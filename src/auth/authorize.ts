@@ -143,7 +143,35 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
         ? ((data[0] as ConsumeRpcRow | undefined) || null)
         : null;
 
-      if (!row) {
+      if (row) {
+        // Key found in DB — check quota and return DB context
+        if (!row.allowed) {
+          return {
+            ok: false,
+            error: mapRpcRejection(row.reason),
+          };
+        }
+
+        return {
+          ok: true,
+          context: {
+            keyId: row.api_key_id || "unknown",
+            keyName: row.key_name,
+            tier: normalizeTier(row.tier),
+            fingerprint: keyFingerprint(apiKey),
+            source: "db",
+            dailyQuota: row.daily_quota,
+            dailyCount: row.daily_count,
+            minuteQuota: row.per_minute_quota,
+            minuteCount: row.minute_count,
+            dailyRemaining: remaining(row.daily_quota, row.daily_count),
+            minuteRemaining: remaining(row.per_minute_quota, row.minute_count),
+          },
+        };
+      }
+
+      // Key not found in DB. If env fallback is not allowed, reject.
+      if (!allowEnvFallback) {
         return {
           ok: false,
           error: {
@@ -153,43 +181,22 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
           },
         };
       }
-
-      if (!row.allowed) {
+      // allowEnvFallback=true: fall through to env key check below
+    } else {
+      // RPC returned an error
+      const errorMessage = String(error.message || "");
+      if (!allowEnvFallback || !isRpcMissing(errorMessage)) {
         return {
           ok: false,
-          error: mapRpcRejection(row.reason),
+          error: {
+            httpStatus: 500,
+            jsonRpcCode: -32603,
+            message:
+              "API key validation backend is unavailable. Run DB migration for consume_mcp_api_request().",
+          },
         };
       }
-
-      return {
-        ok: true,
-        context: {
-          keyId: row.api_key_id || "unknown",
-          keyName: row.key_name,
-          tier: normalizeTier(row.tier),
-          fingerprint: keyFingerprint(apiKey),
-          source: "db",
-          dailyQuota: row.daily_quota,
-          dailyCount: row.daily_count,
-          minuteQuota: row.per_minute_quota,
-          minuteCount: row.minute_count,
-          dailyRemaining: remaining(row.daily_quota, row.daily_count),
-          minuteRemaining: remaining(row.per_minute_quota, row.minute_count),
-        },
-      };
-    }
-
-    const errorMessage = String(error.message || "");
-    if (!allowEnvFallback || !isRpcMissing(errorMessage)) {
-      return {
-        ok: false,
-        error: {
-          httpStatus: 500,
-          jsonRpcCode: -32603,
-          message:
-            "API key validation backend is unavailable. Run DB migration for consume_mcp_api_request().",
-        },
-      };
+      // RPC function missing + fallback allowed: fall through to env key check
     }
   }
 
