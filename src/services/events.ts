@@ -701,8 +701,9 @@ async function unavailableCityPayload(
   supabase: SupabaseClient,
   requestedCity: string,
   baseUrl: string,
+  topLevelCities: string[],
 ): Promise<CityUnavailable> {
-  const available = await listAvailableCities(supabase);
+  const available = await listAvailableCities(supabase, topLevelCities);
   return {
     requested_city: requestedCity,
     message: `${requestedCity} is not available yet.`,
@@ -732,6 +733,7 @@ export async function searchEvents(
         supabase,
         citySlug,
         config.nightlifeBaseUrl,
+        config.topLevelCities,
       ),
     };
   }

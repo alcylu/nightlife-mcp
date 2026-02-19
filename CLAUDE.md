@@ -104,9 +104,19 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - `supabase/migrations/20260219094000_mcp_api_keys.sql` — API key table + `consume_mcp_api_request` RPC for quota tracking
 - Create keys: `npm run key:create -- --name <name> --tier starter --daily-quota 1000 --minute-quota 60`
 
+## Deployment (Railway)
+- **Production URL**: `https://nightlife-mcp-production.up.railway.app/mcp`
+- **Health**: `https://nightlife-mcp-production.up.railway.app/health`
+- **GitHub**: `https://github.com/alcylu/nightlife-mcp` (public, MIT)
+- **Railway project**: `nightlife-mcp` (ID: `08d1f8fb-4a80-4f48-b1b8-1578d2f8bf0c`)
+- **Production API key**: `nlt-mcp-prod-key-2026-feb` (env-based via `MCP_HTTP_API_KEYS`)
+- **Key config**: `MCP_HTTP_USE_DB_KEYS=false` — env fallback only (DB keys not yet provisioned)
+- **Note**: The env key fallback only activates when the DB RPC function is missing. If the migration is applied but no key exists in DB, it's a hard 403 — won't fall through. Keep `MCP_HTTP_USE_DB_KEYS=false` until DB keys are created.
+
 ## Testing (2026-02-19)
-Tested via curl against HTTP transport. All tools pass except genre filter.
-See daily log `~/clawd/memory/2026-02-19.md` for full test results.
+- All tools passing on production (11/11 tests)
+- Genre filter fixed: paginated `event_genres` fetch + chunked `.in()` calls (100 IDs per batch)
+- See daily log `~/clawd/memory/2026-02-19.md` for full test results
 
 ## Planned (not yet built)
 - `search_performers`, `get_performer_profile`

@@ -63,6 +63,7 @@ export async function getCityContext(
 
 export async function listAvailableCities(
   supabase: SupabaseClient,
+  topLevelCities?: string[],
 ): Promise<string[]> {
   const { data, error } = await supabase
     .from("cities")
@@ -73,8 +74,19 @@ export async function listAvailableCities(
     return [];
   }
 
-  return data
+  const normalized = data
     .map((row) => String(row.slug || "").trim().toLowerCase())
-    .filter((value) => value.length > 0);
-}
+    .filter((value) => value.length > 0 && !value.startsWith("unknown"));
 
+  if (!topLevelCities || topLevelCities.length === 0) {
+    return normalized;
+  }
+
+  const allowed = new Set(
+    topLevelCities
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0),
+  );
+
+  return normalized.filter((slug) => allowed.has(slug));
+}

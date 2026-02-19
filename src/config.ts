@@ -13,6 +13,7 @@ const envSchema = z.object({
     .default("JP")
     .transform((value) => value.toUpperCase()),
   NIGHTLIFE_BASE_URL: z.string().url().default("https://nightlifetokyo.com"),
+  MCP_TOP_LEVEL_CITIES: z.string().optional(),
   HTTP_HOST: z.string().default("0.0.0.0"),
   HTTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
   PORT: z.coerce.number().int().min(1).max(65535).optional(),
@@ -39,6 +40,7 @@ export type AppConfig = {
   defaultCity: string;
   defaultCountryCode: string;
   nightlifeBaseUrl: string;
+  topLevelCities: string[];
   httpHost: string;
   httpPort: number;
   mcpHttpRequireApiKey: boolean;
@@ -53,6 +55,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+  const topLevelCities = (parsed.MCP_TOP_LEVEL_CITIES || parsed.DEFAULT_CITY)
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter((value) => value.length > 0);
 
   return {
     supabaseUrl: parsed.SUPABASE_URL,
@@ -62,6 +68,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     defaultCity: parsed.DEFAULT_CITY.toLowerCase(),
     defaultCountryCode: parsed.DEFAULT_COUNTRY_CODE,
     nightlifeBaseUrl: parsed.NIGHTLIFE_BASE_URL.replace(/\/+$/, ""),
+    topLevelCities,
     httpHost: parsed.HTTP_HOST,
     httpPort: parsed.HTTP_PORT ?? parsed.PORT ?? 3000,
     mcpHttpRequireApiKey: parsed.MCP_HTTP_REQUIRE_API_KEY,

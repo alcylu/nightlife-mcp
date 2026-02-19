@@ -38,6 +38,7 @@ Add this to your Claude Desktop MCP config (`claude_desktop_config.json`):
         "SUPABASE_URL": "https://<your-project-ref>.supabase.co",
         "SUPABASE_SERVICE_ROLE_KEY": "<your-service-role-key>",
         "DEFAULT_CITY": "tokyo",
+        "MCP_TOP_LEVEL_CITIES": "tokyo",
         "DEFAULT_COUNTRY_CODE": "JP",
         "NIGHTLIFE_BASE_URL": "https://nightlifetokyo.com"
       }

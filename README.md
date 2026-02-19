@@ -34,6 +34,7 @@ Set env vars in `.env`:
 Optional:
 
 - `DEFAULT_CITY` (default: `tokyo`)
+- `MCP_TOP_LEVEL_CITIES` (default: `DEFAULT_CITY`; controls `available_cities` in unsupported-city responses)
 - `DEFAULT_COUNTRY_CODE` (default: `JP`)
 - `NIGHTLIFE_BASE_URL` (default: `https://nightlifetokyo.com`)
 - `MCP_HTTP_REQUIRE_API_KEY` (default: `true`)
