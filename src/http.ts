@@ -315,8 +315,42 @@ async function main(): Promise<void> {
     }
   });
 
-  app.get("/health", (_req, res) => {
+  app.get("/health", async (_req, res) => {
     const runtime = snapshotRuntimeMetrics();
+
+    // MCP stats — non-blocking, won't fail health check
+    let mcp_stats: { total_users: number | null; api_calls_24h: number | null } = {
+      total_users: null,
+      api_calls_24h: null,
+    };
+    try {
+      const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+      const [usersRes, usageRes] = await Promise.all([
+        supabase
+          .from("mcp_api_keys")
+          .select("user_id")
+          .not("user_id", "is", null)
+          .eq("status", "active"),
+        supabase
+          .from("mcp_api_usage_daily")
+          .select("request_count")
+          .gte("usage_date", yesterday),
+      ]);
+
+      if (usersRes.data) {
+        const uniqueUsers = new Set(usersRes.data.map((r: any) => r.user_id));
+        mcp_stats.total_users = uniqueUsers.size;
+      }
+      if (usageRes.data) {
+        mcp_stats.api_calls_24h = usageRes.data.reduce(
+          (sum: number, r: any) => sum + (r.request_count || 0), 0
+        );
+      }
+    } catch {
+      // Non-blocking — health check still succeeds
+    }
+
     res.json({
       ok: true,
       transport: "streamable-http",
@@ -327,6 +361,7 @@ async function main(): Promise<void> {
       }, {}),
       uptime_sec: Math.floor(process.uptime()),
       runtime_metrics: runtime,
+      mcp_stats,
     });
   });
 

@@ -95,14 +95,21 @@ NIGHTLIFE_BASE_URL=https://nightlifetokyo.com
 HTTP_HOST=127.0.0.1
 HTTP_PORT=3000
 MCP_HTTP_REQUIRE_API_KEY=true
-MCP_HTTP_USE_DB_KEYS=false          # true when DB migration applied
-MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=true
+MCP_HTTP_USE_DB_KEYS=true            # DB migration applied 2026-02-19
+MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=true # env key still works as fallback
 MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 ```
 
-## DB Migration
+## DB Migrations
 - `supabase/migrations/20260219094000_mcp_api_keys.sql` — API key table + `consume_mcp_api_request` RPC for quota tracking
-- Create keys: `npm run key:create -- --name <name> --tier starter --daily-quota 1000 --minute-quota 60`
+- `supabase/migrations/20260220_user_api_keys.sql` — Self-service API keys:
+  - `user_id` column on `mcp_api_keys` (FK to `auth.users`)
+  - RLS on `mcp_api_keys`, `mcp_api_usage_daily`, `mcp_api_usage_minute`
+  - RPCs: `create_user_api_key(text)`, `revoke_user_api_key(uuid)`, `get_user_usage_summary()`
+  - Max 3 active keys per user, free tier (100/day, 20/min)
+  - Applied to production 2026-02-19 via `psql` with `SET ROLE postgres;`
+- Create keys (CLI): `npm run key:create -- --name <name> --tier starter --daily-quota 1000 --minute-quota 60`
+- Create keys (self-service): Users sign up at nightlife.dev → dashboard auto-creates first key
 
 ## Deployment (Railway)
 - **Production URL**: `https://nightlife-mcp-production.up.railway.app/mcp`
@@ -110,13 +117,25 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - **GitHub**: `https://github.com/alcylu/nightlife-mcp` (public, MIT)
 - **Railway project**: `nightlife-mcp` (ID: `08d1f8fb-4a80-4f48-b1b8-1578d2f8bf0c`)
 - **Production API key**: `nlt-mcp-prod-key-2026-feb` (env-based via `MCP_HTTP_API_KEYS`)
-- **Key config**: `MCP_HTTP_USE_DB_KEYS=false` — env fallback only (DB keys not yet provisioned)
-- **Note**: The env key fallback only activates when the DB RPC function is missing. If the migration is applied but no key exists in DB, it's a hard 403 — won't fall through. Keep `MCP_HTTP_USE_DB_KEYS=false` until DB keys are created.
+- **Key config**: `MCP_HTTP_USE_DB_KEYS=true` + `MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=true`
+- DB keys: self-service via nightlife.dev dashboard (RPCs applied 2026-02-19)
+- Env key fallback: `nlt-mcp-prod-key-2026-feb` still works alongside DB keys
 
 ## Testing (2026-02-19)
 - All tools passing on production (11/11 tests)
 - Genre filter fixed: paginated `event_genres` fetch + chunked `.in()` calls (100 IDs per batch)
 - See daily log `~/clawd/memory/2026-02-19.md` for full test results
+
+## Health Endpoint
+- **URL**: `/health`
+- Returns: `{ ok, transport, sessions, tiers, uptime_sec, runtime_metrics, mcp_stats }`
+- `mcp_stats`: `{ total_users, api_calls_24h }` — queries `mcp_api_keys` (unique user_ids) and `mcp_api_usage_daily` (24h request_count sum)
+- Non-blocking: DB query failures don't break health check (returns null for failed fields)
+- Monitored by Cloudflare Workers health-monitor (`~/Apps/health-monitor/`)
+
+## Related Projects
+- **nightlife-dev** (`~/Apps/nightlife-dev/`): Developer landing page + self-service dashboard at nightlife.dev
+- **health-monitor** (`~/Apps/health-monitor/`): Cloudflare Workers health checker, monitors this server + nightlife-dev
 
 ## Planned (not yet built)
 - `search_performers`, `get_performer_profile`
