@@ -144,33 +144,40 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
         : null;
 
       if (row) {
-        // Key found in DB — check quota and return DB context
         if (!row.allowed) {
+          // "invalid_key" means the hash wasn't found in the DB table.
+          // If env fallback is allowed, don't reject — fall through to
+          // the env key check so env-only keys still work.
+          if (row.reason === "invalid_key" && allowEnvFallback) {
+            // fall through to env key check below
+          } else {
+            return {
+              ok: false,
+              error: mapRpcRejection(row.reason),
+            };
+          }
+        } else {
           return {
-            ok: false,
-            error: mapRpcRejection(row.reason),
+            ok: true,
+            context: {
+              keyId: row.api_key_id || "unknown",
+              keyName: row.key_name,
+              tier: normalizeTier(row.tier),
+              fingerprint: keyFingerprint(apiKey),
+              source: "db",
+              dailyQuota: row.daily_quota,
+              dailyCount: row.daily_count,
+              minuteQuota: row.per_minute_quota,
+              minuteCount: row.minute_count,
+              dailyRemaining: remaining(row.daily_quota, row.daily_count),
+              minuteRemaining: remaining(row.per_minute_quota, row.minute_count),
+            },
           };
         }
-
-        return {
-          ok: true,
-          context: {
-            keyId: row.api_key_id || "unknown",
-            keyName: row.key_name,
-            tier: normalizeTier(row.tier),
-            fingerprint: keyFingerprint(apiKey),
-            source: "db",
-            dailyQuota: row.daily_quota,
-            dailyCount: row.daily_count,
-            minuteQuota: row.per_minute_quota,
-            minuteCount: row.minute_count,
-            dailyRemaining: remaining(row.daily_quota, row.daily_count),
-            minuteRemaining: remaining(row.per_minute_quota, row.minute_count),
-          },
-        };
       }
 
-      // Key not found in DB. If env fallback is not allowed, reject.
+      // Key not found in DB (no row or invalid_key with fallback).
+      // If env fallback is not allowed, reject.
       if (!allowEnvFallback) {
         return {
           ok: false,
