@@ -29,6 +29,7 @@ For curl, TypeScript SDK, and other clients, see [`CLIENT_SETUP.md`](CLIENT_SETU
 - `search_events`
 - `get_tonight`
 - `get_event_details`
+- `get_recommendations` (v0.2, behind `MCP_ENABLE_RECOMMENDATIONS=true`)
 - Streamable HTTP endpoint with API-key middleware
 - Structured tool output schemas (`outputSchema`)
 - Deterministic tool error payloads with stable error codes
@@ -54,13 +55,14 @@ Set env vars in `.env`:
 Optional:
 
 - `DEFAULT_CITY` (default: `tokyo`)
-- `MCP_TOP_LEVEL_CITIES` (default: `DEFAULT_CITY`; controls `available_cities` in unsupported-city responses)
+- `MCP_TOP_LEVEL_CITIES` (default example: `tokyo,san-francisco`; controls `available_cities` in unsupported-city responses)
 - `DEFAULT_COUNTRY_CODE` (default: `JP`)
 - `NIGHTLIFE_BASE_URL` (default: `https://nightlifetokyo.com`)
 - `MCP_HTTP_REQUIRE_API_KEY` (default: `true`)
 - `MCP_HTTP_USE_DB_KEYS` (default: `true`)
 - `MCP_HTTP_ALLOW_ENV_KEY_FALLBACK` (default: `true`)
 - `MCP_HTTP_API_KEYS` (comma-separated legacy fallback keys)
+- `MCP_ENABLE_RECOMMENDATIONS` (default: `false`; enables `get_recommendations`)
 
 ## DB API Key Mode (Recommended)
 
@@ -118,10 +120,19 @@ For HTTP in production:
 npm run start:http
 ```
 
+Debug web UI for recommendations:
+
+```bash
+MCP_ENABLE_RECOMMENDATIONS=true npm run dev:http
+# open http://127.0.0.1:3000/debug/recommendations
+```
+
 ## Notes
 
 - Date handling supports `tonight`, `this_weekend`, `YYYY-MM-DD`, and `YYYY-MM-DD/YYYY-MM-DD`.
+- `get_recommendations` returns up to 10 diverse modal slots with dynamic city-aware fallback.
 - City handling is backed by `public.cities` (`slug`, timezone, and service-day cutoff).
+- Supported top-level cities are environment-configurable (for example `tokyo` and `san-francisco`) while Tokyo can remain the default.
 - Stdio transport: no API key check.
 - HTTP transport (`/mcp`): API key required by default (`MCP_HTTP_REQUIRE_API_KEY=true`).
 - API key headers:
@@ -135,6 +146,7 @@ npm run start:http
   - `X-RateLimit-Minute-Limit`
   - `X-RateLimit-Minute-Remaining`
 - Health endpoint: `/health`.
+- Debug page for manual tool testing: `/debug/recommendations`.
 - Tool errors are returned as JSON text payloads in `result.content[0].text`:
   - `INVALID_DATE_FILTER`
   - `INVALID_EVENT_ID`

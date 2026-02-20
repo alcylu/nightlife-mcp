@@ -71,3 +71,21 @@ export interface CityUnavailable {
   request_city_url: string;
 }
 
+export type ModalTimeBucket = "early" | "prime" | "late";
+
+export interface Recommendation {
+  rank: number;
+  modal_id: string;
+  modal_name: string;
+  modal_description: string;
+  event: EventSummary;
+  why_this_fits: string[];
+}
+
+export interface RecommendationsOutput {
+  city: string;
+  date_filter: string | null;
+  result_count: number;
+  recommendations: Recommendation[];
+  unavailable_city: CityUnavailable | null;
+}
