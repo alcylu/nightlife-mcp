@@ -30,6 +30,10 @@ const envSchema = z.object({
     .default("true")
     .transform((value) => value.trim().toLowerCase() !== "false"),
   MCP_HTTP_API_KEYS: z.string().optional(),
+  MCP_ENABLE_RECOMMENDATIONS: z
+    .string()
+    .default("false")
+    .transform((value) => value.trim().toLowerCase() !== "false"),
 });
 
 export type AppConfig = {
@@ -47,6 +51,7 @@ export type AppConfig = {
   mcpHttpUseDbKeys: boolean;
   mcpHttpAllowEnvKeyFallback: boolean;
   mcpHttpApiKeys: string[];
+  mcpEnableRecommendations: boolean;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -55,7 +60,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-  const topLevelCities = (parsed.MCP_TOP_LEVEL_CITIES || parsed.DEFAULT_CITY)
+  const topLevelCities = (parsed.MCP_TOP_LEVEL_CITIES || `${parsed.DEFAULT_CITY},san-francisco`)
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter((value) => value.length > 0);
@@ -75,5 +80,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mcpHttpUseDbKeys: parsed.MCP_HTTP_USE_DB_KEYS,
     mcpHttpAllowEnvKeyFallback: parsed.MCP_HTTP_ALLOW_ENV_KEY_FALLBACK,
     mcpHttpApiKeys: keys,
+    mcpEnableRecommendations: parsed.MCP_ENABLE_RECOMMENDATIONS,
   };
 }

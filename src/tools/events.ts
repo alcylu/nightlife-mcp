@@ -5,6 +5,7 @@ import type { AppConfig } from "../config.js";
 import { NightlifeError, toNightlifeError, toolErrorResponse } from "../errors.js";
 import { recordToolResult, logEvent } from "../observability/metrics.js";
 import { getEventDetails, searchEvents } from "../services/events.js";
+import { getRecommendations } from "../services/recommendations.js";
 
 type ToolDeps = {
   supabase: SupabaseClient;
@@ -86,6 +87,23 @@ const eventDetailSchema = z.object({
   nlt_url: z.string(),
 });
 
+const recommendationSchema = z.object({
+  rank: z.number().int().min(1),
+  modal_id: z.string(),
+  modal_name: z.string(),
+  modal_description: z.string(),
+  event: eventSummarySchema,
+  why_this_fits: z.array(z.string()).length(2),
+});
+
+const recommendationsOutputSchema = z.object({
+  city: z.string(),
+  date_filter: z.string().nullable(),
+  result_count: z.number().int().min(0),
+  recommendations: z.array(recommendationSchema),
+  unavailable_city: cityUnavailableSchema.nullable(),
+});
+
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -151,7 +169,7 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
       description:
         "Search nightlife events. Supports city, date filters (tonight, this_weekend, ISO date, ISO range), genre, and area.",
       inputSchema: {
-        city: z.string().default("tokyo"),
+        city: z.string().default(deps.config.defaultCity),
         date: z.string().optional(),
         genre: z.string().optional(),
         area: z.string().optional(),
@@ -174,7 +192,7 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
       description:
         "Get tonight's nightlife events using city timezone and service-day cutoff logic.",
       inputSchema: {
-        city: z.string().default("tokyo"),
+        city: z.string().default(deps.config.defaultCity),
         genre: z.string().optional(),
         area: z.string().optional(),
         limit: z.number().int().min(1).max(20).default(10),
@@ -216,6 +234,32 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
         }
         return detail;
       },
+    ),
+  );
+
+  if (!deps.config.mcpEnableRecommendations) {
+    return;
+  }
+
+  server.registerTool(
+    "get_recommendations",
+    {
+      description:
+        "Get up to 10 diverse recommendation slots across nightlife modal archetypes with dynamic fallback.",
+      inputSchema: {
+        city: z.string().default(deps.config.defaultCity),
+        date: z.string().optional(),
+        area: z.string().optional(),
+        genre: z.string().optional(),
+        query: z.string().optional(),
+        limit: z.number().int().min(1).max(10).default(10),
+      },
+      outputSchema: recommendationsOutputSchema,
+    },
+    async (args) => runTool(
+      "get_recommendations",
+      recommendationsOutputSchema,
+      async () => getRecommendations(deps.supabase, deps.config, args),
     ),
   );
 }
