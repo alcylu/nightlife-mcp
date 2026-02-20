@@ -62,7 +62,7 @@ await client.connect(transport);
 
 const result = await client.callTool({
   name: "get_tonight",
-  arguments: { city: "tokyo", limit: 5 }
+  arguments: { city: "san-francisco", limit: 5 }
 });
 ```
 

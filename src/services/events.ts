@@ -250,7 +250,14 @@ function buildMapLink(address: string | null): string | null {
   return `https://maps.google.com/?q=${encodeURIComponent(address)}`;
 }
 
-function summarizeEntranceCosts(raw: unknown): string | null {
+function defaultCurrencyForCountry(countryCode?: string | null): string {
+  const code = String(countryCode || "").trim().toUpperCase();
+  if (code === "US") return "USD";
+  if (code === "TH") return "THB";
+  return "JPY";
+}
+
+function summarizeEntranceCosts(raw: unknown, fallbackCurrency = "JPY"): string | null {
   if (!Array.isArray(raw) || raw.length === 0) {
     return null;
   }
@@ -267,7 +274,7 @@ function summarizeEntranceCosts(raw: unknown): string | null {
     }
 
     if (typeof item === "number" && Number.isFinite(item)) {
-      values.push(`JPY ${Math.round(item)}`);
+      values.push(`${fallbackCurrency} ${Math.round(item)}`);
       continue;
     }
 
@@ -286,7 +293,7 @@ function summarizeEntranceCosts(raw: unknown): string | null {
     const currency =
       typeof obj.currency === "string" && obj.currency.trim().length > 0
         ? obj.currency.trim().toUpperCase()
-        : "JPY";
+        : fallbackCurrency;
 
     const amountRaw = [obj.price, obj.amount, obj.cost, obj.value].find(
       (v) => typeof v === "number" && Number.isFinite(v),
@@ -669,6 +676,7 @@ function toEventSummary(
   row: EventOccurrenceRow,
   citySlug: string,
   baseUrl: string,
+  fallbackCurrency: string,
   metadata: {
     genresByEvent: Map<string, string[]>;
     mediaByEvent: Map<string, MediaRow[]>;
@@ -691,7 +699,7 @@ function toEventSummary(
     },
     performers: metadata.performersByEvent.get(row.id) || [],
     genres: metadata.genresByEvent.get(row.id) || [],
-    price: summarizeEntranceCosts(row.entrance_costs),
+    price: summarizeEntranceCosts(row.entrance_costs, fallbackCurrency),
     flyer_url: flyer,
     nlt_url: buildEventUrl(baseUrl, citySlug, row.id),
   };
@@ -831,8 +839,15 @@ export async function searchEvents(
   const occurrenceIds = occurrences.map((row) => row.id);
   const metadata = await fetchOccurrenceMetadata(supabase, occurrenceIds);
 
+  const fallbackCurrency = defaultCurrencyForCountry(city.countryCode);
   let summaries = occurrences.map((row) =>
-    toEventSummary(row, city.slug, config.nightlifeBaseUrl, metadata),
+    toEventSummary(
+      row,
+      city.slug,
+      config.nightlifeBaseUrl,
+      fallbackCurrency,
+      metadata,
+    ),
   );
 
   if (input.area) {
@@ -870,11 +885,11 @@ function tierText(tier: {
   tier_name: string;
   price: number | null;
   currency: string | null;
-}): string {
+}, fallbackCurrency: string): string {
   if (tier.price === null) {
     return tier.tier_name;
   }
-  const ccy = tier.currency || "JPY";
+  const ccy = tier.currency || fallbackCurrency;
   return `${tier.tier_name}: ${ccy} ${Math.round(tier.price)}`;
 }
 
@@ -922,7 +937,7 @@ export async function getEventDetails(
   const cityQuery = occurrence.city_id
     ? await supabase
         .from("cities")
-        .select("slug,timezone,service_day_cutoff_time")
+        .select("slug,timezone,service_day_cutoff_time,country_code")
         .eq("id", occurrence.city_id)
         .maybeSingle()
     : { data: null };
@@ -930,6 +945,9 @@ export async function getEventDetails(
   const citySlug =
     (cityQuery.data?.slug as string | undefined)?.toLowerCase() ||
     config.defaultCity;
+  const fallbackCurrency = defaultCurrencyForCountry(
+    (cityQuery.data?.country_code as string | undefined) || config.defaultCountryCode,
+  );
   const timezone = (cityQuery.data?.timezone as string | undefined) || "UTC";
   const cutoffTime =
     (cityQuery.data?.service_day_cutoff_time as string | undefined) || "06:00";
@@ -1056,9 +1074,9 @@ export async function getEventDetails(
     lineup,
     genres: metadata.genresByEvent.get(occurrence.id) || [],
     price: {
-      entrance_summary: summarizeEntranceCosts(occurrence.entrance_costs),
-      door: doorTier ? tierText(doorTier) : null,
-      advance: advanceTier ? tierText(advanceTier) : null,
+      entrance_summary: summarizeEntranceCosts(occurrence.entrance_costs, fallbackCurrency),
+      door: doorTier ? tierText(doorTier, fallbackCurrency) : null,
+      advance: advanceTier ? tierText(advanceTier, fallbackCurrency) : null,
       tiers,
     },
     flyer_url: flyer,

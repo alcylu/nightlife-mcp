@@ -235,7 +235,14 @@ function venueArea(venue: EventOccurrenceRow["venue"]): string | null {
   return v.city_en || v.city || v.city_ja || null;
 }
 
-function summarizeEntranceCosts(raw: unknown): string | null {
+function defaultCurrencyForCountry(countryCode?: string | null): string {
+  const code = String(countryCode || "").trim().toUpperCase();
+  if (code === "US") return "USD";
+  if (code === "TH") return "THB";
+  return "JPY";
+}
+
+function summarizeEntranceCosts(raw: unknown, fallbackCurrency = "JPY"): string | null {
   if (!Array.isArray(raw) || raw.length === 0) {
     return null;
   }
@@ -251,7 +258,7 @@ function summarizeEntranceCosts(raw: unknown): string | null {
     }
 
     if (typeof item === "number" && Number.isFinite(item)) {
-      values.push(`JPY ${Math.round(item)}`);
+      values.push(`${fallbackCurrency} ${Math.round(item)}`);
       continue;
     }
 
@@ -270,7 +277,7 @@ function summarizeEntranceCosts(raw: unknown): string | null {
     const currency =
       typeof obj.currency === "string" && obj.currency.trim().length > 0
         ? obj.currency.trim().toUpperCase()
-        : "JPY";
+        : fallbackCurrency;
 
     const amount = [obj.price, obj.amount, obj.cost, obj.value].find(
       (value) => typeof value === "number" && Number.isFinite(value),
@@ -359,6 +366,7 @@ function toEventSummary(
   row: EventOccurrenceRow,
   citySlug: string,
   baseUrl: string,
+  fallbackCurrency: string,
   metadata: {
     genresByEvent: Map<string, string[]>;
     performersByEvent: Map<string, string[]>;
@@ -381,7 +389,7 @@ function toEventSummary(
     },
     performers: metadata.performersByEvent.get(eventId) || [],
     genres: metadata.genresByEvent.get(eventId) || [],
-    price: summarizeEntranceCosts(row.entrance_costs),
+    price: summarizeEntranceCosts(row.entrance_costs, fallbackCurrency),
     flyer_url: metadata.flyerByEvent.get(eventId) || null,
     nlt_url: buildEventUrl(baseUrl, citySlug, eventId),
   };
@@ -890,13 +898,20 @@ export async function getRecommendations(
     city.serviceDayCutoffTime,
     rows,
   );
+  const fallbackCurrency = defaultCurrencyForCountry(city.countryCode);
 
   const candidates = rows.map((row) => {
-    const summary = toEventSummary(row, city.slug, config.nightlifeBaseUrl, {
-      genresByEvent: metadata.genresByEvent,
-      performersByEvent: metadata.performersByEvent,
-      flyerByEvent: metadata.flyerByEvent,
-    });
+    const summary = toEventSummary(
+      row,
+      city.slug,
+      config.nightlifeBaseUrl,
+      fallbackCurrency,
+      {
+        genresByEvent: metadata.genresByEvent,
+        performersByEvent: metadata.performersByEvent,
+        flyerByEvent: metadata.flyerByEvent,
+      },
+    );
 
     return toCandidate(
       row,
