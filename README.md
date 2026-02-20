@@ -2,7 +2,27 @@
 
 MCP server for nightlife event discovery backed by Supabase.
 
-Client setup examples (Claude Desktop + HTTP MCP): see `CLIENT_SETUP.md`.
+## Quick Start
+
+**Production endpoint:** `https://api.nightlife.dev/mcp`
+
+1. Get a free API key at [nightlife.dev](https://nightlife.dev)
+2. Add to Claude Desktop config (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "nightlife": {
+      "url": "https://api.nightlife.dev/mcp",
+      "headers": {
+        "x-api-key": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+For curl, TypeScript SDK, and other clients, see [`CLIENT_SETUP.md`](CLIENT_SETUP.md).
 
 ## Implemented (v0.1)
 

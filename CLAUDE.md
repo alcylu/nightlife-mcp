@@ -112,8 +112,8 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - Create keys (self-service): Users sign up at nightlife.dev → dashboard auto-creates first key
 
 ## Deployment (Railway)
-- **Production URL**: `https://nightlife-mcp-production.up.railway.app/mcp`
-- **Health**: `https://nightlife-mcp-production.up.railway.app/health`
+- **Production URL**: `https://api.nightlife.dev/mcp` (Railway: `nightlife-mcp-production.up.railway.app`)
+- **Health**: `https://api.nightlife.dev/health`
 - **GitHub**: `https://github.com/alcylu/nightlife-mcp` (public, MIT)
 - **Railway project**: `nightlife-mcp` (ID: `08d1f8fb-4a80-4f48-b1b8-1578d2f8bf0c`)
 - **Production API key**: `nlt-mcp-prod-key-2026-feb` (env-based via `MCP_HTTP_API_KEYS`)
@@ -137,10 +137,27 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - **nightlife-dev** (`~/Apps/nightlife-dev/`): Developer landing page + self-service dashboard at nightlife.dev
 - **health-monitor** (`~/Apps/health-monitor/`): Cloudflare Workers health checker, monitors this server + nightlife-dev
 
-## Planned (not yet built)
-- `search_performers`, `get_performer_profile`
+## Hotel Go-to-Market Strategy (2026-02-20 Research)
+- **Target market**: Hotel AI concierge platforms need real-time nightlife/event data
+- **Key insight**: HFTP declared "2026 is the year of MCP" — hotels actively adopting
+- **No competitor** provides structured nightlife data via MCP to hotels
+- **Targets**: Tokyo luxury hotels (direct), Apaleo Agent Hub, Mindtrip, Canary, Sabre/Amadeus
+- **Pricing**: $199/mo starter, $499/mo professional, custom enterprise
+- **Research reports**: `~/clawd/memory/meetings/2026-02-20-hotel-ai-concierge-market-research.md`, `~/clawd/memory/meetings/2026-02-20-mcp-hospitality-adoption.md`, `~/clawd/memory/2026-02-20-hotel-tech-pricing-research.md`
+
+## Planned (not yet built) — Prioritized for Hotel Readiness
+### P0 (Hotel-Critical)
+- REST API endpoints (same auth/data as MCP — universal fallback for 90%+ of integrations)
+- `get_recommendations` tool (THE hotel question: "what should I do tonight?")
+
+### P1
 - `search_venues`, `get_venue_details`
-- `get_recommendations`
 - `list_genres`, `list_areas`, `list_cities`
-- REST API endpoints (same auth/data)
+- OpenAPI spec + hosted docs
+- Publish on mcp.so + Apaleo Agent Hub
+
+### P2
+- `search_performers`, `get_performer_profile`
+- Hotel-optimized response formatting (concierge-friendly language, safety/vibe info)
+- Multi-city expansion (next 5 cities after Tokyo)
 - Hotel concierge dashboard (separate frontend)

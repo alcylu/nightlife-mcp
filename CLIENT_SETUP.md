@@ -1,108 +1,95 @@
 # Client Setup Guide
 
-This guide shows how to connect clients to `nightlife-mcp`.
+Production endpoint: `https://api.nightlife.dev/mcp`
 
-## 1) Prerequisites
+Get a free API key at [nightlife.dev](https://nightlife.dev).
 
-- Project path: `/Users/alcylu/Apps/nightlife-mcp`
-- Install deps and build:
+## Claude Desktop
 
-```bash
-cd /Users/alcylu/Apps/nightlife-mcp
-npm install
-npm run build
-```
-
-- For HTTP mode, ensure `.env` is configured with:
-  - `SUPABASE_URL`
-  - `SUPABASE_SERVICE_ROLE_KEY`
-  - `MCP_HTTP_REQUIRE_API_KEY=true`
-  - `MCP_HTTP_USE_DB_KEYS=true`
-
-## 2) Claude Desktop (stdio)
-
-Stdio mode does not require API keys.
-
-Add this to your Claude Desktop MCP config (`claude_desktop_config.json`):
+Add to your Claude Desktop config (`claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
-    "nightlife-mcp": {
-      "command": "node",
-      "args": [
-        "/Users/alcylu/Apps/nightlife-mcp/dist/index.js"
-      ],
-      "cwd": "/Users/alcylu/Apps/nightlife-mcp",
-      "env": {
-        "SUPABASE_URL": "https://<your-project-ref>.supabase.co",
-        "SUPABASE_SERVICE_ROLE_KEY": "<your-service-role-key>",
-        "DEFAULT_CITY": "tokyo",
-        "MCP_TOP_LEVEL_CITIES": "tokyo",
-        "DEFAULT_COUNTRY_CODE": "JP",
-        "NIGHTLIFE_BASE_URL": "https://nightlifetokyo.com"
+    "nightlife": {
+      "url": "https://api.nightlife.dev/mcp",
+      "headers": {
+        "x-api-key": "YOUR_API_KEY"
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop after saving config.
+Restart Claude Desktop after saving.
 
-## 3) HTTP Clients (Remote MCP)
+## curl
 
-Start server:
-
-```bash
-cd /Users/alcylu/Apps/nightlife-mcp
-npm run start:http
-```
-
-Default endpoint:
-
-- `http://127.0.0.1:3000/mcp`
-
-Required headers:
-
-- `Accept: application/json, text/event-stream`
-- `x-api-key: <your-db-api-key>` (or `Authorization: Bearer <key>`)
-
-## 4) ChatGPT-Compatible MCP HTTP Setup
-
-For MCP clients that use remote HTTP (including ChatGPT MCP connector flows), use:
-
-- URL: `http://127.0.0.1:3000/mcp` (or your deployed HTTPS URL)
-- Header: `x-api-key: <your-db-api-key>`
-- Accept header must include: `application/json, text/event-stream`
-
-If your connector UI supports custom headers, add `x-api-key` there.
-
-## 5) Quick Verification
-
-Initialize:
+Initialize a session:
 
 ```bash
-curl -i http://127.0.0.1:3000/mcp \
+curl -i https://api.nightlife.dev/mcp \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
-  -H 'x-api-key: <your-db-api-key>' \
+  -H 'x-api-key: YOUR_API_KEY' \
   --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1.0.0"}}}'
 ```
 
-From the response, copy `mcp-session-id`, then call a tool:
+Copy the `mcp-session-id` from the response headers, then call a tool:
 
 ```bash
-curl -i http://127.0.0.1:3000/mcp \
+curl -i https://api.nightlife.dev/mcp \
   -H 'content-type: application/json' \
   -H 'accept: application/json, text/event-stream' \
-  -H 'x-api-key: <your-db-api-key>' \
-  -H 'mcp-session-id: <session-id>' \
+  -H 'x-api-key: YOUR_API_KEY' \
+  -H 'mcp-session-id: SESSION_ID' \
   --data '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_tonight","arguments":{"city":"tokyo","limit":5}}}'
 ```
 
-## 6) Common Errors
+## TypeScript SDK
 
-- `401 API key required`: missing key header in HTTP mode.
-- `403 Invalid API key`: key is wrong/revoked.
-- `400/406 on initialize`: missing `Accept: application/json, text/event-stream`.
-- Session mismatch errors: use same API key for all requests in a session.
+```typescript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+const transport = new StreamableHTTPClientTransport(
+  new URL("https://api.nightlife.dev/mcp"),
+  { requestInit: { headers: { "x-api-key": "YOUR_API_KEY" } } }
+);
+
+const client = new Client({ name: "my-app", version: "1.0.0" });
+await client.connect(transport);
+
+const result = await client.callTool({
+  name: "get_tonight",
+  arguments: { city: "tokyo", limit: 5 }
+});
+```
+
+## Authentication
+
+All HTTP requests require an API key via one of:
+- `x-api-key: YOUR_API_KEY` header
+- `Authorization: Bearer YOUR_API_KEY` header
+
+Responses include rate-limit headers:
+- `X-RateLimit-Daily-Limit` / `X-RateLimit-Daily-Remaining`
+- `X-RateLimit-Minute-Limit` / `X-RateLimit-Minute-Remaining`
+
+## Common Errors
+
+| Status | Meaning |
+|--------|---------|
+| `401` | Missing API key header |
+| `403` | Invalid or revoked API key |
+| `400/406` | Missing `Accept: application/json, text/event-stream` header |
+
+## Local Development
+
+If running the server locally (for contributors):
+
+```bash
+cp .env.example .env   # configure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+npm install
+npm run dev:http       # starts at http://127.0.0.1:3000/mcp
+```
