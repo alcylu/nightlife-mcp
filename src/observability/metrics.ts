@@ -16,6 +16,12 @@ type HttpCounter = {
   };
 };
 
+type UnmetRequestCounter = {
+  attempts: number;
+  success: number;
+  errors: number;
+};
+
 const startedAt = Date.now();
 
 const toolCounters = new Map<string, ToolCounter>();
@@ -27,6 +33,12 @@ const httpCounter: HttpCounter = {
     success: 0,
     denied: 0,
   },
+};
+
+const unmetRequestCounter: UnmetRequestCounter = {
+  attempts: 0,
+  success: 0,
+  errors: 0,
 };
 
 function getToolCounter(name: string): ToolCounter {
@@ -82,10 +94,20 @@ export function recordHttpAuthResult(allowed: boolean): void {
   httpCounter.auth.denied += 1;
 }
 
+export function recordUnmetRequestWrite(success: boolean): void {
+  unmetRequestCounter.attempts += 1;
+  if (success) {
+    unmetRequestCounter.success += 1;
+    return;
+  }
+  unmetRequestCounter.errors += 1;
+}
+
 export function snapshotRuntimeMetrics(): {
   uptimeSec: number;
   tools: Record<string, ToolCounter & { avgDurationMs: number }>;
   http: HttpCounter;
+  unmet_requests: UnmetRequestCounter;
 } {
   const tools: Record<string, ToolCounter & { avgDurationMs: number }> = {};
   for (const [name, counter] of toolCounters.entries()) {
@@ -108,6 +130,11 @@ export function snapshotRuntimeMetrics(): {
         success: httpCounter.auth.success,
         denied: httpCounter.auth.denied,
       },
+    },
+    unmet_requests: {
+      attempts: unmetRequestCounter.attempts,
+      success: unmetRequestCounter.success,
+      errors: unmetRequestCounter.errors,
     },
   };
 }

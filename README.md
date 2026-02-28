@@ -24,11 +24,20 @@ MCP server for nightlife event discovery backed by Supabase.
 
 For curl, TypeScript SDK, and other clients, see [`CLIENT_SETUP.md`](CLIENT_SETUP.md).
 
-## Implemented (v0.1)
+## Implemented (v0.3)
 
 - `search_events`
 - `get_tonight`
 - `get_event_details`
+- `search_venues`
+- `get_venue_info`
+- `search_performers`
+- `get_performer_info`
+- `log_unmet_request`
+- `create_vip_booking_request`
+- `get_vip_booking_status`
+- `get_vip_table_availability`
+- `get_vip_table_chart`
 - `get_recommendations` (v0.2, behind `MCP_ENABLE_RECOMMENDATIONS=true`)
 - Streamable HTTP endpoint with API-key middleware
 - Structured tool output schemas (`outputSchema`)
@@ -93,6 +102,56 @@ This prints the raw `api_key` once. Save it securely and use it in MCP HTTP call
 
 If the DB RPC is unavailable, fallback to `MCP_HTTP_API_KEYS` works only when `MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=true`.
 
+## Concierge Unmet Request Backlog
+
+Public concierge flows can log unsupported user intents to Supabase.
+
+Run migration:
+
+```sql
+-- copy file contents from:
+-- supabase/migrations/20260226_concierge_unmet_requests.sql
+```
+
+Then call MCP tool `log_unmet_request` when no good answer exists from available nightlife data.
+
+## VIP Booking Phase 1
+
+VIP table booking submission and status tracking are backed by Supabase.
+
+Run migration:
+
+```sql
+-- copy file contents from:
+-- supabase/migrations/20260227143000_vip_phase1_requests_and_queue.sql
+-- supabase/migrations/20260228124500_add_vip_booking_enabled_to_venues.sql
+-- and if already deployed before 2026-02-28:
+-- supabase/migrations/20260228111000_vip_outward_language_defaults.sql
+-- supabase/migrations/20260301010000_vip_table_availability_chart.sql
+```
+
+Then call MCP tools:
+- `create_vip_booking_request`
+- `get_vip_booking_status`
+- `get_vip_table_availability` (read per-day table availability by venue/date range)
+- `get_vip_table_chart` (read structured table chart with optional per-date status overlay)
+
+Ops-tier sessions also have internal queue tools:
+- `list_vip_reservations` (all outstanding reservations; default statuses: `submitted`, `in_review`, `confirmed`)
+- `list_vip_requests_for_alerting` (due alerts only)
+- `mark_vip_request_alert_sent`
+- `claim_vip_request_after_ack`
+- `update_vip_booking_status` (set `confirmed`/`rejected`/`cancelled` with audit event)
+- `upsert_vip_venue_tables` (write venue table definitions + chart coordinates)
+- `upsert_vip_table_availability` (write per-date table statuses)
+
+To discover bookable venues first, use:
+- `search_venues` with `vip_booking_supported_only=true`
+- or `get_venue_info` and check `vip_booking_supported`
+
+For internal venue-booking workers, claim queue tasks via DB function:
+- `public.claim_next_vip_agent_task(p_agent_id text)`
+
 ## Run
 
 Stdio (local desktop clients):
@@ -131,6 +190,13 @@ MCP_ENABLE_RECOMMENDATIONS=true npm run dev:http
 
 - Date handling supports `tonight`, `this_weekend`, `YYYY-MM-DD`, and `YYYY-MM-DD/YYYY-MM-DD`.
 - `get_recommendations` returns up to 10 diverse modal slots with dynamic city-aware fallback.
+- Venue and performer tools include upcoming events snapshots.
+- `log_unmet_request` writes unresolved user asks to `public.concierge_unmet_requests`.
+- VIP phase 1 writes booking submissions to `public.vip_booking_requests` and worker queue tasks to `public.vip_agent_tasks`.
+- VIP inventory writes table definitions to `public.vip_venue_tables` and date-specific statuses to `public.vip_table_availability`.
+- `search_venues` and `get_venue_info` include `vip_booking_supported` so clients can show exactly which venues accept VIP booking submissions.
+- `vip_booking_supported` is sourced from `public.venues.vip_booking_enabled` (separate from `guest_list_enabled`).
+- `create_vip_booking_request` only accepts venues where `vip_booking_supported=true`.
 - City handling is backed by `public.cities` (`slug`, timezone, and service-day cutoff).
 - Supported top-level cities are environment-configurable (for example `tokyo` and `san-francisco`) while Tokyo can remain the default.
 - Stdio transport: no API key check.
@@ -152,5 +218,17 @@ MCP_ENABLE_RECOMMENDATIONS=true npm run dev:http
   - `INVALID_EVENT_ID`
   - `UNSUPPORTED_EVENT_ID`
   - `EVENT_NOT_FOUND`
+  - `INVALID_VENUE_ID`
+  - `VENUE_NOT_FOUND`
+  - `INVALID_PERFORMER_ID`
+  - `PERFORMER_NOT_FOUND`
+  - `INVALID_BOOKING_REQUEST`
+  - `BOOKING_REQUEST_NOT_FOUND`
+  - `BOOKING_STATUS_UPDATE_FAILED`
+  - `VIP_TASK_NOT_AVAILABLE`
+  - `VIP_ALERT_UPDATE_FAILED`
+  - `VIP_CLAIM_FAILED`
+  - `INVALID_REQUEST`
+  - `REQUEST_WRITE_FAILED`
   - `DB_QUERY_FAILED`
   - `INTERNAL_ERROR`

@@ -72,7 +72,7 @@ BEGIN
       updated_at
     )
     VALUES (v_key.id, v_minute, 1, p_now)
-    ON CONFLICT ON CONSTRAINT mcp_api_usage_minute_pkey
+    ON CONFLICT (api_key_id, minute_start)
     DO UPDATE SET
       request_count = public.mcp_api_usage_minute.request_count + 1,
       updated_at = EXCLUDED.updated_at
@@ -86,7 +86,7 @@ BEGIN
       updated_at
     )
     VALUES (v_key.id, v_minute, 1, p_now)
-    ON CONFLICT ON CONSTRAINT mcp_api_usage_minute_pkey
+    ON CONFLICT (api_key_id, minute_start)
     DO UPDATE SET
       request_count = public.mcp_api_usage_minute.request_count + 1,
       updated_at = EXCLUDED.updated_at
@@ -123,7 +123,7 @@ BEGIN
       updated_at
     )
     VALUES (v_key.id, v_day, 1, p_now)
-    ON CONFLICT ON CONSTRAINT mcp_api_usage_daily_pkey
+    ON CONFLICT (api_key_id, usage_date)
     DO UPDATE SET
       request_count = public.mcp_api_usage_daily.request_count + 1,
       updated_at = EXCLUDED.updated_at
@@ -137,7 +137,7 @@ BEGIN
       updated_at
     )
     VALUES (v_key.id, v_day, 1, p_now)
-    ON CONFLICT ON CONSTRAINT mcp_api_usage_daily_pkey
+    ON CONFLICT (api_key_id, usage_date)
     DO UPDATE SET
       request_count = public.mcp_api_usage_daily.request_count + 1,
       updated_at = EXCLUDED.updated_at
@@ -182,5 +182,4 @@ BEGIN
     v_minute_count;
 END;
 $$;
-
 GRANT EXECUTE ON FUNCTION public.consume_mcp_api_request(text, timestamptz) TO service_role;

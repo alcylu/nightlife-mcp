@@ -747,7 +747,9 @@ async function main(): Promise<void> {
         return;
       }
 
-      const server = createNightlifeServer(config, supabase);
+      const server = createNightlifeServer(config, supabase, {
+        includeOpsTools: req.apiKeyTier === "ops",
+      });
       let transport: StreamableHTTPServerTransport;
 
       transport = new StreamableHTTPServerTransport({
