@@ -40,6 +40,9 @@ test("getVipTableAvailability returns per-day available tables", async () => {
                         id: "table-1",
                         table_code: "A1",
                         table_name: "A1",
+                        metadata: {
+                          table_note: "Near DJ booth",
+                        },
                         zone: "Front",
                         capacity_min: 2,
                         capacity_max: 6,
@@ -57,6 +60,9 @@ test("getVipTableAvailability returns per-day available tables", async () => {
                         id: "table-2",
                         table_code: "B2",
                         table_name: "B2",
+                        metadata: {
+                          table_note: "Behind DJ booth",
+                        },
                         zone: "Back",
                         capacity_min: 2,
                         capacity_max: 6,
@@ -147,6 +153,7 @@ test("getVipTableAvailability returns per-day available tables", async () => {
   assert.equal(result.days[0].tables[0].table_code, "A1");
   assert.equal(result.days[1].tables.length, 1);
   assert.equal(result.days[1].tables[0].table_code, "B2");
+  assert.equal(result.days[1].tables[0].note, "Behind DJ booth");
 });
 
 test("getVipTableChart returns chart and status fallback", async () => {
@@ -181,6 +188,9 @@ test("getVipTableChart returns chart and status fallback", async () => {
                         id: "table-1",
                         table_code: "A1",
                         table_name: "A1",
+                        metadata: {
+                          table_note: "Near DJ booth",
+                        },
                         zone: "Front",
                         capacity_min: 2,
                         capacity_max: 6,
@@ -198,6 +208,9 @@ test("getVipTableChart returns chart and status fallback", async () => {
                         id: "table-2",
                         table_code: "B2",
                         table_name: "B2",
+                        metadata: {
+                          table_note: "Blocked view of stage",
+                        },
                         zone: "Back",
                         capacity_min: 4,
                         capacity_max: 8,
@@ -256,8 +269,10 @@ test("getVipTableChart returns chart and status fallback", async () => {
 
   assert.equal(result.tables.length, 2);
   assert.equal(result.tables[0].status, "booked");
+  assert.equal(result.tables[0].note, "Confirmed hold");
   assert.equal(result.tables[1].status, "available");
   assert.equal(result.tables[1].chart_shape, "booth");
+  assert.equal(result.tables[1].note, "Blocked view of stage");
 });
 
 test("upsertVipVenueTables normalizes codes and writes upsert payload", async () => {
@@ -284,6 +299,22 @@ test("upsertVipVenueTables normalizes codes and writes upsert payload", async ()
 
       if (table === "vip_venue_tables") {
         return {
+          select: () => ({
+            eq: () => ({
+              in: async () => ({
+                data: [
+                  {
+                    table_code: "A1",
+                    metadata: {
+                      table_note: "Existing note",
+                      preserved_key: "keep",
+                    },
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          }),
           upsert: (rows: Array<Record<string, unknown>>) => {
             capturedRows = rows;
             return {
@@ -307,7 +338,13 @@ test("upsertVipVenueTables normalizes codes and writes upsert payload", async ()
     venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
     tables: [
       { table_code: "a1", table_name: "A1", capacity_min: 2, capacity_max: 6 },
-      { table_code: "b_02", capacity_min: 4, capacity_max: 8, default_status: "held" },
+      {
+        table_code: "b_02",
+        capacity_min: 4,
+        capacity_max: 8,
+        default_status: "held",
+        note: "Behind DJ booth",
+      },
     ],
   });
 
@@ -315,6 +352,13 @@ test("upsertVipVenueTables normalizes codes and writes upsert payload", async ()
   assert.equal(capturedRows[0].table_code, "A1");
   assert.equal(capturedRows[1].table_code, "B_02");
   assert.equal(capturedRows[1].default_status, "held");
+  assert.deepEqual(capturedRows[0].metadata, {
+    table_note: "Existing note",
+    preserved_key: "keep",
+  });
+  assert.deepEqual(capturedRows[1].metadata, {
+    table_note: "Behind DJ booth",
+  });
 });
 
 test("upsertVipTableAvailability rejects unknown table codes", async () => {

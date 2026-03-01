@@ -142,7 +142,7 @@ Ops-tier sessions also have internal queue tools:
 - `mark_vip_request_alert_sent`
 - `claim_vip_request_after_ack`
 - `update_vip_booking_status` (set `confirmed`/`rejected`/`cancelled` with audit event)
-- `upsert_vip_venue_tables` (write venue table definitions + chart coordinates)
+- `upsert_vip_venue_tables` (write venue table definitions + chart coordinates + optional table notes)
 - `upsert_vip_table_availability` (write per-date table statuses)
 
 To discover bookable venues first, use:

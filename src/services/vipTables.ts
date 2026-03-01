@@ -27,6 +27,7 @@ export type UpsertVipVenueTablesInput = {
   tables: Array<{
     table_code: string;
     table_name?: string;
+    note?: string;
     zone?: string;
     capacity_min?: number;
     capacity_max?: number;
@@ -79,6 +80,7 @@ type VipVenueTableRow = {
   id: string;
   table_code: string;
   table_name: string;
+  metadata: unknown;
   zone: string | null;
   capacity_min: number | null;
   capacity_max: number | null;
@@ -285,6 +287,23 @@ function numberOrNull(input: number | string | null): number | null {
   return value;
 }
 
+function objectOrEmpty(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+  return { ...(input as Record<string, unknown>) };
+}
+
+function extractDefaultTableNote(metadata: unknown): string | null {
+  const obj = objectOrEmpty(metadata);
+  const value = obj.table_note;
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
 function isVipTableStatus(value: string): value is VipTableStatus {
   return VIP_TABLE_STATUSES.includes(value as VipTableStatus);
 }
@@ -336,7 +355,7 @@ async function fetchVenueTables(
   let query = supabase
     .from("vip_venue_tables")
     .select(
-      "id,table_code,table_name,zone,capacity_min,capacity_max,is_active,default_status,chart_shape,chart_x,chart_y,chart_width,chart_height,chart_rotation,sort_order",
+      "id,table_code,table_name,metadata,zone,capacity_min,capacity_max,is_active,default_status,chart_shape,chart_x,chart_y,chart_width,chart_height,chart_rotation,sort_order",
     )
     .eq("venue_id", venueId);
 
@@ -405,6 +424,7 @@ export async function getVipTableAvailability(
   const days = dates.map((bookingDate) => {
     const tableStatuses = candidateTables.map((table) => {
       const row = availabilityByKey.get(`${bookingDate}:${table.id}`);
+      const defaultTableNote = extractDefaultTableNote(table.metadata);
       const fallbackStatus = isVipTableStatus(table.default_status)
         ? table.default_status
         : "unknown";
@@ -423,7 +443,7 @@ export async function getVipTableAvailability(
         status,
         min_spend: numberOrNull(row?.min_spend ?? null),
         currency: row?.currency || null,
-        note: row?.note || null,
+        note: row?.note || defaultTableNote,
       };
     });
 
@@ -488,6 +508,7 @@ export async function getVipTableChart(
 
   const chartTables = tables.map((table) => {
     const row = bookingDate ? availabilityByTableId.get(table.id) : null;
+    const defaultTableNote = extractDefaultTableNote(table.metadata);
     const fallbackStatus = isVipTableStatus(table.default_status)
       ? table.default_status
       : "unknown";
@@ -515,7 +536,7 @@ export async function getVipTableChart(
       status,
       min_spend: numberOrNull(row?.min_spend ?? null),
       currency: row?.currency || null,
-      note: row?.note || null,
+      note: row?.note || defaultTableNote,
     };
   });
 
@@ -542,12 +563,15 @@ export async function upsertVipVenueTables(
   }
 
   const venue = await resolveVenue(supabase, venueId, false);
-  const rows = rowsRaw.map((table, index) => {
+  const rowsNormalized = rowsRaw.map((table, index) => {
     const tableCode = normalizeTableCode(table.table_code);
     const { min, max } = normalizeCapacity(table.capacity_min, table.capacity_max);
     return {
       venue_id: venueId,
       table_code: tableCode,
+      table_note: table.note !== undefined
+        ? normalizeOptionalText(table.note, "note", 500)
+        : undefined,
       table_name: normalizeTableName(table.table_name, tableCode),
       zone: normalizeOptionalText(table.zone, "zone", 120),
       capacity_min: min,
@@ -561,6 +585,55 @@ export async function upsertVipVenueTables(
       chart_height: normalizeOptionalNumber(table.chart_height, "chart_height"),
       chart_rotation: normalizeOptionalNumber(table.chart_rotation, "chart_rotation"),
       sort_order: normalizeSortOrder(table.sort_order, index),
+    };
+  });
+
+  const tableCodes = [...new Set(rowsNormalized.map((row) => row.table_code))];
+  const { data: existingRows, error: existingRowsError } = await supabase
+    .from("vip_venue_tables")
+    .select("table_code,metadata")
+    .eq("venue_id", venueId)
+    .in("table_code", tableCodes);
+
+  if (existingRowsError) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to load existing table metadata.", {
+      cause: existingRowsError.message,
+    });
+  }
+
+  const metadataByCode = new Map<string, Record<string, unknown>>();
+  for (const row of (existingRows || []) as Array<{ table_code: string; metadata: unknown }>) {
+    metadataByCode.set(String(row.table_code).toUpperCase(), objectOrEmpty(row.metadata));
+  }
+
+  const rows = rowsNormalized.map((row) => {
+    const existingMetadata = metadataByCode.get(row.table_code) || {};
+    const metadata = { ...existingMetadata };
+    if (row.table_note !== undefined) {
+      if (row.table_note) {
+        metadata.table_note = row.table_note;
+      } else {
+        delete metadata.table_note;
+      }
+    }
+
+    return {
+      venue_id: row.venue_id,
+      table_code: row.table_code,
+      table_name: row.table_name,
+      zone: row.zone,
+      capacity_min: row.capacity_min,
+      capacity_max: row.capacity_max,
+      is_active: row.is_active,
+      default_status: row.default_status,
+      chart_shape: row.chart_shape,
+      chart_x: row.chart_x,
+      chart_y: row.chart_y,
+      chart_width: row.chart_width,
+      chart_height: row.chart_height,
+      chart_rotation: row.chart_rotation,
+      sort_order: row.sort_order,
+      metadata,
     };
   });
 

@@ -20,6 +20,7 @@ export const upsertVipVenueTablesInputSchema = {
     z.object({
       table_code: z.string().min(1),
       table_name: z.string().optional(),
+      note: z.string().max(500).optional(),
       zone: z.string().optional(),
       capacity_min: z.number().int().min(1).optional(),
       capacity_max: z.number().int().min(1).optional(),
