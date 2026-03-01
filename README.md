@@ -128,6 +128,7 @@ Run migration:
 -- and if already deployed before 2026-02-28:
 -- supabase/migrations/20260228111000_vip_outward_language_defaults.sql
 -- supabase/migrations/20260301010000_vip_table_availability_chart.sql
+-- supabase/migrations/20260301114000_vip_table_chart_storage_bucket.sql
 ```
 
 Then call MCP tools:
@@ -144,6 +145,7 @@ Ops-tier sessions also have internal queue tools:
 - `update_vip_booking_status` (set `confirmed`/`rejected`/`cancelled` with audit event)
 - `upsert_vip_venue_tables` (write venue table definitions + chart coordinates + optional table notes + optional `layout_image_url`)
 - `upsert_vip_table_availability` (write per-date table statuses)
+- `upload_vip_table_chart_image` (upload chart image to storage and attach `layout_image_url` to venue table metadata)
 
 To discover bookable venues first, use:
 - `search_venues` with `vip_booking_supported_only=true`

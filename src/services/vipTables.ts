@@ -3,6 +3,7 @@ import {
   type VipTableAvailabilityMutationResult,
   type VipTableAvailabilityResult,
   type VipTableChartResult,
+  type VipTableChartImageUploadResult,
   type VipTableStatus,
   type VipVenueTableMutationResult,
 } from "../types.js";
@@ -56,12 +57,30 @@ export type UpsertVipTableAvailabilityInput = {
   }>;
 };
 
+export type UploadVipTableChartImageInput = {
+  venue_id: string;
+  image_base64: string;
+  mime_type: string;
+  filename?: string;
+};
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY_RE = /^[A-Z]{3}$/;
 const TABLE_CODE_RE = /^[A-Z0-9._-]{1,64}$/;
 const HTTP_URL_RE = /^https?:\/\/\S+$/i;
+const FILE_STEM_RE = /[^a-z0-9._-]/g;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+const VIP_TABLE_CHARTS_BUCKET = "vip-table-charts";
+const VIP_TABLE_CHART_MAX_BYTES = 10 * 1024 * 1024;
+const VIP_TABLE_CHART_MIME_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/svg+xml": "svg",
+};
 
 const VIP_TABLE_STATUSES: VipTableStatus[] = [
   "available",
@@ -268,6 +287,59 @@ function normalizeOptionalHttpUrl(input: string | undefined, field: string): str
   return normalized;
 }
 
+function normalizeMimeType(input: string): string {
+  const normalized = String(input || "").trim().toLowerCase();
+  if (!Object.prototype.hasOwnProperty.call(VIP_TABLE_CHART_MIME_EXT, normalized)) {
+    throw new NightlifeError(
+      "INVALID_REQUEST",
+      `mime_type must be one of: ${Object.keys(VIP_TABLE_CHART_MIME_EXT).join(", ")}.`,
+    );
+  }
+  return normalized;
+}
+
+function normalizeImageBase64(input: string): Buffer {
+  const raw = String(input || "").trim();
+  if (!raw) {
+    throw new NightlifeError("INVALID_REQUEST", "image_base64 is required.");
+  }
+
+  const base64 = raw.replace(/^data:[^;]+;base64,/i, "").replace(/\s+/g, "");
+  if (!BASE64_RE.test(base64)) {
+    throw new NightlifeError("INVALID_REQUEST", "image_base64 must be valid base64 data.");
+  }
+
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(base64, "base64");
+  } catch {
+    throw new NightlifeError("INVALID_REQUEST", "image_base64 must be valid base64 data.");
+  }
+
+  if (bytes.length === 0) {
+    throw new NightlifeError("INVALID_REQUEST", "image_base64 decoded to an empty payload.");
+  }
+  if (bytes.length > VIP_TABLE_CHART_MAX_BYTES) {
+    throw new NightlifeError(
+      "INVALID_REQUEST",
+      `Image size exceeds ${VIP_TABLE_CHART_MAX_BYTES} bytes.`,
+    );
+  }
+
+  return bytes;
+}
+
+function normalizeFileStem(input: string | undefined): string {
+  const normalized = String(input || "").trim().toLowerCase();
+  if (!normalized) {
+    return "layout";
+  }
+
+  const noExtension = normalized.replace(/\.[a-z0-9]+$/i, "");
+  const compact = noExtension.replace(FILE_STEM_RE, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return compact.slice(0, 64) || "layout";
+}
+
 function normalizeChartShape(input: string | undefined): string {
   const normalized = String(input || "").trim().toLowerCase();
   if (!normalized) {
@@ -402,6 +474,51 @@ async function fetchVenueTables(
     });
   }
   return (data || []) as VipVenueTableRow[];
+}
+
+async function applyLayoutImageUrlToVenueTables(
+  supabase: SupabaseClient,
+  venueId: string,
+  layoutImageUrl: string,
+): Promise<number> {
+  const { data, error } = await supabase
+    .from("vip_venue_tables")
+    .select("id,metadata")
+    .eq("venue_id", venueId);
+
+  if (error) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to load VIP venue tables for layout image.", {
+      cause: error.message,
+    });
+  }
+
+  const rows = (data || []) as Array<{ id: string; metadata: unknown }>;
+  if (rows.length === 0) {
+    throw new NightlifeError(
+      "INVALID_REQUEST",
+      "Cannot attach layout image before venue tables exist. Create VIP tables first.",
+    );
+  }
+
+  for (const row of rows) {
+    const metadata = {
+      ...objectOrEmpty(row.metadata),
+      layout_image_url: layoutImageUrl,
+    };
+
+    const { error: updateError } = await supabase
+      .from("vip_venue_tables")
+      .update({ metadata })
+      .eq("id", row.id);
+
+    if (updateError) {
+      throw new NightlifeError("DB_QUERY_FAILED", "Failed to save layout image metadata.", {
+        cause: updateError.message,
+      });
+    }
+  }
+
+  return rows.length;
 }
 
 export async function getVipTableAvailability(
@@ -775,5 +892,54 @@ export async function upsertVipTableAvailability(
     venue_name: venue.name,
     booking_date: bookingDate,
     updated_count: upserts.length,
+  };
+}
+
+export async function uploadVipTableChartImage(
+  supabase: SupabaseClient,
+  input: UploadVipTableChartImageInput,
+): Promise<VipTableChartImageUploadResult> {
+  const venueId = ensureUuid(input.venue_id, "venue_id");
+  const mimeType = normalizeMimeType(input.mime_type);
+  const bytes = normalizeImageBase64(input.image_base64);
+  const venue = await resolveVenue(supabase, venueId, false);
+
+  const fileExtension = VIP_TABLE_CHART_MIME_EXT[mimeType];
+  const fileStem = normalizeFileStem(input.filename);
+  const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, "").slice(0, 14);
+  const objectPath = `${venueId}/${timestamp}-${fileStem}.${fileExtension}`;
+
+  const storage = supabase.storage.from(VIP_TABLE_CHARTS_BUCKET);
+  const { error: uploadError } = await storage.upload(objectPath, bytes, {
+    contentType: mimeType,
+    upsert: true,
+    cacheControl: "3600",
+  });
+  if (uploadError) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to upload VIP table chart image.", {
+      cause: uploadError.message,
+    });
+  }
+
+  const { data: publicUrlData } = storage.getPublicUrl(objectPath);
+  const layoutImageUrl = String(publicUrlData?.publicUrl || "").trim();
+  if (!layoutImageUrl) {
+    throw new NightlifeError(
+      "DB_QUERY_FAILED",
+      "Failed to resolve uploaded chart image public URL.",
+    );
+  }
+
+  await applyLayoutImageUrlToVenueTables(supabase, venueId, layoutImageUrl);
+
+  return {
+    venue_id: venue.id,
+    venue_name: venue.name,
+    storage_bucket: VIP_TABLE_CHARTS_BUCKET,
+    storage_path: objectPath,
+    layout_image_url: layoutImageUrl,
+    mime_type: mimeType,
+    size_bytes: bytes.length,
+    uploaded_at: new Date().toISOString(),
   };
 }

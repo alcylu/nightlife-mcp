@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toNightlifeError, toolErrorResponse } from "../errors.js";
 import { logEvent, recordToolResult } from "../observability/metrics.js";
 import {
+  uploadVipTableChartImage,
   upsertVipTableAvailability,
   upsertVipVenueTables,
 } from "../services/vipTables.js";
@@ -69,6 +70,24 @@ export const upsertVipTableAvailabilityOutputSchema = z.object({
   venue_name: z.string().nullable(),
   booking_date: z.string(),
   updated_count: z.number().int().min(0),
+});
+
+export const uploadVipTableChartImageInputSchema = {
+  venue_id: z.string().min(1),
+  image_base64: z.string().min(1),
+  mime_type: z.string().min(1),
+  filename: z.string().max(120).optional(),
+};
+
+export const uploadVipTableChartImageOutputSchema = z.object({
+  venue_id: z.string(),
+  venue_name: z.string().nullable(),
+  storage_bucket: z.string(),
+  storage_path: z.string(),
+  layout_image_url: z.string().url(),
+  mime_type: z.string(),
+  size_bytes: z.number().int().min(1),
+  uploaded_at: z.string(),
 });
 
 function jsonText(value: unknown): string {
@@ -156,6 +175,21 @@ export function registerVipTableOpsTools(server: McpServer, deps: ToolDeps): voi
       "upsert_vip_table_availability",
       upsertVipTableAvailabilityOutputSchema,
       async () => upsertVipTableAvailability(deps.supabase, args),
+    ),
+  );
+
+  server.registerTool(
+    "upload_vip_table_chart_image",
+    {
+      description:
+        "Ops-only: upload a VIP table chart image to storage and attach its public URL to venue table chart metadata.",
+      inputSchema: uploadVipTableChartImageInputSchema,
+      outputSchema: uploadVipTableChartImageOutputSchema,
+    },
+    async (args) => runTool(
+      "upload_vip_table_chart_image",
+      uploadVipTableChartImageOutputSchema,
+      async () => uploadVipTableChartImage(deps.supabase, args),
     ),
   );
 }

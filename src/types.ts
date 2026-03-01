@@ -406,3 +406,14 @@ export interface VipTableAvailabilityMutationResult {
   booking_date: string;
   updated_count: number;
 }
+
+export interface VipTableChartImageUploadResult {
+  venue_id: string;
+  venue_name: string | null;
+  storage_bucket: string;
+  storage_path: string;
+  layout_image_url: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_at: string;
+}

@@ -4,6 +4,7 @@ import { NightlifeError } from "../errors.js";
 import {
   getVipTableAvailability,
   getVipTableChart,
+  uploadVipTableChartImage,
   upsertVipTableAvailability,
   upsertVipVenueTables,
 } from "./vipTables.js";
@@ -427,5 +428,112 @@ test("upsertVipTableAvailability rejects unknown table codes", async () => {
       error instanceof NightlifeError &&
       error.code === "INVALID_REQUEST" &&
       error.message.includes("Unknown table_code"),
+  );
+});
+
+test("uploadVipTableChartImage uploads image and persists layout URL on venue tables", async () => {
+  const updates = new Map<string, Record<string, unknown>>();
+  const uploaded: { path: string; contentType: string; bytes: number }[] = [];
+
+  const supabase = {
+    storage: {
+      from: (bucket: string) => {
+        assert.equal(bucket, "vip-table-charts");
+        return {
+          upload: async (path: string, payload: Buffer, options: { contentType: string }) => {
+            uploaded.push({
+              path,
+              contentType: options.contentType,
+              bytes: payload.length,
+            });
+            return { data: { path }, error: null };
+          },
+          getPublicUrl: (path: string) => ({
+            data: {
+              publicUrl:
+                `https://nqwyhdfwcaedtycojslb.supabase.co/storage/v1/object/public/vip-table-charts/${path}`,
+            },
+          }),
+        };
+      },
+    },
+    from: (table: string) => {
+      if (table === "venues") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                  name: "1Oak",
+                  vip_booking_enabled: true,
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "vip_venue_tables") {
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: [
+                { id: "table-1", metadata: { table_note: "Stage table" } },
+                { id: "table-2", metadata: { table_note: "Floor table", keep: "yes" } },
+              ],
+              error: null,
+            }),
+          }),
+          update: (payload: Record<string, unknown>) => ({
+            eq: async (_field: string, tableId: string) => {
+              updates.set(tableId, payload);
+              return { data: null, error: null };
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    },
+  } as any;
+
+  const result = await uploadVipTableChartImage(supabase, {
+    venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+    image_base64: Buffer.from("fake-image-bytes").toString("base64"),
+    mime_type: "image/png",
+    filename: "1oak-main-layout.png",
+  });
+
+  assert.equal(uploaded.length, 1);
+  assert.equal(uploaded[0].contentType, "image/png");
+  assert.equal(result.storage_bucket, "vip-table-charts");
+  assert.equal(result.venue_name, "1Oak");
+  assert.match(result.storage_path, /^d290f1ee-6c54-4b01-90e6-d701748f0851\/\d{14}-1oak-main-layout\.png$/);
+  assert.match(result.layout_image_url, /\/vip-table-charts\/d290f1ee-6c54-4b01-90e6-d701748f0851\//);
+  assert.equal(result.size_bytes, Buffer.from("fake-image-bytes").length);
+
+  const metadataOne = updates.get("table-1")?.metadata as Record<string, unknown>;
+  const metadataTwo = updates.get("table-2")?.metadata as Record<string, unknown>;
+  assert.equal(typeof metadataOne.layout_image_url, "string");
+  assert.equal(metadataOne.table_note, "Stage table");
+  assert.equal(metadataTwo.keep, "yes");
+  assert.equal(metadataTwo.table_note, "Floor table");
+});
+
+test("uploadVipTableChartImage rejects unsupported mime type", async () => {
+  const supabase = {} as any;
+  await assert.rejects(
+    async () =>
+      uploadVipTableChartImage(supabase, {
+        venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+        image_base64: Buffer.from("fake-image-bytes").toString("base64"),
+        mime_type: "application/pdf",
+      }),
+    (error) =>
+      error instanceof NightlifeError &&
+      error.code === "INVALID_REQUEST" &&
+      error.message.includes("mime_type must be one of"),
   );
 });
