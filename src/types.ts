@@ -383,6 +383,7 @@ export interface VipTableChartResult {
   venue_id: string;
   venue_name: string | null;
   booking_date: string | null;
+  layout_image_url: string | null;
   generated_at: string;
   tables: VipTableChartNode[];
 }

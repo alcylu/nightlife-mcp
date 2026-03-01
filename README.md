@@ -134,7 +134,7 @@ Then call MCP tools:
 - `create_vip_booking_request`
 - `get_vip_booking_status`
 - `get_vip_table_availability` (read per-day table availability by venue/date range)
-- `get_vip_table_chart` (read structured table chart with optional per-date status overlay)
+- `get_vip_table_chart` (read structured table chart with optional per-date status overlay and optional `layout_image_url`)
 
 Ops-tier sessions also have internal queue tools:
 - `list_vip_reservations` (all outstanding reservations; default statuses: `submitted`, `in_review`, `confirmed`)
@@ -142,7 +142,7 @@ Ops-tier sessions also have internal queue tools:
 - `mark_vip_request_alert_sent`
 - `claim_vip_request_after_ack`
 - `update_vip_booking_status` (set `confirmed`/`rejected`/`cancelled` with audit event)
-- `upsert_vip_venue_tables` (write venue table definitions + chart coordinates + optional table notes)
+- `upsert_vip_venue_tables` (write venue table definitions + chart coordinates + optional table notes + optional `layout_image_url`)
 - `upsert_vip_table_availability` (write per-date table statuses)
 
 To discover bookable venues first, use:

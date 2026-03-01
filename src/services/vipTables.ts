@@ -24,6 +24,7 @@ export type GetVipTableChartInput = {
 
 export type UpsertVipVenueTablesInput = {
   venue_id: string;
+  layout_image_url?: string;
   tables: Array<{
     table_code: string;
     table_name?: string;
@@ -60,6 +61,7 @@ const UUID_RE =
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const CURRENCY_RE = /^[A-Z]{3}$/;
 const TABLE_CODE_RE = /^[A-Z0-9._-]{1,64}$/;
+const HTTP_URL_RE = /^https?:\/\/\S+$/i;
 
 const VIP_TABLE_STATUSES: VipTableStatus[] = [
   "available",
@@ -252,6 +254,20 @@ function normalizeOptionalText(
   return normalized;
 }
 
+function normalizeOptionalHttpUrl(input: string | undefined, field: string): string | null {
+  const normalized = String(input || "").trim();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized.length > 2048) {
+    throw new NightlifeError("INVALID_REQUEST", `${field} cannot exceed 2048 characters.`);
+  }
+  if (!HTTP_URL_RE.test(normalized)) {
+    throw new NightlifeError("INVALID_REQUEST", `${field} must be an http/https URL.`);
+  }
+  return normalized;
+}
+
 function normalizeChartShape(input: string | undefined): string {
   const normalized = String(input || "").trim().toLowerCase();
   if (!normalized) {
@@ -302,6 +318,19 @@ function extractDefaultTableNote(metadata: unknown): string | null {
   }
   const normalized = value.trim();
   return normalized ? normalized : null;
+}
+
+function extractLayoutImageUrl(metadata: unknown): string | null {
+  const obj = objectOrEmpty(metadata);
+  const value = obj.layout_image_url;
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim();
+  if (!normalized || !HTTP_URL_RE.test(normalized)) {
+    return null;
+  }
+  return normalized;
 }
 
 function isVipTableStatus(value: string): value is VipTableStatus {
@@ -544,6 +573,8 @@ export async function getVipTableChart(
     venue_id: venue.id,
     venue_name: venue.name,
     booking_date: bookingDate,
+    layout_image_url:
+      tables.map((table) => extractLayoutImageUrl(table.metadata)).find(Boolean) || null,
     generated_at: nowIso,
     tables: chartTables,
   };
@@ -563,6 +594,7 @@ export async function upsertVipVenueTables(
   }
 
   const venue = await resolveVenue(supabase, venueId, false);
+  const layoutImageUrl = normalizeOptionalHttpUrl(input.layout_image_url, "layout_image_url");
   const rowsNormalized = rowsRaw.map((table, index) => {
     const tableCode = normalizeTableCode(table.table_code);
     const { min, max } = normalizeCapacity(table.capacity_min, table.capacity_max);
@@ -615,6 +647,9 @@ export async function upsertVipVenueTables(
       } else {
         delete metadata.table_note;
       }
+    }
+    if (layoutImageUrl) {
+      metadata.layout_image_url = layoutImageUrl;
     }
 
     return {

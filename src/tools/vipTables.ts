@@ -80,6 +80,7 @@ export const vipTableChartOutputSchema = z.object({
   venue_id: z.string(),
   venue_name: z.string().nullable(),
   booking_date: z.string().nullable(),
+  layout_image_url: z.string().url().nullable(),
   generated_at: z.string(),
   tables: z.array(vipTableChartNodeSchema),
 });

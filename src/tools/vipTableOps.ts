@@ -16,6 +16,7 @@ const vipTableStatusSchema = z.enum(["available", "held", "booked", "blocked", "
 
 export const upsertVipVenueTablesInputSchema = {
   venue_id: z.string().min(1),
+  layout_image_url: z.string().url().optional(),
   tables: z.array(
     z.object({
       table_code: z.string().min(1),

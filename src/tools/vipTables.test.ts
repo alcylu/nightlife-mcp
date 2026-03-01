@@ -46,6 +46,7 @@ test("vipTableChartOutputSchema accepts table chart payload", () => {
     venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
     venue_name: "Zouk",
     booking_date: "2026-03-01",
+    layout_image_url: "https://cdn.nightlife.dev/charts/zouk-layout.jpg",
     generated_at: "2026-02-28T12:00:00.000Z",
     tables: [
       {

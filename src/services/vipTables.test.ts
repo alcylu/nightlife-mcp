@@ -42,6 +42,7 @@ test("getVipTableAvailability returns per-day available tables", async () => {
                         table_name: "A1",
                         metadata: {
                           table_note: "Near DJ booth",
+                          layout_image_url: "https://cdn.nightlife.dev/charts/zouk-layout.jpg",
                         },
                         zone: "Front",
                         capacity_min: 2,
@@ -190,6 +191,7 @@ test("getVipTableChart returns chart and status fallback", async () => {
                         table_name: "A1",
                         metadata: {
                           table_note: "Near DJ booth",
+                          layout_image_url: "https://cdn.nightlife.dev/charts/zouk-layout.jpg",
                         },
                         zone: "Front",
                         capacity_min: 2,
@@ -268,6 +270,7 @@ test("getVipTableChart returns chart and status fallback", async () => {
   });
 
   assert.equal(result.tables.length, 2);
+  assert.equal(result.layout_image_url, "https://cdn.nightlife.dev/charts/zouk-layout.jpg");
   assert.equal(result.tables[0].status, "booked");
   assert.equal(result.tables[0].note, "Confirmed hold");
   assert.equal(result.tables[1].status, "available");
@@ -336,6 +339,7 @@ test("upsertVipVenueTables normalizes codes and writes upsert payload", async ()
 
   const result = await upsertVipVenueTables(supabase, {
     venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+    layout_image_url: "https://cdn.nightlife.dev/charts/zouk-layout.jpg",
     tables: [
       { table_code: "a1", table_name: "A1", capacity_min: 2, capacity_max: 6 },
       {
@@ -353,10 +357,12 @@ test("upsertVipVenueTables normalizes codes and writes upsert payload", async ()
   assert.equal(capturedRows[1].table_code, "B_02");
   assert.equal(capturedRows[1].default_status, "held");
   assert.deepEqual(capturedRows[0].metadata, {
+    layout_image_url: "https://cdn.nightlife.dev/charts/zouk-layout.jpg",
     table_note: "Existing note",
     preserved_key: "keep",
   });
   assert.deepEqual(capturedRows[1].metadata, {
+    layout_image_url: "https://cdn.nightlife.dev/charts/zouk-layout.jpg",
     table_note: "Behind DJ booth",
   });
 });
