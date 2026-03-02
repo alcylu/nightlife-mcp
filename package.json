@@ -12,7 +12,8 @@
     "start": "node dist/index.js",
     "start:http": "node dist/http.js",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/**/*.test.ts",
+    "smoke:prod:auth": "node scripts/prod-auth-smoke.mjs"
   },
   "keywords": [
     "mcp",

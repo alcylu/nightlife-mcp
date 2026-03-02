@@ -12,6 +12,10 @@ test("createVipBookingOutputSchema accepts phase-1 output shape", () => {
     status: "submitted",
     created_at: "2026-02-27T12:00:00.000Z",
     message: "Your VIP booking request has been sent to the venue booking desk.",
+    preferred_table_code: null,
+    min_spend: null,
+    min_spend_currency: null,
+    table_warning: null,
   });
 
   assert.equal(parsed.status, "submitted");

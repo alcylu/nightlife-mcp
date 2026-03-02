@@ -138,6 +138,17 @@ test("getVipTableAvailability returns per-day available tables", async () => {
         };
       }
 
+      if (table === "vip_table_day_defaults") {
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: [],
+              error: null,
+            }),
+          }),
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     },
   } as any;
@@ -256,6 +267,17 @@ test("getVipTableChart returns chart and status fallback", async () => {
                   error: null,
                 }),
               }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "vip_table_day_defaults") {
+        return {
+          select: () => ({
+            eq: async () => ({
+              data: [],
+              error: null,
             }),
           }),
         };

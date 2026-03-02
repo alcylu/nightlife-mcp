@@ -181,6 +181,17 @@ For HTTP in production:
 npm run start:http
 ```
 
+Authenticated production smoke check:
+
+```bash
+NLT_API_KEY=... npm run smoke:prod:auth
+```
+
+Optional env overrides:
+- `NLT_MCP_URL` (default: `https://api.nightlife.dev/mcp`)
+- `NLT_REST_BASE_URL` (default: `https://api.nightlife.dev/api/v1`)
+- `NLT_SMOKE_CITY` (default: `tokyo`)
+
 Debug web UI for recommendations:
 
 ```bash

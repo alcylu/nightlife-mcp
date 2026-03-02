@@ -716,6 +716,10 @@ async function main(): Promise<void> {
   });
 
   // OpenAPI spec + docs (public, no auth)
+  app.get("/favicon.ico", (_req, res) => {
+    res.status(204).end();
+  });
+
   app.get("/api/v1/openapi.json", (_req, res) => {
     res.json(openApiDocument);
   });

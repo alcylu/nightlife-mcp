@@ -17,6 +17,7 @@ test("vipTableAvailabilityOutputSchema accepts daily availability payload", () =
     days: [
       {
         booking_date: "2026-03-01",
+        venue_open: true,
         available_count: 2,
         total_count: 4,
         tables: [
@@ -31,6 +32,7 @@ test("vipTableAvailabilityOutputSchema accepts daily availability payload", () =
             min_spend: 1000,
             currency: "JPY",
             note: "Prime location",
+            pricing_approximate: false,
           },
         ],
       },
@@ -45,6 +47,7 @@ test("vipTableChartOutputSchema accepts table chart payload", () => {
   const parsed = vipTableChartOutputSchema.parse({
     venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
     venue_name: "Zouk",
+    venue_open: true,
     booking_date: "2026-03-01",
     layout_image_url: "https://cdn.nightlife.dev/charts/zouk-layout.jpg",
     generated_at: "2026-02-28T12:00:00.000Z",
@@ -68,6 +71,7 @@ test("vipTableChartOutputSchema accepts table chart payload", () => {
         min_spend: 1200,
         currency: "JPY",
         note: null,
+        pricing_approximate: false,
       },
     ],
   });
