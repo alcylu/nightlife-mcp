@@ -192,6 +192,9 @@ export interface VipBookingCreateResult {
   status: VipBookingStatus;
   created_at: string;
   message: string;
+  preferred_table_code: string | null;
+  min_spend: number | null;
+  min_spend_currency: string | null;
 }
 
 export interface VipBookingStatusHistoryEntry {

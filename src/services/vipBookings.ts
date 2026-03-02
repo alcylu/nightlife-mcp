@@ -27,6 +27,7 @@ export type CreateVipBookingRequestInput = {
   customer_name: string;
   customer_email: string;
   customer_phone: string;
+  preferred_table_code?: string;
   special_requests?: string;
 };
 
@@ -83,6 +84,7 @@ const UUID_RE =
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const TABLE_CODE_RE = /^[A-Z0-9._-]{1,64}$/;
 const VIP_STATUSES: VipBookingStatus[] = [
   "submitted",
   "in_review",
@@ -346,6 +348,92 @@ function normalizeOptionalText(input: string | undefined, maxLength: number): st
   return normalized.slice(0, maxLength);
 }
 
+function normalizeOptionalTableCode(input: string | undefined): string | null {
+  const normalized = String(input || "").trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+  if (!TABLE_CODE_RE.test(normalized)) {
+    throw new NightlifeError(
+      "INVALID_BOOKING_REQUEST",
+      "preferred_table_code must contain only letters, numbers, dots, hyphens, or underscores (max 64 chars).",
+    );
+  }
+  return normalized;
+}
+
+type TablePricingLookup = {
+  tableId: string;
+  minSpend: number | null;
+  currency: string | null;
+};
+
+async function lookupTablePricing(
+  supabase: SupabaseClient,
+  venueId: string,
+  tableCode: string,
+  bookingDate: string,
+): Promise<TablePricingLookup> {
+  const { data: table, error: tableError } = await supabase
+    .from("vip_venue_tables")
+    .select("id")
+    .eq("venue_id", venueId)
+    .eq("table_code", tableCode)
+    .maybeSingle<{ id: string }>();
+
+  if (tableError) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to validate table code.", {
+      cause: tableError.message,
+    });
+  }
+
+  if (!table) {
+    throw new NightlifeError(
+      "INVALID_BOOKING_REQUEST",
+      `Table "${tableCode}" does not exist at this venue. Use get_vip_table_availability to see available tables.`,
+    );
+  }
+
+  // Level 1: Check explicit per-date availability
+  const { data: explicit } = await supabase
+    .from("vip_table_availability")
+    .select("min_spend,currency")
+    .eq("vip_venue_table_id", table.id)
+    .eq("booking_date", bookingDate)
+    .maybeSingle<{ min_spend: number | null; currency: string | null }>();
+
+  if (explicit?.min_spend != null) {
+    return { tableId: table.id, minSpend: explicit.min_spend, currency: explicit.currency };
+  }
+
+  // Level 2: Check day-of-week defaults
+  const dayOfWeek = new Date(`${bookingDate}T00:00:00Z`).getUTCDay();
+  const { data: dayDefault } = await supabase
+    .from("vip_table_day_defaults")
+    .select("min_spend,currency")
+    .eq("vip_venue_table_id", table.id)
+    .eq("day_of_week", dayOfWeek)
+    .maybeSingle<{ min_spend: number | null; currency: string | null }>();
+
+  if (dayDefault?.min_spend != null) {
+    return { tableId: table.id, minSpend: dayDefault.min_spend, currency: dayDefault.currency };
+  }
+
+  // Level 3: Venue-level default
+  const { data: venue } = await supabase
+    .from("venues")
+    .select("vip_default_min_spend,vip_default_currency")
+    .eq("id", venueId)
+    .maybeSingle<{ vip_default_min_spend: number | null; vip_default_currency: string | null }>();
+
+  if (venue?.vip_default_min_spend != null) {
+    return { tableId: table.id, minSpend: venue.vip_default_min_spend, currency: venue.vip_default_currency };
+  }
+
+  // Level 4: No pricing data
+  return { tableId: table.id, minSpend: null, currency: null };
+}
+
 function normalizeStatusMessage(input: string | undefined): string | null {
   const normalized = normalizeOptionalText(input, 400);
   return normalized;
@@ -587,6 +675,7 @@ export async function createVipBookingRequest(
   const customerName = normalizeCustomerName(input.customer_name);
   const customerEmail = normalizeCustomerEmail(input.customer_email);
   const customerPhone = normalizeCustomerPhone(input.customer_phone);
+  const preferredTableCode = normalizeOptionalTableCode(input.preferred_table_code);
   const specialRequests = normalizeOptionalText(input.special_requests, 2000);
 
   const window = await resolveBookingWindow(supabase, venueId);
@@ -595,6 +684,15 @@ export async function createVipBookingRequest(
       "INVALID_BOOKING_REQUEST",
       `booking_date must be between ${window.currentServiceDate} and ${window.maxServiceDate}.`,
     );
+  }
+
+  let minSpend: number | null = null;
+  let minSpendCurrency: string | null = null;
+
+  if (preferredTableCode) {
+    const pricing = await lookupTablePricing(supabase, venueId, preferredTableCode, bookingDate);
+    minSpend = pricing.minSpend;
+    minSpendCurrency = pricing.currency;
   }
 
   const { data: created, error: createError } = await supabase
@@ -607,6 +705,9 @@ export async function createVipBookingRequest(
       customer_name: customerName,
       customer_email: customerEmail,
       customer_phone: customerPhone,
+      preferred_table_code: preferredTableCode,
+      min_spend: minSpend,
+      min_spend_currency: minSpendCurrency,
       special_requests: specialRequests,
       status: "submitted",
       status_message: DEFAULT_STATUS_MESSAGE,
@@ -658,6 +759,9 @@ export async function createVipBookingRequest(
     status: created.status,
     created_at: created.created_at,
     message: created.status_message,
+    preferred_table_code: preferredTableCode,
+    min_spend: minSpend,
+    min_spend_currency: minSpendCurrency,
   };
 }
 

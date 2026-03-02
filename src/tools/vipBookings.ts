@@ -20,6 +20,7 @@ export const createVipBookingInputSchema = {
   customer_name: z.string().min(1),
   customer_email: z.string().min(1),
   customer_phone: z.string().min(1),
+  preferred_table_code: z.string().optional(),
   special_requests: z.string().optional(),
 };
 
@@ -28,6 +29,9 @@ export const createVipBookingOutputSchema = z.object({
   status: z.enum(["submitted", "in_review", "confirmed", "rejected", "cancelled"]),
   created_at: z.string(),
   message: z.string(),
+  preferred_table_code: z.string().nullable(),
+  min_spend: z.number().nullable(),
+  min_spend_currency: z.string().nullable(),
 });
 
 const vipBookingHistorySchema = z.object({
