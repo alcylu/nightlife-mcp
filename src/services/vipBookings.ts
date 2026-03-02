@@ -363,7 +363,8 @@ function normalizeOptionalTableCode(input: string | undefined): string | null {
 }
 
 type TablePricingLookup = {
-  tableId: string;
+  found: boolean;
+  tableId: string | null;
   minSpend: number | null;
   currency: string | null;
 };
@@ -388,10 +389,7 @@ async function lookupTablePricing(
   }
 
   if (!table) {
-    throw new NightlifeError(
-      "INVALID_BOOKING_REQUEST",
-      `Table "${tableCode}" does not exist at this venue. Use get_vip_table_availability to see available tables.`,
-    );
+    return { found: false, tableId: null, minSpend: null, currency: null };
   }
 
   // Level 1: Check explicit per-date availability
@@ -403,7 +401,7 @@ async function lookupTablePricing(
     .maybeSingle<{ min_spend: number | null; currency: string | null }>();
 
   if (explicit?.min_spend != null) {
-    return { tableId: table.id, minSpend: explicit.min_spend, currency: explicit.currency };
+    return { found: true, tableId: table.id, minSpend: explicit.min_spend, currency: explicit.currency };
   }
 
   // Level 2: Check day-of-week defaults
@@ -416,7 +414,7 @@ async function lookupTablePricing(
     .maybeSingle<{ min_spend: number | null; currency: string | null }>();
 
   if (dayDefault?.min_spend != null) {
-    return { tableId: table.id, minSpend: dayDefault.min_spend, currency: dayDefault.currency };
+    return { found: true, tableId: table.id, minSpend: dayDefault.min_spend, currency: dayDefault.currency };
   }
 
   // Level 3: Venue-level default
@@ -427,11 +425,11 @@ async function lookupTablePricing(
     .maybeSingle<{ vip_default_min_spend: number | null; vip_default_currency: string | null }>();
 
   if (venue?.vip_default_min_spend != null) {
-    return { tableId: table.id, minSpend: venue.vip_default_min_spend, currency: venue.vip_default_currency };
+    return { found: true, tableId: table.id, minSpend: venue.vip_default_min_spend, currency: venue.vip_default_currency };
   }
 
   // Level 4: No pricing data
-  return { tableId: table.id, minSpend: null, currency: null };
+  return { found: true, tableId: table.id, minSpend: null, currency: null };
 }
 
 function normalizeStatusMessage(input: string | undefined): string | null {
@@ -688,9 +686,13 @@ export async function createVipBookingRequest(
 
   let minSpend: number | null = null;
   let minSpendCurrency: string | null = null;
+  let tableWarning: string | null = null;
 
   if (preferredTableCode) {
     const pricing = await lookupTablePricing(supabase, venueId, preferredTableCode, bookingDate);
+    if (!pricing.found) {
+      tableWarning = `Table "${preferredTableCode}" was not found in our system for this venue. The booking request has been submitted and the venue will confirm table availability.`;
+    }
     minSpend = pricing.minSpend;
     minSpendCurrency = pricing.currency;
   }
@@ -762,6 +764,7 @@ export async function createVipBookingRequest(
     preferred_table_code: preferredTableCode,
     min_spend: minSpend,
     min_spend_currency: minSpendCurrency,
+    table_warning: tableWarning,
   };
 }
 

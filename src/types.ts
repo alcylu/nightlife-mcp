@@ -195,6 +195,7 @@ export interface VipBookingCreateResult {
   preferred_table_code: string | null;
   min_spend: number | null;
   min_spend_currency: string | null;
+  table_warning: string | null;
 }
 
 export interface VipBookingStatusHistoryEntry {

@@ -32,6 +32,7 @@ export const createVipBookingOutputSchema = z.object({
   preferred_table_code: z.string().nullable(),
   min_spend: z.number().nullable(),
   min_spend_currency: z.string().nullable(),
+  table_warning: z.string().nullable(),
 });
 
 const vipBookingHistorySchema = z.object({
