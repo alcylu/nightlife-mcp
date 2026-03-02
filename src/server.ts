@@ -9,6 +9,7 @@ import { registerVipBookingTools } from "./tools/vipBookings.js";
 import { registerVipAgentOpsTools } from "./tools/vipAgentOps.js";
 import { registerVipTableTools } from "./tools/vipTables.js";
 import { registerVipTableOpsTools } from "./tools/vipTableOps.js";
+import { registerHelperTools } from "./tools/helpers.js";
 
 export type ServerOptions = {
   includeOpsTools?: boolean;
@@ -30,6 +31,7 @@ export function createNightlifeServer(
   registerRequestTools(server, { supabase });
   registerVipBookingTools(server, { supabase });
   registerVipTableTools(server, { supabase });
+  registerHelperTools(server, { config, supabase });
   if (options.includeOpsTools) {
     registerVipAgentOpsTools(server, { supabase });
     registerVipTableOpsTools(server, { supabase });

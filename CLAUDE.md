@@ -34,6 +34,9 @@ npm run build && npm start:http
 | `get_performer_info` | Performer profile + social + upcoming events | performer_id |
 | `log_unmet_request` | Log unresolved concierge asks for ops follow-up | channel, language, city, raw_query, intent, suggested_filters, user_hash |
 | `get_recommendations` | Diverse recommendation slots (feature-flagged) | city, date, area, genre, query, limit |
+| `list_cities` | List all available cities with metadata | *(none)* |
+| `list_genres` | List all available genres | *(none)* |
+| `list_areas` | List area/neighborhood names for a city | city (optional) |
 
 ### Date Filters
 - `tonight` — uses 6am JST rollover (at 2am Saturday, "tonight" = Friday night)
@@ -60,6 +63,9 @@ Plain JSON endpoints at `/api/v1/`. Same auth (API key via `x-api-key` or `Autho
 | GET | `/api/v1/performers` | `searchPerformers()` — query: city, date, genre, query, sort_by, limit, offset |
 | GET | `/api/v1/performers/:id` | `getPerformerInfo()` |
 | GET | `/api/v1/recommendations` | `getRecommendations()` — query: city, date, area, genre, query, limit |
+| GET | `/api/v1/cities` | `listCities()` — no params |
+| GET | `/api/v1/genres` | `listGenres()` — no params |
+| GET | `/api/v1/areas` | `listAreas()` — query: city |
 
 Error responses: `{ error: { code, message } }` with appropriate HTTP status (400/404/500).
 
@@ -100,13 +106,15 @@ src/
 │   ├── venues.ts     # Venue search + detail + upcoming snapshot
 │   ├── performers.ts # Performer search + detail + upcoming snapshot
 │   ├── requests.ts   # Unmet-request writer for concierge follow-up
-│   └── cities.ts     # City context resolution
+│   ├── cities.ts     # City context resolution + listCities()
+│   └── helpers.ts    # listGenres(), listAreas()
 ├── tools/
 │   ├── events.ts      # Event + recommendation tool registration
 │   ├── venues.ts      # Venue tool registration
 │   ├── performers.ts  # Performer tool registration
 │   ├── requests.ts    # Unmet-request tool registration
-│   └── schemas.ts     # Shared Zod schemas
+│   ├── schemas.ts     # Shared Zod schemas
+│   └── helpers.ts    # Helper tool registration (list_cities, list_genres, list_areas)
 ├── utils/
 │   └── time.ts       # Service-day logic, date parsing, timezone conversion
 ├── scripts/
@@ -263,7 +271,7 @@ Before entering the 4-level pricing fallback, VIP table queries check if the ven
 - Output includes: `preferred_table_code`, `min_spend`, `min_spend_currency`, `table_warning` (all nullable)
 
 ### P1
-- `list_genres`, `list_areas`, `list_cities`
+- ~~`list_genres`, `list_areas`, `list_cities`~~ ✓ Shipped (2026-03-02) — 3 MCP tools + REST endpoints + OpenAPI
 - Hotel-optimized response formatting (concierge-friendly language, safety/vibe info)
 
 ### P2

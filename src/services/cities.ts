@@ -61,6 +61,44 @@ export async function getCityContext(
   return null;
 }
 
+export async function listCities(
+  supabase: SupabaseClient,
+  topLevelCities?: string[],
+): Promise<{
+  cities: Array<{ slug: string; name: string; timezone: string; country_code: string }>;
+}> {
+  const { data, error } = await supabase
+    .from("cities")
+    .select("slug,name_en,timezone,country_code")
+    .order("slug", { ascending: true });
+
+  if (error || !data) {
+    return { cities: [] };
+  }
+
+  let rows = data.filter(
+    (row) => row.slug && !String(row.slug).startsWith("unknown"),
+  );
+
+  if (topLevelCities && topLevelCities.length > 0) {
+    const allowed = new Set(
+      topLevelCities
+        .map((v) => v.trim().toLowerCase())
+        .filter((v) => v.length > 0),
+    );
+    rows = rows.filter((row) => allowed.has(String(row.slug).trim().toLowerCase()));
+  }
+
+  return {
+    cities: rows.map((row) => ({
+      slug: String(row.slug).trim().toLowerCase(),
+      name: row.name_en || row.slug,
+      timezone: row.timezone || "UTC",
+      country_code: row.country_code || "JP",
+    })),
+  };
+}
+
 export async function listAvailableCities(
   supabase: SupabaseClient,
   topLevelCities?: string[],

@@ -7,6 +7,8 @@ import { searchEvents, getEventDetails } from "./services/events.js";
 import { searchVenues, getVenueInfo } from "./services/venues.js";
 import { searchPerformers, getPerformerInfo } from "./services/performers.js";
 import { getRecommendations } from "./services/recommendations.js";
+import { listCities } from "./services/cities.js";
+import { listGenres, listAreas } from "./services/helpers.js";
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0
@@ -178,6 +180,36 @@ export function createRestRouter(
         query: str(req.query.query),
         limit: num(req.query.limit),
       });
+      res.json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // GET /api/v1/cities
+  router.get("/cities", async (_req, res) => {
+    try {
+      const result = await listCities(supabase, config.topLevelCities);
+      res.json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // GET /api/v1/genres
+  router.get("/genres", async (_req, res) => {
+    try {
+      const result = await listGenres(supabase);
+      res.json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // GET /api/v1/areas
+  router.get("/areas", async (req, res) => {
+    try {
+      const result = await listAreas(supabase, config, str(req.query.city));
       res.json(result);
     } catch (error) {
       sendError(res, error);

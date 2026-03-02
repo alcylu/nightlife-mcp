@@ -93,6 +93,7 @@ export const openApiDocument = {
     { name: "Venues", description: "Search and retrieve venue profiles" },
     { name: "Performers", description: "Search and retrieve performer profiles" },
     { name: "Recommendations", description: "AI-curated nightlife recommendations" },
+    { name: "Helpers", description: "Discover valid filter values (cities, genres, areas)" },
   ],
   paths: {
     "/events": {
@@ -211,6 +212,56 @@ export const openApiDocument = {
           },
           "401": auth401,
           "404": notFound("Performer"),
+        },
+      },
+    },
+    "/cities": {
+      get: {
+        summary: "List cities",
+        description: "List all available cities with metadata. Use this to discover valid city slugs before calling other endpoints.",
+        operationId: "listCities",
+        tags: ["Helpers"],
+        parameters: [],
+        responses: {
+          "200": {
+            description: "List of available cities",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ListCitiesOutput" } } },
+          },
+          "401": auth401,
+        },
+      },
+    },
+    "/genres": {
+      get: {
+        summary: "List genres",
+        description: "List all available genres. Use this to discover valid genre names before filtering events or venues.",
+        operationId: "listGenres",
+        tags: ["Helpers"],
+        parameters: [],
+        responses: {
+          "200": {
+            description: "List of available genres",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ListGenresOutput" } } },
+          },
+          "401": auth401,
+        },
+      },
+    },
+    "/areas": {
+      get: {
+        summary: "List areas",
+        description: "List distinct area/neighborhood names for a given city. Use this to discover valid area filter values.",
+        operationId: "listAreas",
+        tags: ["Helpers"],
+        parameters: [
+          { name: "city", in: "query", schema: { type: "string" }, description: "City slug (default: tokyo)", required: false },
+        ],
+        responses: {
+          "200": {
+            description: "List of areas for the city",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ListAreasOutput" } } },
+          },
+          "401": auth401,
         },
       },
     },
@@ -449,6 +500,52 @@ export const openApiDocument = {
           why_this_fits: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 2 },
         },
         required: ["rank", "modal_id", "modal_name", "modal_description", "event", "why_this_fits"],
+      },
+      ListCitiesOutput: {
+        type: "object",
+        properties: {
+          cities: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                slug: { type: "string" },
+                name: { type: "string" },
+                timezone: { type: "string" },
+                country_code: { type: "string" },
+              },
+              required: ["slug", "name", "timezone", "country_code"],
+            },
+          },
+        },
+        required: ["cities"],
+      },
+      ListGenresOutput: {
+        type: "object",
+        properties: {
+          genres: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string" },
+                name: { type: "string" },
+                name_en: { type: ["string", "null"] },
+                name_ja: { type: ["string", "null"] },
+              },
+              required: ["id", "name", "name_en", "name_ja"],
+            },
+          },
+        },
+        required: ["genres"],
+      },
+      ListAreasOutput: {
+        type: "object",
+        properties: {
+          city: { type: "string" },
+          areas: { type: "array", items: { type: "string" } },
+        },
+        required: ["city", "areas"],
       },
       RecommendationsOutput: {
         type: "object",
