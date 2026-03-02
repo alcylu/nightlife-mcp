@@ -6,7 +6,7 @@ import { loadConfig } from "../config.js";
 import { createSupabaseClient } from "../db/supabase.js";
 import { hashApiKey, keyFingerprint } from "../auth/apiKeys.js";
 
-type Tier = "free" | "starter" | "enterprise";
+type Tier = "free" | "starter" | "enterprise" | "ops";
 
 type CliOptions = {
   name: string;
@@ -24,7 +24,7 @@ function usage(): string {
     "",
     "Options:",
     "  --name <string>             Key display name (default: generated)",
-    "  --tier <free|starter|enterprise> (default: free)",
+    "  --tier <free|starter|enterprise|ops> (default: free)",
     "  --daily-quota <number|unlimited> (default: 100)",
     "  --minute-quota <number|unlimited> (default: 20)",
     "  --key <string>              Provide explicit key value (default: generated)",
@@ -53,10 +53,10 @@ function parseQuota(raw: string | undefined, fallback: number): number | null {
 
 function parseTier(raw: string | undefined): Tier {
   const value = (raw || "free").trim().toLowerCase();
-  if (value === "free" || value === "starter" || value === "enterprise") {
+  if (value === "free" || value === "starter" || value === "enterprise" || value === "ops") {
     return value;
   }
-  throw new Error(`Invalid tier "${raw}". Expected free|starter|enterprise.`);
+  throw new Error(`Invalid tier "${raw}". Expected free|starter|enterprise|ops.`);
 }
 
 function parseMetadata(raw: string | undefined): Record<string, unknown> {

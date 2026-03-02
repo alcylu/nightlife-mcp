@@ -1,6 +1,6 @@
 {
   "name": "nightlife-mcp",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "MCP server for nightlife event discovery",
   "type": "module",
   "main": "dist/index.js",
@@ -20,8 +20,16 @@
     "events",
     "supabase"
   ],
-  "author": "",
+  "author": "Nightlife Tokyo <hello@nightlifetokyo.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alcylu/nightlife-mcp"
+  },
+  "homepage": "https://nightlife.dev",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@supabase/supabase-js": "^2.97.0",

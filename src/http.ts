@@ -19,6 +19,8 @@ import {
   recordHttpRequest,
   snapshotRuntimeMetrics,
 } from "./observability/metrics.js";
+import { createApiKeyAuthMiddleware, type RequestWithAuth } from "./middleware/apiKeyAuth.js";
+import { createRestRouter } from "./rest.js";
 
 type SessionContext = {
   server: McpServer;
@@ -27,14 +29,6 @@ type SessionContext = {
   apiKeyId: string;
   apiKeyTier: string;
   createdAt: number;
-};
-
-type RequestWithAuth = Request & {
-  apiKey?: string;
-  apiKeyFingerprint?: string;
-  apiKeyId?: string;
-  apiKeyTier?: string;
-  apiKeySource?: "db" | "env";
 };
 
 const SESSION_HEADER = "mcp-session-id";
@@ -618,9 +612,11 @@ async function main(): Promise<void> {
   const supabase = createSupabaseClient(config);
   const sessions = new Map<string, SessionContext>();
 
-  app.get("/debug/recommendations", (_req, res) => {
-    res.type("html").send(recommendationsDebugPageHtml());
-  });
+  if (process.env.NODE_ENV !== "production") {
+    app.get("/debug/recommendations", (_req, res) => {
+      res.type("html").send(recommendationsDebugPageHtml());
+    });
+  }
 
   app.use((req: RequestWithAuth, res, next) => {
     const startedAt = Date.now();
@@ -653,6 +649,10 @@ async function main(): Promise<void> {
     await Promise.allSettled([context.transport.close(), context.server.close()]);
   };
 
+  // Shared API key auth middleware — used by both /mcp and /api/v1
+  const apiKeyAuth = createApiKeyAuthMiddleware({ supabase, config });
+
+  // MCP auth (wraps shared middleware to send JSON-RPC error format)
   app.use("/mcp", async (req: RequestWithAuth, res, next) => {
     if (!config.mcpHttpRequireApiKey) {
       next();
@@ -712,6 +712,9 @@ async function main(): Promise<void> {
     req.apiKeySource = auth.context.source;
     next();
   });
+
+  // REST API v1 — same auth, plain JSON responses
+  app.use("/api/v1", apiKeyAuth, createRestRouter(config, supabase));
 
   app.post("/mcp", async (req: RequestWithAuth, res: Response) => {
     try {

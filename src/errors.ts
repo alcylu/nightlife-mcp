@@ -49,6 +49,26 @@ export function toNightlifeError(
   return new NightlifeError(fallbackCode, "Unknown error");
 }
 
+export function errorToHttpStatus(code: NightlifeErrorCode): number {
+  switch (code) {
+    case "INVALID_DATE_FILTER":
+    case "INVALID_EVENT_ID":
+    case "UNSUPPORTED_EVENT_ID":
+    case "INVALID_VENUE_ID":
+    case "INVALID_PERFORMER_ID":
+    case "INVALID_REQUEST":
+    case "INVALID_BOOKING_REQUEST":
+      return 400;
+    case "EVENT_NOT_FOUND":
+    case "VENUE_NOT_FOUND":
+    case "PERFORMER_NOT_FOUND":
+    case "BOOKING_REQUEST_NOT_FOUND":
+      return 404;
+    default:
+      return 500;
+  }
+}
+
 export function toolErrorResponse(
   error: NightlifeError,
 ): { error: { code: NightlifeErrorCode; message: string } } {

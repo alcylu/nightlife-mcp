@@ -46,6 +46,17 @@ curl -i https://api.nightlife.dev/mcp \
   --data '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_tonight","arguments":{"city":"tokyo","limit":5}}}'
 ```
 
+Example venue search call:
+
+```bash
+curl -i https://api.nightlife.dev/mcp \
+  -H 'content-type: application/json' \
+  -H 'accept: application/json, text/event-stream' \
+  -H 'x-api-key: YOUR_API_KEY' \
+  -H 'mcp-session-id: SESSION_ID' \
+  --data '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"search_venues","arguments":{"city":"tokyo","genre":"techno","limit":5}}}'
+```
+
 ## TypeScript SDK
 
 ```typescript
@@ -65,6 +76,25 @@ const result = await client.callTool({
   arguments: { city: "san-francisco", limit: 5 }
 });
 ```
+
+## Available Tools
+
+- `search_events`
+- `get_tonight`
+- `get_event_details`
+- `search_venues`
+- `get_venue_info`
+- `search_performers`
+- `get_performer_info`
+- `log_unmet_request`
+- `create_vip_booking_request`
+- `get_vip_booking_status`
+- `get_recommendations` (when `MCP_ENABLE_RECOMMENDATIONS=true`)
+
+VIP booking support visibility:
+- `search_venues` returns `vip_booking_supported` per venue and accepts optional `vip_booking_supported_only`
+- `get_venue_info` returns `vip_booking_supported`
+- `vip_booking_supported` is driven by the dedicated venue flag `vip_booking_enabled` (not `guest_list_enabled`)
 
 ## Authentication
 

@@ -21,13 +21,19 @@ npm run dev:http     # → http://127.0.0.1:3000/mcp
 npm run build && npm start:http
 ```
 
-## Tools (v0.1)
+## Tools (v0.3)
 
 | Tool | Description | Params |
 |------|-------------|--------|
 | `search_events` | Search events with filters | city, date, genre, area, query, limit, offset |
 | `get_tonight` | Tonight's events (service-day aware) | city, genre, area, limit, offset |
 | `get_event_details` | Full event detail by UUID | event_id |
+| `search_venues` | Search venues with event-backed filters | city, date, area, genre, query, limit, offset |
+| `get_venue_info` | Venue profile + upcoming events snapshot | venue_id |
+| `search_performers` | Search performers active in city/date window | city, date, genre, query, sort_by, limit, offset |
+| `get_performer_info` | Performer profile + social + upcoming events | performer_id |
+| `log_unmet_request` | Log unresolved concierge asks for ops follow-up | channel, language, city, raw_query, intent, suggested_filters, user_hash |
+| `get_recommendations` | Diverse recommendation slots (feature-flagged) | city, date, area, genre, query, limit |
 
 ### Date Filters
 - `tonight` — uses 6am JST rollover (at 2am Saturday, "tonight" = Friday night)
@@ -39,6 +45,23 @@ npm run build && npm start:http
 - Defaults to `tokyo`
 - Unknown cities return `unavailable_city` with available cities list + request URL
 - Cities resolved from `public.cities` table (slug, timezone, cutoff time)
+
+## REST API (v1)
+
+Plain JSON endpoints at `/api/v1/`. Same auth (API key via `x-api-key` or `Authorization: Bearer`), same data as MCP tools.
+
+| Method | Path | Service Function |
+|--------|------|-----------------|
+| GET | `/api/v1/events` | `searchEvents()` — query: city, date, genre, area, query, limit, offset |
+| GET | `/api/v1/events/tonight` | `searchEvents()` with date="tonight" |
+| GET | `/api/v1/events/:id` | `getEventDetails()` |
+| GET | `/api/v1/venues` | `searchVenues()` — query: city, date, area, genre, query, limit, offset |
+| GET | `/api/v1/venues/:id` | `getVenueInfo()` |
+| GET | `/api/v1/performers` | `searchPerformers()` — query: city, date, genre, query, sort_by, limit, offset |
+| GET | `/api/v1/performers/:id` | `getPerformerInfo()` |
+| GET | `/api/v1/recommendations` | `getRecommendations()` — query: city, date, area, genre, query, limit |
+
+Error responses: `{ error: { code, message } }` with appropriate HTTP status (400/404/500).
 
 ## Auth
 
@@ -57,16 +80,26 @@ src/
 ├── config.ts         # Zod-validated env config
 ├── errors.ts         # NightlifeError class + error codes
 ├── types.ts          # Shared TypeScript types
+├── rest.ts           # REST API v1 router (/api/v1/*)
 ├── auth/
 │   ├── apiKeys.ts    # Key extraction, hashing, timing-safe compare
 │   └── authorize.ts  # DB RPC auth + env fallback
+├── middleware/
+│   └── apiKeyAuth.ts # Shared API key auth middleware (used by /mcp + /api/v1)
 ├── db/
 │   └── supabase.ts   # Supabase client factory
 ├── services/
 │   ├── events.ts     # Event search + detail queries (main business logic)
+│   ├── venues.ts     # Venue search + detail + upcoming snapshot
+│   ├── performers.ts # Performer search + detail + upcoming snapshot
+│   ├── requests.ts   # Unmet-request writer for concierge follow-up
 │   └── cities.ts     # City context resolution
 ├── tools/
-│   └── events.ts     # MCP tool registration + output schemas
+│   ├── events.ts      # Event + recommendation tool registration
+│   ├── venues.ts      # Venue tool registration
+│   ├── performers.ts  # Performer tool registration
+│   ├── requests.ts    # Unmet-request tool registration
+│   └── schemas.ts     # Shared Zod schemas
 ├── utils/
 │   └── time.ts       # Service-day logic, date parsing, timezone conversion
 ├── scripts/
@@ -110,6 +143,7 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
   - Applied to production 2026-02-19 via `psql` with `SET ROLE postgres;`
 - Create keys (CLI): `npm run key:create -- --name <name> --tier starter --daily-quota 1000 --minute-quota 60`
 - Create keys (self-service): Users sign up at nightlife.dev → dashboard auto-creates first key
+- `supabase/migrations/20260226_concierge_unmet_requests.sql` — Concierge unmet-request backlog table (`public.concierge_unmet_requests`)
 
 ## Deployment (Railway)
 - **Production URL**: `https://api.nightlife.dev/mcp` (Railway: `nightlife-mcp-production.up.railway.app`)
@@ -133,6 +167,28 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - Non-blocking: DB query failures don't break health check (returns null for failed fields)
 - Monitored by Cloudflare Workers health-monitor (`~/Apps/health-monitor/`)
 
+## Concierge Runbook Snippets
+
+### Rotate MCP API key
+1. Create new key: `npm run key:create -- --name concierge-rotation --tier starter --daily-quota 1000 --minute-quota 60`
+2. Update client secret storage/environment.
+3. Revoke previous key via Supabase (`mcp_api_keys.status='revoked'`) after cutover.
+
+### Validate new concierge tools
+1. Call `search_venues` with `city=tokyo`.
+2. Call `search_performers` with `city=tokyo`.
+3. Call `get_venue_info` and `get_performer_info` using IDs from prior calls.
+4. Call `log_unmet_request` and confirm row insertion in `public.concierge_unmet_requests`.
+
+### Query unresolved unmet requests
+```sql
+select id, created_at, channel, language, city, raw_query, normalized_intent
+from public.concierge_unmet_requests
+where status in ('open', 'triaged')
+order by created_at desc
+limit 200;
+```
+
 ## Related Projects
 - **nightlife-dev** (`~/Apps/nightlife-dev/`): Developer landing page + self-service dashboard at nightlife.dev
 - **health-monitor** (`~/Apps/health-monitor/`): Cloudflare Workers health checker, monitors this server + nightlife-dev
@@ -147,17 +203,15 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 
 ## Planned (not yet built) — Prioritized for Hotel Readiness
 ### P0 (Hotel-Critical)
-- REST API endpoints (same auth/data as MCP — universal fallback for 90%+ of integrations)
-- `get_recommendations` tool (THE hotel question: "what should I do tonight?")
+- ~~REST API endpoints~~ ✓ Shipped v1 at `/api/v1/` (2026-03-01)
+- OpenAPI spec + hosted docs
+- ~~mcp.so listing prep~~ ✓ LICENSE, package.json metadata ready (2026-03-01). Submit issue to punkpeye/awesome-mcp-servers.
+- Publish on Apaleo Agent Hub
 
 ### P1
-- `search_venues`, `get_venue_details`
 - `list_genres`, `list_areas`, `list_cities`
-- OpenAPI spec + hosted docs
-- Publish on mcp.so + Apaleo Agent Hub
+- Hotel-optimized response formatting (concierge-friendly language, safety/vibe info)
 
 ### P2
-- `search_performers`, `get_performer_profile`
-- Hotel-optimized response formatting (concierge-friendly language, safety/vibe info)
 - Multi-city expansion (next 5 cities after Tokyo)
 - Hotel concierge dashboard (separate frontend)
