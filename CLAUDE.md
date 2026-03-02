@@ -201,6 +201,26 @@ limit 200;
 - **Pricing**: $199/mo starter, $499/mo professional, custom enterprise
 - **Research reports**: `~/clawd/memory/meetings/2026-02-20-hotel-ai-concierge-market-research.md`, `~/clawd/memory/meetings/2026-02-20-mcp-hospitality-adoption.md`, `~/clawd/memory/2026-02-20-hotel-tech-pricing-research.md`
 
+## VIP Table Availability Logic
+
+### Venue Open-Day Pre-Check
+Before entering the 4-level pricing fallback, VIP table queries check if the venue is open:
+1. **Event exists** for venue on that date → venue is open
+2. **No event**, but `venue_operating_hours` says day is enabled → venue is open
+3. **Neither** → venue is closed → all tables `status: "blocked"`, `venue_open: false`
+
+**Edge case**: Venues with 0 rows in `venue_operating_hours` (e.g., Zouk, CE LA VI, WARP) skip the hours check entirely — fall through to existing pricing logic. This avoids blocking unconfigured venues.
+
+### Pricing Fallback Chain (4 levels)
+1. **Level 1**: Explicit per-date row in `vip_table_availability` (exact pricing)
+2. **Level 2**: Per-table day-of-week template in `vip_table_day_defaults`
+3. **Level 3**: Venue-level `vip_default_min_spend` (approximate, marked `pricing_approximate: true`)
+4. **Level 4**: No pricing data → status "unknown"
+
+### Response Fields
+- `venue_open: boolean` on each `VipTableAvailabilityDay`
+- `venue_open: boolean | null` on `VipTableChartResult` (null when no booking_date provided)
+
 ## Planned (not yet built) — Prioritized for Hotel Readiness
 ### P0 (Hotel-Critical)
 - ~~REST API endpoints~~ ✓ Shipped v1 at `/api/v1/` (2026-03-01)
