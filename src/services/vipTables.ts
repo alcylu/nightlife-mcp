@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { serviceDateWindowToUtc, addDaysToIsoDate } from "../utils/time.js";
 import {
   type VipTableAvailabilityMutationResult,
   type VipTableAvailabilityResult,
@@ -109,6 +110,7 @@ const VIP_TABLE_SHAPES = ["rectangle", "circle", "booth", "standing"] as const;
 type VipVenueRow = {
   id: string;
   name: string | null;
+  city_id: string | null;
   vip_booking_enabled: boolean | null;
   vip_default_min_spend: number | string | null;
   vip_default_currency: string | null;
@@ -468,6 +470,125 @@ async function fetchTableDayDefaults(
   return map;
 }
 
+async function fetchCityContext(
+  supabase: SupabaseClient,
+  cityId: string,
+): Promise<{ timezone: string; cutoff: string } | null> {
+  const { data, error } = await supabase
+    .from("cities")
+    .select("timezone,service_day_cutoff_time")
+    .eq("id", cityId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    timezone: data.timezone || "Asia/Tokyo",
+    cutoff: data.service_day_cutoff_time || "06:00",
+  };
+}
+
+async function resolveClosedDates(
+  supabase: SupabaseClient,
+  venueId: string,
+  dates: string[],
+  city: { timezone: string; cutoff: string },
+): Promise<Set<string>> {
+  if (dates.length === 0) {
+    return new Set();
+  }
+
+  const firstDate = dates[0];
+  const lastDate = dates[dates.length - 1];
+  const windowEndExclusive = addDaysToIsoDate(lastDate, 1);
+  const { startIso: windowStart, endIso: windowEnd } = serviceDateWindowToUtc(
+    firstDate,
+    windowEndExclusive,
+    city.timezone,
+    city.cutoff,
+  );
+
+  // Fetch published events in the date range
+  const { data: eventRows } = await supabase
+    .from("event_occurrences")
+    .select("start_at")
+    .eq("venue_id", venueId)
+    .eq("published", true)
+    .gte("start_at", windowStart)
+    .lt("start_at", windowEnd);
+
+  const datesWithEvents = new Set<string>();
+  for (const row of (eventRows || []) as Array<{ start_at: string }>) {
+    // Convert UTC start_at back to a service date in the venue's timezone
+    const eventDate = new Date(row.start_at);
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone: city.timezone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const localDate = formatter.format(eventDate); // YYYY-MM-DD
+    // Check if before cutoff → previous service date
+    const timeFormatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: city.timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    const timeParts = new Map<string, string>();
+    for (const part of timeFormatter.formatToParts(eventDate)) {
+      if (part.type !== "literal") {
+        timeParts.set(part.type, part.value);
+      }
+    }
+    const hour = Number(timeParts.get("hour"));
+    const minute = Number(timeParts.get("minute"));
+    const cutoffMatch = /^(\d{2}):(\d{2})/.exec(city.cutoff);
+    const cutoffHour = cutoffMatch ? Number(cutoffMatch[1]) : 6;
+    const cutoffMinute = cutoffMatch ? Number(cutoffMatch[2]) : 0;
+    const beforeCutoff =
+      hour < cutoffHour || (hour === cutoffHour && minute < cutoffMinute);
+    const serviceDate = beforeCutoff ? addDaysToIsoDate(localDate, -1) : localDate;
+    datesWithEvents.add(serviceDate);
+  }
+
+  // Fetch operating hours (up to 7 rows)
+  const { data: hoursRows } = await supabase
+    .from("venue_operating_hours")
+    .select("day_of_week,is_enabled")
+    .eq("venue_id", venueId);
+
+  const operatingHours = new Map<number, boolean>();
+  for (const row of (hoursRows || []) as Array<{
+    day_of_week: number;
+    is_enabled: boolean;
+  }>) {
+    operatingHours.set(row.day_of_week, row.is_enabled);
+  }
+
+  const hasOperatingHours = operatingHours.size > 0;
+  const closed = new Set<string>();
+
+  for (const date of dates) {
+    if (datesWithEvents.has(date)) {
+      // Event exists → venue is open
+      continue;
+    }
+    if (hasOperatingHours) {
+      const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
+      if (operatingHours.get(dow) === false) {
+        closed.add(date);
+      }
+      // If day_of_week not in map or is_enabled=true → open
+    }
+    // No operating hours configured → don't block (fall through to existing logic)
+  }
+
+  return closed;
+}
+
 async function resolveVenue(
   supabase: SupabaseClient,
   venueId: string,
@@ -475,7 +596,7 @@ async function resolveVenue(
 ): Promise<VipVenueRow> {
   const { data, error } = await supabase
     .from("venues")
-    .select("id,name,vip_booking_enabled,vip_default_min_spend,vip_default_currency")
+    .select("id,name,city_id,vip_booking_enabled,vip_default_min_spend,vip_default_currency")
     .eq("id", venueId)
     .maybeSingle<VipVenueRow>();
 
@@ -592,6 +713,13 @@ export async function getVipTableAvailability(
   });
 
   const dates = enumerateDates(range.from, range.to);
+
+  // Determine which dates the venue is closed
+  const city = venue.city_id ? await fetchCityContext(supabase, venue.city_id) : null;
+  const closedDates = city
+    ? await resolveClosedDates(supabase, venueId, dates, city)
+    : new Set<string>();
+
   const tableIds = candidateTables.map((table) => table.id);
 
   const availabilityByKey = new Map<string, VipTableAvailabilityRow>();
@@ -618,6 +746,30 @@ export async function getVipTableAvailability(
   const dayDefaults = await fetchTableDayDefaults(supabase, venueId);
 
   const days = dates.map((bookingDate) => {
+    // Venue closed pre-check — all tables blocked
+    if (closedDates.has(bookingDate)) {
+      const blockedTables = candidateTables.map((table) => ({
+        table_id: table.id,
+        table_code: table.table_code,
+        table_name: table.table_name,
+        zone: table.zone,
+        capacity_min: table.capacity_min,
+        capacity_max: table.capacity_max,
+        status: "blocked" as VipTableStatus,
+        min_spend: null,
+        currency: null,
+        note: "Venue closed",
+        pricing_approximate: false,
+      }));
+      return {
+        booking_date: bookingDate,
+        venue_open: false,
+        available_count: 0,
+        total_count: blockedTables.length,
+        tables: includeNonAvailable ? blockedTables : [],
+      };
+    }
+
     const tableStatuses = candidateTables.map((table) => {
       const row = availabilityByKey.get(`${bookingDate}:${table.id}`);
       const defaultTableNote = extractDefaultTableNote(table.metadata);
@@ -691,6 +843,7 @@ export async function getVipTableAvailability(
 
     return {
       booking_date: bookingDate,
+      venue_open: true,
       available_count: availableCount,
       total_count: tableStatuses.length,
       tables: visibleTables,
@@ -721,6 +874,48 @@ export async function getVipTableChart(
 
   const venue = await resolveVenue(supabase, venueId, true);
   const tables = await fetchVenueTables(supabase, venueId, includeInactive);
+
+  // Determine if venue is closed on the requested date
+  const city = venue.city_id ? await fetchCityContext(supabase, venue.city_id) : null;
+  const isDateClosed = bookingDate && city
+    ? (await resolveClosedDates(supabase, venueId, [bookingDate], city)).has(bookingDate)
+    : false;
+
+  // If venue is closed, all tables get blocked status
+  if (isDateClosed) {
+    const blockedTables = tables.map((table) => ({
+      table_id: table.id,
+      table_code: table.table_code,
+      table_name: table.table_name,
+      zone: table.zone,
+      capacity_min: table.capacity_min,
+      capacity_max: table.capacity_max,
+      is_active: table.is_active,
+      sort_order: table.sort_order,
+      chart_shape: table.chart_shape,
+      chart_x: numberOrNull(table.chart_x),
+      chart_y: numberOrNull(table.chart_y),
+      chart_width: numberOrNull(table.chart_width),
+      chart_height: numberOrNull(table.chart_height),
+      chart_rotation: numberOrNull(table.chart_rotation),
+      status: "blocked" as VipTableStatus,
+      min_spend: null,
+      currency: null,
+      note: "Venue closed",
+      pricing_approximate: false,
+    }));
+
+    return {
+      venue_id: venue.id,
+      venue_name: venue.name,
+      venue_open: false,
+      booking_date: bookingDate,
+      layout_image_url:
+        tables.map((table) => extractLayoutImageUrl(table.metadata)).find(Boolean) || null,
+      generated_at: nowIso,
+      tables: blockedTables,
+    };
+  }
 
   const availabilityByTableId = new Map<string, VipTableAvailabilityRow>();
   if (bookingDate && tables.length > 0) {
@@ -831,6 +1026,7 @@ export async function getVipTableChart(
   return {
     venue_id: venue.id,
     venue_name: venue.name,
+    venue_open: bookingDate ? true : null,
     booking_date: bookingDate,
     layout_image_url:
       tables.map((table) => extractLayoutImageUrl(table.metadata)).find(Boolean) || null,

@@ -27,6 +27,7 @@ const vipTableAvailabilityTableSchema = z.object({
 
 const vipTableAvailabilityDaySchema = z.object({
   booking_date: z.string(),
+  venue_open: z.boolean(),
   available_count: z.number().int().min(0),
   total_count: z.number().int().min(0),
   tables: z.array(vipTableAvailabilityTableSchema),
@@ -81,6 +82,7 @@ export const vipTableChartInputSchema = {
 export const vipTableChartOutputSchema = z.object({
   venue_id: z.string(),
   venue_name: z.string().nullable(),
+  venue_open: z.boolean().nullable(),
   booking_date: z.string().nullable(),
   layout_image_url: z.string().url().nullable(),
   generated_at: z.string(),

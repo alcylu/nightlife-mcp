@@ -344,6 +344,7 @@ export interface VipTableAvailabilityTable {
 
 export interface VipTableAvailabilityDay {
   booking_date: string;
+  venue_open: boolean;
   available_count: number;
   total_count: number;
   tables: VipTableAvailabilityTable[];
@@ -384,6 +385,7 @@ export interface VipTableChartNode {
 export interface VipTableChartResult {
   venue_id: string;
   venue_name: string | null;
+  venue_open: boolean | null;
   booking_date: string | null;
   layout_image_url: string | null;
   generated_at: string;
