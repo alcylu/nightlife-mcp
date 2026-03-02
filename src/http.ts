@@ -21,6 +21,8 @@ import {
 } from "./observability/metrics.js";
 import { createApiKeyAuthMiddleware, type RequestWithAuth } from "./middleware/apiKeyAuth.js";
 import { createRestRouter } from "./rest.js";
+import { apiReference } from "@scalar/express-api-reference";
+import { openApiDocument } from "./openapi.js";
 
 type SessionContext = {
   server: McpServer;
@@ -712,6 +714,19 @@ async function main(): Promise<void> {
     req.apiKeySource = auth.context.source;
     next();
   });
+
+  // OpenAPI spec + docs (public, no auth)
+  app.get("/api/v1/openapi.json", (_req, res) => {
+    res.json(openApiDocument);
+  });
+  app.use(
+    "/api/v1/docs",
+    apiReference({
+      content: openApiDocument as Record<string, unknown>,
+      theme: "kepler",
+      _integration: "express",
+    }),
+  );
 
   // REST API v1 — same auth, plain JSON responses
   app.use("/api/v1", apiKeyAuth, createRestRouter(config, supabase));

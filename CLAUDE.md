@@ -63,6 +63,12 @@ Plain JSON endpoints at `/api/v1/`. Same auth (API key via `x-api-key` or `Autho
 
 Error responses: `{ error: { code, message } }` with appropriate HTTP status (400/404/500).
 
+### OpenAPI & Docs (public, no auth)
+| Path | Description |
+|------|-------------|
+| GET `/api/v1/openapi.json` | OpenAPI 3.1.0 spec (machine-readable) |
+| GET `/api/v1/docs` | Interactive Scalar API reference |
+
 ## Auth
 
 - **Stdio**: no auth
@@ -81,6 +87,7 @@ src/
 ├── errors.ts         # NightlifeError class + error codes
 ├── types.ts          # Shared TypeScript types
 ├── rest.ts           # REST API v1 router (/api/v1/*)
+├── openapi.ts        # OpenAPI 3.1 spec (served at /api/v1/openapi.json + /api/v1/docs)
 ├── auth/
 │   ├── apiKeys.ts    # Key extraction, hashing, timing-safe compare
 │   └── authorize.ts  # DB RPC auth + env fallback
@@ -209,7 +216,7 @@ Before entering the 4-level pricing fallback, VIP table queries check if the ven
 2. **No event**, but `venue_operating_hours` says day is enabled → venue is open
 3. **Neither** → venue is closed → all tables `status: "blocked"`, `venue_open: false`
 
-**Edge case**: Venues with 0 rows in `venue_operating_hours` (e.g., Zouk, CE LA VI, WARP) skip the hours check entirely — fall through to existing pricing logic. This avoids blocking unconfigured venues.
+**Edge case**: Venues with 0 rows in `venue_operating_hours` (e.g., WARP) skip the hours check entirely — fall through to existing pricing logic. This avoids blocking unconfigured venues.
 
 ### Pricing Fallback Chain (4 levels)
 1. **Level 1**: Explicit per-date row in `vip_table_availability` (exact pricing)
@@ -221,12 +228,39 @@ Before entering the 4-level pricing fallback, VIP table queries check if the ven
 - `venue_open: boolean` on each `VipTableAvailabilityDay`
 - `venue_open: boolean | null` on `VipTableChartResult` (null when no booking_date provided)
 
+### Seeded VIP Pricing Data
+
+**1 Oak** (`560a67c5-960e-44fe-a509-220490776158`) — 30 tables, 112 day-default rows:
+- **Fri/Sat** (days 5-6): Per-table pricing from venue's official reply (¥150K–¥1M). 26/30 priced, 4 Black Room unknown.
+- **Thu/Sun** (days 0, 4): All 30 tables — ¥60,000 min (1 bottle minimum, cheapest bottle price). `pricing_approximate: false`.
+- **Mon-Wed**: No pricing → venue_operating_hours blocks as closed.
+
+**CÉ LA VI** (`6f772e2f-d5f6-4db7-bf74-43cdc1cedb21`) — 12 tables, 84 day-default rows:
+- Tables: V1-V6 (vip zone), S1-S4 (vip zone), DJ1-DJ2 (dj zone)
+- **Weekday (Sun-Thu, days 0-4)**: ¥100,000 min spend
+- **Weekend (Fri-Sat, days 5-6)**: ¥200,000 min spend
+- Chart image: `vip-table-charts/{venue_id}/table-chart.jpg` in Supabase storage
+- Operating hours configured: open 7 days (22:00 start). Source: jp.celavi.com/contact-us
+
+**Zouk** (`00ffb61c-d834-4619-9580-5a3913e43e3a`) — 17 tables, 68 day-default rows:
+- Tables: 1-4 (premium_stage), 11-17 (lower_dance_floor), 21-26 (upper_dance_floor)
+- **Wed-Thu** (days 3-4): ¥100,000 min spend
+- **Fri-Sat** (days 5-6): ¥200,000 min spend
+- Operating hours: Wed-Sat open (21:00 start), Sun-Tue closed
+- Chart image: uploaded Mar 1 (SVG + PNG + original JPG), linked to all 17 tables' metadata
+
 ## Planned (not yet built) — Prioritized for Hotel Readiness
 ### P0 (Hotel-Critical)
 - ~~REST API endpoints~~ ✓ Shipped v1 at `/api/v1/` (2026-03-01)
-- OpenAPI spec + hosted docs
-- ~~mcp.so listing prep~~ ✓ LICENSE, package.json metadata ready (2026-03-01). Submit issue to punkpeye/awesome-mcp-servers.
-- Publish on Apaleo Agent Hub
+- ~~OpenAPI spec + hosted docs~~ ✓ OpenAPI 3.1 at `/api/v1/openapi.json`, Scalar docs at `/api/v1/docs` (2026-03-02)
+- ~~mcp.so listing prep~~ ✓ LICENSE, package.json metadata ready (2026-03-01). PR filed: punkpeye/awesome-mcp-servers#2615
+- Publish on Apaleo Agent Hub — alpha/invite-only. Pitch doc at `docs/apaleo-pitch.md`
+
+### VIP Booking (shipped)
+- `create_vip_booking_request` — now accepts optional `preferred_table_code`; auto-populates `min_spend` + `min_spend_currency` from 4-level pricing fallback
+- Invalid table codes: booking still submitted (soft fail), `table_warning` field explains table not found + venue will confirm
+- DB columns: `preferred_table_code text`, `min_spend integer`, `min_spend_currency text DEFAULT 'JPY'` on `vip_booking_requests`
+- Output includes: `preferred_table_code`, `min_spend`, `min_spend_currency`, `table_warning` (all nullable)
 
 ### P1
 - `list_genres`, `list_areas`, `list_cities`
