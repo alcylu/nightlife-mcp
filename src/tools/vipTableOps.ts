@@ -6,6 +6,7 @@ import { logEvent, recordToolResult } from "../observability/metrics.js";
 import {
   uploadVipTableChartImage,
   upsertVipTableAvailability,
+  upsertVipTableDayDefaults,
   upsertVipVenueTables,
 } from "../services/vipTables.js";
 
@@ -70,6 +71,36 @@ export const upsertVipTableAvailabilityOutputSchema = z.object({
   venue_name: z.string().nullable(),
   booking_date: z.string(),
   updated_count: z.number().int().min(0),
+});
+
+export const upsertVipTableDayDefaultsInputSchema = {
+  venue_id: z.string().min(1),
+  tables: z.array(
+    z.object({
+      table_code: z.string().min(1),
+      days: z.array(
+        z.object({
+          day_of_week: z.number().int().min(0).max(6),
+          default_status: vipTableStatusSchema.optional(),
+          min_spend: z.number().min(0).optional(),
+          currency: z.string().optional(),
+          note: z.string().max(500).optional(),
+        }),
+      ).min(1).max(7),
+    }),
+  ).min(1).max(200),
+};
+
+export const upsertVipTableDayDefaultsOutputSchema = z.object({
+  venue_id: z.string(),
+  venue_name: z.string().nullable(),
+  updated_count: z.number().int().min(0),
+  tables: z.array(
+    z.object({
+      table_code: z.string(),
+      days_set: z.number().int().min(0),
+    }),
+  ),
 });
 
 export const uploadVipTableChartImageInputSchema = {
@@ -175,6 +206,21 @@ export function registerVipTableOpsTools(server: McpServer, deps: ToolDeps): voi
       "upsert_vip_table_availability",
       upsertVipTableAvailabilityOutputSchema,
       async () => upsertVipTableAvailability(deps.supabase, args),
+    ),
+  );
+
+  server.registerTool(
+    "upsert_vip_table_day_defaults",
+    {
+      description:
+        "Ops-only: set per-table day-of-week default VIP availability and pricing templates. Day 0=Sun, 1=Mon ... 6=Sat.",
+      inputSchema: upsertVipTableDayDefaultsInputSchema,
+      outputSchema: upsertVipTableDayDefaultsOutputSchema,
+    },
+    async (args) => runTool(
+      "upsert_vip_table_day_defaults",
+      upsertVipTableDayDefaultsOutputSchema,
+      async () => upsertVipTableDayDefaults(deps.supabase, args),
     ),
   );
 

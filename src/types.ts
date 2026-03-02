@@ -339,6 +339,7 @@ export interface VipTableAvailabilityTable {
   min_spend: number | null;
   currency: string | null;
   note: string | null;
+  pricing_approximate: boolean;
 }
 
 export interface VipTableAvailabilityDay {
@@ -377,6 +378,7 @@ export interface VipTableChartNode {
   min_spend: number | null;
   currency: string | null;
   note: string | null;
+  pricing_approximate: boolean;
 }
 
 export interface VipTableChartResult {
@@ -405,6 +407,16 @@ export interface VipTableAvailabilityMutationResult {
   venue_name: string | null;
   booking_date: string;
   updated_count: number;
+}
+
+export interface VipTableDayDefaultMutationResult {
+  venue_id: string;
+  venue_name: string | null;
+  updated_count: number;
+  tables: Array<{
+    table_code: string;
+    days_set: number;
+  }>;
 }
 
 export interface VipTableChartImageUploadResult {

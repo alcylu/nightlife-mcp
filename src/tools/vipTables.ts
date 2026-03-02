@@ -22,6 +22,7 @@ const vipTableAvailabilityTableSchema = z.object({
   min_spend: z.number().nullable(),
   currency: z.string().nullable(),
   note: z.string().nullable(),
+  pricing_approximate: z.boolean(),
 });
 
 const vipTableAvailabilityDaySchema = z.object({
@@ -68,6 +69,7 @@ const vipTableChartNodeSchema = z.object({
   min_spend: z.number().nullable(),
   currency: z.string().nullable(),
   note: z.string().nullable(),
+  pricing_approximate: z.boolean(),
 });
 
 export const vipTableChartInputSchema = {

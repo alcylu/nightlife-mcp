@@ -4,6 +4,7 @@ import {
   type VipTableAvailabilityResult,
   type VipTableChartResult,
   type VipTableChartImageUploadResult,
+  type VipTableDayDefaultMutationResult,
   type VipTableStatus,
   type VipVenueTableMutationResult,
 } from "../types.js";
@@ -57,6 +58,20 @@ export type UpsertVipTableAvailabilityInput = {
   }>;
 };
 
+export type UpsertVipTableDayDefaultsInput = {
+  venue_id: string;
+  tables: Array<{
+    table_code: string;
+    days: Array<{
+      day_of_week: number;
+      default_status?: string;
+      min_spend?: number;
+      currency?: string;
+      note?: string;
+    }>;
+  }>;
+};
+
 export type UploadVipTableChartImageInput = {
   venue_id: string;
   image_base64: string;
@@ -95,6 +110,8 @@ type VipVenueRow = {
   id: string;
   name: string | null;
   vip_booking_enabled: boolean | null;
+  vip_default_min_spend: number | string | null;
+  vip_default_currency: string | null;
 };
 
 type VipVenueTableRow = {
@@ -120,6 +137,15 @@ type VipTableAvailabilityRow = {
   vip_venue_table_id: string;
   booking_date: string;
   status: string;
+  min_spend: number | string | null;
+  currency: string | null;
+  note: string | null;
+};
+
+type VipTableDayDefaultRow = {
+  vip_venue_table_id: string;
+  day_of_week: number;
+  default_status: string;
   min_spend: number | string | null;
   currency: string | null;
   note: string | null;
@@ -420,6 +446,28 @@ function enumerateDates(from: string, to: string): string[] {
   return dates;
 }
 
+async function fetchTableDayDefaults(
+  supabase: SupabaseClient,
+  venueId: string,
+): Promise<Map<string, VipTableDayDefaultRow>> {
+  const { data, error } = await supabase
+    .from("vip_table_day_defaults")
+    .select("vip_venue_table_id,day_of_week,default_status,min_spend,currency,note")
+    .eq("venue_id", venueId);
+
+  if (error) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to load VIP table day defaults.", {
+      cause: error.message,
+    });
+  }
+
+  const map = new Map<string, VipTableDayDefaultRow>();
+  for (const row of (data || []) as VipTableDayDefaultRow[]) {
+    map.set(`${row.vip_venue_table_id}:${row.day_of_week}`, row);
+  }
+  return map;
+}
+
 async function resolveVenue(
   supabase: SupabaseClient,
   venueId: string,
@@ -427,7 +475,7 @@ async function resolveVenue(
 ): Promise<VipVenueRow> {
   const { data, error } = await supabase
     .from("venues")
-    .select("id,name,vip_booking_enabled")
+    .select("id,name,vip_booking_enabled,vip_default_min_spend,vip_default_currency")
     .eq("id", venueId)
     .maybeSingle<VipVenueRow>();
 
@@ -567,17 +615,59 @@ export async function getVipTableAvailability(
     }
   }
 
+  const dayDefaults = await fetchTableDayDefaults(supabase, venueId);
+
   const days = dates.map((bookingDate) => {
     const tableStatuses = candidateTables.map((table) => {
       const row = availabilityByKey.get(`${bookingDate}:${table.id}`);
       const defaultTableNote = extractDefaultTableNote(table.metadata);
-      const fallbackStatus = isVipTableStatus(table.default_status)
-        ? table.default_status
-        : "unknown";
-      const status =
-        row && isVipTableStatus(String(row.status))
-          ? (row.status as VipTableStatus)
-          : fallbackStatus;
+
+      let status: VipTableStatus;
+      let min_spend: number | null;
+      let currency: string | null;
+      let note: string | null;
+      let pricingApproximate: boolean;
+
+      if (row && isVipTableStatus(String(row.status))) {
+        // Level 1: Explicit per-date row — exact pricing
+        status = row.status as VipTableStatus;
+        min_spend = numberOrNull(row.min_spend);
+        currency = row.currency || null;
+        note = row.note || defaultTableNote;
+        pricingApproximate = false;
+      } else {
+        const dayOfWeek = new Date(`${bookingDate}T00:00:00Z`).getUTCDay();
+        const dayDefault = dayDefaults.get(`${table.id}:${dayOfWeek}`);
+
+        if (dayDefault) {
+          // Level 2: Per-table day-of-week template
+          status = isVipTableStatus(dayDefault.default_status)
+            ? dayDefault.default_status as VipTableStatus
+            : "available";
+          min_spend = numberOrNull(dayDefault.min_spend);
+          currency = dayDefault.currency || null;
+          note = dayDefault.note || defaultTableNote;
+          pricingApproximate = false;
+        } else if (venue.vip_default_min_spend != null) {
+          // Level 3: Venue-level minimum table price (approximate)
+          status = isVipTableStatus(table.default_status)
+            ? table.default_status as VipTableStatus
+            : "available";
+          min_spend = numberOrNull(venue.vip_default_min_spend);
+          currency = venue.vip_default_currency || "JPY";
+          note = defaultTableNote;
+          pricingApproximate = true;
+        } else {
+          // Level 4: No pricing data (backward compat)
+          status = isVipTableStatus(table.default_status)
+            ? table.default_status as VipTableStatus
+            : "unknown";
+          min_spend = null;
+          currency = null;
+          note = defaultTableNote;
+          pricingApproximate = false;
+        }
+      }
 
       return {
         table_id: table.id,
@@ -587,9 +677,10 @@ export async function getVipTableAvailability(
         capacity_min: table.capacity_min,
         capacity_max: table.capacity_max,
         status,
-        min_spend: numberOrNull(row?.min_spend ?? null),
-        currency: row?.currency || null,
-        note: row?.note || defaultTableNote,
+        min_spend,
+        currency,
+        note,
+        pricing_approximate: pricingApproximate,
       };
     });
 
@@ -652,17 +743,67 @@ export async function getVipTableChart(
     }
   }
 
+  const dayDefaults = bookingDate
+    ? await fetchTableDayDefaults(supabase, venueId)
+    : new Map<string, VipTableDayDefaultRow>();
+
   const chartTables = tables.map((table) => {
     const row = bookingDate ? availabilityByTableId.get(table.id) : null;
     const defaultTableNote = extractDefaultTableNote(table.metadata);
-    const fallbackStatus = isVipTableStatus(table.default_status)
-      ? table.default_status
-      : "unknown";
-    const status = bookingDate
-      ? row && isVipTableStatus(String(row.status))
-        ? (row.status as VipTableStatus)
-        : fallbackStatus
-      : null;
+
+    let status: VipTableStatus | null;
+    let min_spend: number | null;
+    let currency: string | null;
+    let note: string | null;
+    let pricingApproximate: boolean;
+
+    if (!bookingDate) {
+      // No booking date — chart-only view, no status/pricing
+      status = null;
+      min_spend = null;
+      currency = null;
+      note = defaultTableNote;
+      pricingApproximate = false;
+    } else if (row && isVipTableStatus(String(row.status))) {
+      // Level 1: Explicit per-date row
+      status = row.status as VipTableStatus;
+      min_spend = numberOrNull(row.min_spend);
+      currency = row.currency || null;
+      note = row.note || defaultTableNote;
+      pricingApproximate = false;
+    } else {
+      const dayOfWeek = new Date(`${bookingDate}T00:00:00Z`).getUTCDay();
+      const dayDefault = dayDefaults.get(`${table.id}:${dayOfWeek}`);
+
+      if (dayDefault) {
+        // Level 2: Per-table day-of-week template
+        status = isVipTableStatus(dayDefault.default_status)
+          ? dayDefault.default_status as VipTableStatus
+          : "available";
+        min_spend = numberOrNull(dayDefault.min_spend);
+        currency = dayDefault.currency || null;
+        note = dayDefault.note || defaultTableNote;
+        pricingApproximate = false;
+      } else if (venue.vip_default_min_spend != null) {
+        // Level 3: Venue-level minimum table price (approximate)
+        status = isVipTableStatus(table.default_status)
+          ? table.default_status as VipTableStatus
+          : "available";
+        min_spend = numberOrNull(venue.vip_default_min_spend);
+        currency = venue.vip_default_currency || "JPY";
+        note = defaultTableNote;
+        pricingApproximate = true;
+      } else {
+        // Level 4: No pricing data (backward compat)
+        status = isVipTableStatus(table.default_status)
+          ? table.default_status as VipTableStatus
+          : "unknown";
+        min_spend = null;
+        currency = null;
+        note = defaultTableNote;
+        pricingApproximate = false;
+      }
+    }
 
     return {
       table_id: table.id,
@@ -680,9 +821,10 @@ export async function getVipTableChart(
       chart_height: numberOrNull(table.chart_height),
       chart_rotation: numberOrNull(table.chart_rotation),
       status,
-      min_spend: numberOrNull(row?.min_spend ?? null),
-      currency: row?.currency || null,
-      note: row?.note || defaultTableNote,
+      min_spend,
+      currency,
+      note,
+      pricing_approximate: pricingApproximate,
     };
   });
 
@@ -892,6 +1034,126 @@ export async function upsertVipTableAvailability(
     venue_name: venue.name,
     booking_date: bookingDate,
     updated_count: upserts.length,
+  };
+}
+
+export async function upsertVipTableDayDefaults(
+  supabase: SupabaseClient,
+  input: UpsertVipTableDayDefaultsInput,
+): Promise<VipTableDayDefaultMutationResult> {
+  const venueId = ensureUuid(input.venue_id, "venue_id");
+  const tablesRaw = Array.isArray(input.tables) ? input.tables : [];
+  if (tablesRaw.length === 0) {
+    throw new NightlifeError("INVALID_REQUEST", "tables must include at least one table entry.");
+  }
+  if (tablesRaw.length > 200) {
+    throw new NightlifeError("INVALID_REQUEST", "tables cannot exceed 200 items per request.");
+  }
+
+  const venue = await resolveVenue(supabase, venueId, false);
+
+  // Collect all table codes and validate days
+  const normalizedTables = tablesRaw.map((t) => {
+    const tableCode = normalizeTableCode(t.table_code);
+    const days = Array.isArray(t.days) ? t.days : [];
+    if (days.length === 0) {
+      throw new NightlifeError("INVALID_REQUEST", `Table ${tableCode}: days must include at least one entry.`);
+    }
+    if (days.length > 7) {
+      throw new NightlifeError("INVALID_REQUEST", `Table ${tableCode}: days cannot exceed 7 entries.`);
+    }
+
+    const normalizedDays = days.map((d) => {
+      if (!Number.isInteger(d.day_of_week) || d.day_of_week < 0 || d.day_of_week > 6) {
+        throw new NightlifeError("INVALID_REQUEST", `Table ${tableCode}: day_of_week must be 0-6 (Sun-Sat).`);
+      }
+      return {
+        day_of_week: d.day_of_week,
+        default_status: d.default_status
+          ? normalizeTableStatus(d.default_status, "default_status")
+          : "available",
+        min_spend: normalizeAmount(d.min_spend, "min_spend"),
+        currency: normalizeCurrency(d.currency) || "JPY",
+        note: normalizeOptionalText(d.note, "note", 500),
+      };
+    });
+
+    return { tableCode, days: normalizedDays };
+  });
+
+  // Resolve table codes to IDs
+  const allCodes = [...new Set(normalizedTables.map((t) => t.tableCode))];
+  const { data: tableRows, error: tableError } = await supabase
+    .from("vip_venue_tables")
+    .select("id,table_code")
+    .eq("venue_id", venueId)
+    .in("table_code", allCodes);
+
+  if (tableError) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to load venue table IDs.", {
+      cause: tableError.message,
+    });
+  }
+
+  const tableIdByCode = new Map<string, string>();
+  for (const row of (tableRows || []) as Array<{ id: string; table_code: string }>) {
+    tableIdByCode.set(String(row.table_code).toUpperCase(), row.id);
+  }
+
+  const missingCodes = allCodes.filter((code) => !tableIdByCode.has(code));
+  if (missingCodes.length > 0) {
+    throw new NightlifeError(
+      "INVALID_REQUEST",
+      `Unknown table_code for venue: ${missingCodes.join(", ")}.`,
+    );
+  }
+
+  // Build upsert rows
+  const upserts: Array<{
+    vip_venue_table_id: string;
+    venue_id: string;
+    day_of_week: number;
+    default_status: string;
+    min_spend: number | null;
+    currency: string;
+    note: string | null;
+    updated_at: string;
+  }> = [];
+
+  const resultTables: Array<{ table_code: string; days_set: number }> = [];
+
+  for (const t of normalizedTables) {
+    const tableId = tableIdByCode.get(t.tableCode)!;
+    for (const d of t.days) {
+      upserts.push({
+        vip_venue_table_id: tableId,
+        venue_id: venueId,
+        day_of_week: d.day_of_week,
+        default_status: d.default_status,
+        min_spend: d.min_spend,
+        currency: d.currency,
+        note: d.note,
+        updated_at: new Date().toISOString(),
+      });
+    }
+    resultTables.push({ table_code: t.tableCode, days_set: t.days.length });
+  }
+
+  const { error: upsertError } = await supabase
+    .from("vip_table_day_defaults")
+    .upsert(upserts, { onConflict: "vip_venue_table_id,day_of_week" });
+
+  if (upsertError) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to upsert VIP table day defaults.", {
+      cause: upsertError.message,
+    });
+  }
+
+  return {
+    venue_id: venue.id,
+    venue_name: venue.name,
+    updated_count: upserts.length,
+    tables: resultTables,
   };
 }
 
