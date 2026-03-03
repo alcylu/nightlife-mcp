@@ -234,6 +234,11 @@ export function renderVipDashboardPage(args: {
       margin: 0;
       font-size: 16px;
     }
+    .panel-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     .filters {
       padding: 12px 14px;
       border-bottom: 1px solid var(--border);
@@ -388,6 +393,20 @@ export function renderVipDashboardPage(args: {
       font-size: 12px;
       color: var(--muted);
       line-height: 1.35;
+    }
+    .new-booking {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      background: #f7fbff;
+      display: grid;
+      gap: 9px;
+    }
+    .new-booking-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
     }
     .messages {
       padding: 10px 14px;
@@ -549,9 +568,77 @@ export function renderVipDashboardPage(args: {
     <section class="panel">
       <div class="panel-head">
         <h2>Booking Detail</h2>
+        <div class="panel-head-actions">
+          <button id="toggleNewBookingBtn" type="button" class="secondary">Submit New</button>
+        </div>
       </div>
       <div class="detail">
         <div class="muted" id="detailHeader">Select a booking request.</div>
+
+        <div class="new-booking" id="newBookingPanel" hidden>
+          <div class="new-booking-title">Submit New VIP Booking</div>
+          <div class="field-help">Uses the same create flow as MCP tool <code>create_vip_booking_request</code>.</div>
+
+          <div class="grid2">
+            <div>
+              <label for="newVenueId">Venue ID</label>
+              <input id="newVenueId" placeholder="UUID" />
+            </div>
+            <div>
+              <label for="newPartySize">Party Size</label>
+              <input id="newPartySize" type="number" min="1" max="30" />
+            </div>
+          </div>
+
+          <div class="grid2">
+            <div>
+              <label for="newBookingDate">Booking Date</label>
+              <input id="newBookingDate" type="date" />
+            </div>
+            <div>
+              <label for="newArrivalTime">Arrival Time</label>
+              <input id="newArrivalTime" type="time" />
+            </div>
+          </div>
+
+          <div class="grid2">
+            <div>
+              <label for="newCustomerName">Customer Name</label>
+              <input id="newCustomerName" />
+            </div>
+            <div>
+              <label for="newCustomerEmail">Customer Email</label>
+              <input id="newCustomerEmail" type="email" />
+            </div>
+          </div>
+
+          <div>
+            <label for="newCustomerPhone">Customer Phone</label>
+            <input id="newCustomerPhone" placeholder="+81..." />
+          </div>
+
+          <div class="grid2">
+            <div>
+              <label for="newPreferredTableCode">Preferred Table Code (optional)</label>
+              <input id="newPreferredTableCode" placeholder="e.g. T1" />
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <button id="newUseSelectedTemplateBtn" type="button" class="secondary">Use Selected Booking</button>
+            </div>
+          </div>
+
+          <div>
+            <label for="newSpecialRequests">Special Requests (optional)</label>
+            <textarea id="newSpecialRequests"></textarea>
+          </div>
+
+          <div style="display:flex; gap:8px;">
+            <button id="submitNewBookingBtn" type="button">Submit New Booking</button>
+            <button id="cancelNewBookingBtn" type="button" class="secondary">Cancel</button>
+          </div>
+        </div>
+
         <div class="field-guide">
           <div class="field-guide-title">Field Guide</div>
           <div><strong>Status Message:</strong> Customer-facing status text.</div>
@@ -660,6 +747,7 @@ export function renderVipDashboardPage(args: {
       selectedDetail: null,
       loadingList: false,
       loadingDetail: false,
+      creatingBooking: false,
     };
 
     const $ = (id) => document.getElementById(id);
@@ -736,6 +824,53 @@ export function renderVipDashboardPage(args: {
       }
       $("bookingDateFrom").value = state.bookingDateFrom;
       $("bookingDateTo").value = state.bookingDateTo;
+    }
+
+    function clearNewBookingForm() {
+      $("newVenueId").value = "";
+      $("newBookingDate").value = getTodayDate();
+      $("newArrivalTime").value = "";
+      $("newPartySize").value = "";
+      $("newCustomerName").value = "";
+      $("newCustomerEmail").value = "";
+      $("newCustomerPhone").value = "";
+      $("newPreferredTableCode").value = "";
+      $("newSpecialRequests").value = "";
+    }
+
+    function setNewBookingPanelOpen(open) {
+      const panel = $("newBookingPanel");
+      const toggleButton = $("toggleNewBookingBtn");
+      if (!panel || !toggleButton) {
+        return;
+      }
+      if (open) {
+        panel.removeAttribute("hidden");
+        toggleButton.textContent = "Hide New";
+      } else {
+        panel.setAttribute("hidden", "hidden");
+        toggleButton.textContent = "Submit New";
+      }
+    }
+
+    function prefillNewBookingFromSelected() {
+      const detail = state.selectedDetail;
+      const booking = detail && detail.booking ? detail.booking : null;
+      if (!booking) {
+        setDetailMessage("Select a booking first to use it as a template.", "warning");
+        return;
+      }
+
+      $("newVenueId").value = booking.venue_id || "";
+      $("newBookingDate").value = booking.booking_date || "";
+      $("newArrivalTime").value = normalizeTimeInput(booking.arrival_time || "");
+      $("newPartySize").value = String(booking.party_size || "");
+      $("newCustomerName").value = booking.customer_name || "";
+      $("newCustomerEmail").value = booking.customer_email || "";
+      $("newCustomerPhone").value = booking.customer_phone || "";
+      $("newPreferredTableCode").value = booking.preferred_table_code || "";
+      $("newSpecialRequests").value = booking.special_requests || "";
+      setDetailMessage("New booking form prefilled from selected booking.", "");
     }
 
     function readFiltersFromDom() {
@@ -1014,6 +1149,114 @@ export function renderVipDashboardPage(args: {
       }
     }
 
+    function buildCreatePayload() {
+      const venueId = $("newVenueId").value.trim();
+      const bookingDate = $("newBookingDate").value;
+      const arrivalTime = normalizeTimeInput($("newArrivalTime").value);
+      const partySize = Number($("newPartySize").value || 0);
+      const customerName = $("newCustomerName").value.trim();
+      const customerEmail = $("newCustomerEmail").value.trim();
+      const customerPhone = $("newCustomerPhone").value.trim();
+      const preferredTableCode = $("newPreferredTableCode").value.trim().toUpperCase();
+      const specialRequests = $("newSpecialRequests").value.trim();
+
+      if (!venueId) {
+        throw new Error("Venue ID is required.");
+      }
+      if (!bookingDate) {
+        throw new Error("Booking Date is required.");
+      }
+      if (!arrivalTime) {
+        throw new Error("Arrival Time is required.");
+      }
+      if (!Number.isInteger(partySize) || partySize < 1 || partySize > 30) {
+        throw new Error("Party Size must be between 1 and 30.");
+      }
+      if (!customerName) {
+        throw new Error("Customer Name is required.");
+      }
+      if (!customerEmail) {
+        throw new Error("Customer Email is required.");
+      }
+      if (!customerPhone) {
+        throw new Error("Customer Phone is required.");
+      }
+
+      const payload = {
+        venue_id: venueId,
+        booking_date: bookingDate,
+        arrival_time: arrivalTime,
+        party_size: partySize,
+        customer_name: customerName,
+        customer_email: customerEmail,
+        customer_phone: customerPhone,
+      };
+
+      if (preferredTableCode) {
+        payload.preferred_table_code = preferredTableCode;
+      }
+      if (specialRequests) {
+        payload.special_requests = specialRequests;
+      }
+
+      return payload;
+    }
+
+    async function submitNewBooking() {
+      if (state.creatingBooking) {
+        return;
+      }
+
+      let payload = null;
+      try {
+        payload = buildCreatePayload();
+      } catch (error) {
+        setDetailMessage(String(error.message || error), "error");
+        return;
+      }
+
+      state.creatingBooking = true;
+      $("submitNewBookingBtn").disabled = true;
+      setDetailMessage("Submitting new booking...", "");
+
+      try {
+        const created = await requestJson("/api/v1/admin/vip-bookings", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        state.selectedId = created.booking_request_id || null;
+        state.reservationView = "upcoming";
+        state.statuses.add("submitted");
+        applyReservationViewDateRange();
+        renderReservationViewFilters();
+        renderStatusFilters();
+        await loadBookings(true);
+        if (state.selectedId) {
+          await loadDetail(state.selectedId, { silent: true });
+        }
+
+        clearNewBookingForm();
+        setNewBookingPanelOpen(false);
+        setDetailMessage("New booking submitted.", "success");
+        openSaveConfirmDialog({
+          title: "Booking Submitted",
+          message: created.table_warning
+            ? "Booking submitted with warning: " + created.table_warning
+            : "Booking submitted successfully.",
+          tone: created.table_warning ? "warning" : "success",
+        });
+      } catch (error) {
+        setDetailMessage(String(error.message || error), "error");
+      } finally {
+        state.creatingBooking = false;
+        $("submitNewBookingBtn").disabled = false;
+      }
+    }
+
     function buildPatchPayload() {
       const detail = state.selectedDetail;
       const booking = detail && detail.booking ? detail.booking : null;
@@ -1108,6 +1351,19 @@ export function renderVipDashboardPage(args: {
       $("refreshBtn").addEventListener("click", () => loadBookings(false));
       $("reloadDetailBtn").addEventListener("click", () => loadDetail(state.selectedId));
       $("saveBtn").addEventListener("click", saveDetail);
+      $("toggleNewBookingBtn").addEventListener("click", () => {
+        const nextOpen = $("newBookingPanel").hasAttribute("hidden");
+        setNewBookingPanelOpen(nextOpen);
+        if (nextOpen && state.selectedDetail) {
+          prefillNewBookingFromSelected();
+        }
+      });
+      $("newUseSelectedTemplateBtn").addEventListener("click", prefillNewBookingFromSelected);
+      $("submitNewBookingBtn").addEventListener("click", submitNewBooking);
+      $("cancelNewBookingBtn").addEventListener("click", () => {
+        clearNewBookingForm();
+        setNewBookingPanelOpen(false);
+      });
       $("saveConfirmOkBtn").addEventListener("click", closeSaveConfirmDialog);
       $("saveConfirmOverlay").addEventListener("click", (event) => {
         if (event.target === $("saveConfirmOverlay")) {
@@ -1126,6 +1382,8 @@ export function renderVipDashboardPage(args: {
 
     async function init() {
       applyReservationViewDateRange();
+      clearNewBookingForm();
+      setNewBookingPanelOpen(false);
       renderReservationViewFilters();
       renderStatusFilters();
       bindEvents();

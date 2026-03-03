@@ -3,9 +3,11 @@ import type { Response } from "express";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { errorToHttpStatus, toNightlifeError } from "../errors.js";
 import {
+  createVipAdminBooking,
   getVipAdminBookingDetail,
   listVipAdminBookings,
   updateVipAdminBooking,
+  type CreateVipAdminBookingInput,
   type UpdateVipAdminBookingPatch,
 } from "../services/vipAdmin.js";
 import type { VipBookingStatus } from "../types.js";
@@ -50,6 +52,16 @@ function sendError(res: Response, error: unknown): void {
 
 export function createVipAdminRouter(supabase: SupabaseClient): Router {
   const router = Router();
+
+  router.post("/vip-bookings", async (req: RequestWithDashboardAuth, res) => {
+    try {
+      const body = (req.body || {}) as CreateVipAdminBookingInput;
+      const result = await createVipAdminBooking(supabase, body);
+      res.status(201).json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
 
   router.get("/vip-bookings", async (req: RequestWithDashboardAuth, res) => {
     try {

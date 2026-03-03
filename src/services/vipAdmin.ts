@@ -7,9 +7,14 @@ import type {
   VipAdminBookingSummary,
   VipAdminBookingUpdateResult,
   VipAgentTaskStatus,
+  VipBookingCreateResult,
   VipBookingEditAuditEntry,
   VipBookingStatus,
 } from "../types.js";
+import {
+  createVipBookingRequest,
+  type CreateVipBookingRequestInput,
+} from "./vipBookings.js";
 
 export type ListVipAdminBookingsInput = {
   statuses?: VipBookingStatus[];
@@ -36,6 +41,8 @@ export type UpdateVipAdminBookingInput = {
   patch: UpdateVipAdminBookingPatch;
   note?: string;
 };
+
+export type CreateVipAdminBookingInput = CreateVipBookingRequestInput;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -655,4 +662,12 @@ export async function updateVipAdminBooking(
     audit_id: rpcRow.audit_id,
     updated_at: rpcRow.updated_at,
   };
+}
+
+export async function createVipAdminBooking(
+  supabase: SupabaseClient,
+  input: CreateVipAdminBookingInput,
+): Promise<VipBookingCreateResult> {
+  // Reuse the exact flow used by MCP tool `create_vip_booking_request`.
+  return createVipBookingRequest(supabase, input);
 }

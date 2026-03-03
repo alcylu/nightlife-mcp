@@ -2,10 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NightlifeError } from "../errors.js";
 import {
+  createVipAdminBooking,
   getVipAdminBookingDetail,
   listVipAdminBookings,
   updateVipAdminBooking,
 } from "./vipAdmin.js";
+
+function isoDateFromNow(daysFromNow: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + daysFromNow);
+  return date.toISOString().slice(0, 10);
+}
 
 test("listVipAdminBookings defaults to all statuses and maps booking context", async () => {
   const supabase = {
@@ -264,6 +271,99 @@ test("getVipAdminBookingDetail returns booking, history, and audits", async () =
   assert.equal(result.history.length, 2);
   assert.equal(result.audits.length, 1);
   assert.equal(result.audits[0].editor_username, "ops-1");
+});
+
+test("createVipAdminBooking uses MCP create flow and enqueues task", async () => {
+  const inserts: Record<string, unknown[]> = {
+    vip_booking_requests: [],
+    vip_booking_status_events: [],
+    vip_agent_tasks: [],
+  };
+
+  const supabase = {
+    from: (table: string) => {
+      if (table === "venues") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                  city_id: "11111111-1111-4111-8111-111111111111",
+                  vip_booking_enabled: true,
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "cities") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: {
+                  timezone: "UTC",
+                  service_day_cutoff_time: "06:00",
+                },
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "vip_booking_requests") {
+        return {
+          insert: (payload: Record<string, unknown>) => {
+            inserts.vip_booking_requests.push(payload);
+            return {
+              select: () => ({
+                single: async () => ({
+                  data: {
+                    id: "b0ef9e38-b9f5-4712-bfd5-4c5f3f1f16cd",
+                    status: "submitted",
+                    created_at: "2026-03-04T00:00:00.000Z",
+                    status_message: "Your VIP booking request has been sent to the venue booking desk.",
+                  },
+                  error: null,
+                }),
+              }),
+            };
+          },
+        };
+      }
+
+      if (table === "vip_booking_status_events" || table === "vip_agent_tasks") {
+        return {
+          insert: async (payload: Record<string, unknown>) => {
+            inserts[table].push(payload);
+            return { error: null };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    },
+  } as any;
+
+  const result = await createVipAdminBooking(supabase, {
+    venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+    booking_date: isoDateFromNow(1),
+    arrival_time: "22:30",
+    party_size: 6,
+    customer_name: "Jane Doe",
+    customer_email: "jane@example.com",
+    customer_phone: "+14155550100",
+    special_requests: "Birthday setup",
+  });
+
+  assert.equal(result.status, "submitted");
+  assert.equal(inserts.vip_booking_requests.length, 1);
+  assert.equal(inserts.vip_booking_status_events.length, 1);
+  assert.equal(inserts.vip_agent_tasks.length, 1);
 });
 
 test("updateVipAdminBooking rejects empty patch", async () => {
