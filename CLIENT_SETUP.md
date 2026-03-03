@@ -96,6 +96,15 @@ VIP booking support visibility:
 - `get_venue_info` returns `vip_booking_supported`
 - `vip_booking_supported` is driven by the dedicated venue flag `vip_booking_enabled` (not `guest_list_enabled`)
 
+VIP booking conversation policy (`create_vip_booking_request`):
+- Confirm booking date/time in venue local time before tool call.
+- Use dual-date wording to avoid after-midnight confusion.
+- For `00:00`-`05:59` arrivals, explicitly include next calendar day.
+- Required template:
+  - `Just to confirm: you want a table for [Night Day] night ([Night Date]), arriving around [Time] on [Arrival Day], [Arrival Date] ([Timezone]). I'll submit that as [Night Day] night with [Time] arrival. Is that correct?`
+- If user gives only `2am` without day:
+  - `Do you mean 2:00 AM after Thursday night (Friday morning), or after Friday night (Saturday morning)?`
+
 ## Authentication
 
 All HTTP requests require an API key via one of:

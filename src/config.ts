@@ -34,7 +34,15 @@ const envSchema = z.object({
     .string()
     .default("false")
     .transform((value) => value.trim().toLowerCase() !== "false"),
+  VIP_DASHBOARD_ADMINS: z.string().optional(),
+  VIP_DASHBOARD_SESSION_TTL_MINUTES: z.coerce.number().int().min(5).max(10080).default(720),
+  VIP_DASHBOARD_SESSION_COOKIE_NAME: z.string().default("vip_dashboard_session"),
 });
+
+export type VipDashboardAdminCredential = {
+  username: string;
+  password: string;
+};
 
 export type AppConfig = {
   supabaseUrl: string;
@@ -52,7 +60,42 @@ export type AppConfig = {
   mcpHttpAllowEnvKeyFallback: boolean;
   mcpHttpApiKeys: string[];
   mcpEnableRecommendations: boolean;
+  vipDashboardAdmins: VipDashboardAdminCredential[];
+  vipDashboardSessionTtlMinutes: number;
+  vipDashboardSessionCookieName: string;
 };
+
+function parseVipDashboardAdmins(raw: string | undefined): VipDashboardAdminCredential[] {
+  if (!raw) {
+    return [];
+  }
+
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0)
+    .map((entry) => {
+      const separatorIndex = entry.indexOf(":");
+      if (separatorIndex <= 0 || separatorIndex >= entry.length - 1) {
+        throw new Error(
+          "VIP_DASHBOARD_ADMINS must be a comma-separated list of username:password pairs.",
+        );
+      }
+
+      const username = entry.slice(0, separatorIndex).trim();
+      const password = entry.slice(separatorIndex + 1).trim();
+      if (!username || !password) {
+        throw new Error(
+          "VIP_DASHBOARD_ADMINS contains an invalid username:password pair.",
+        );
+      }
+
+      return {
+        username,
+        password,
+      };
+    });
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = envSchema.parse(env);
@@ -64,6 +107,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     .split(",")
     .map((value) => value.trim().toLowerCase())
     .filter((value) => value.length > 0);
+  const vipDashboardAdmins = parseVipDashboardAdmins(parsed.VIP_DASHBOARD_ADMINS);
 
   return {
     supabaseUrl: parsed.SUPABASE_URL,
@@ -81,5 +125,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mcpHttpAllowEnvKeyFallback: parsed.MCP_HTTP_ALLOW_ENV_KEY_FALLBACK,
     mcpHttpApiKeys: keys,
     mcpEnableRecommendations: parsed.MCP_ENABLE_RECOMMENDATIONS,
+    vipDashboardAdmins,
+    vipDashboardSessionTtlMinutes: parsed.VIP_DASHBOARD_SESSION_TTL_MINUTES,
+    vipDashboardSessionCookieName: parsed.VIP_DASHBOARD_SESSION_COOKIE_NAME,
   };
 }

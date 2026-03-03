@@ -129,6 +129,7 @@ Run migration:
 -- supabase/migrations/20260228111000_vip_outward_language_defaults.sql
 -- supabase/migrations/20260301010000_vip_table_availability_chart.sql
 -- supabase/migrations/20260301114000_vip_table_chart_storage_bucket.sql
+-- supabase/migrations/20260303093000_vip_dashboard_admin_edits.sql
 ```
 
 Then call MCP tools:
@@ -136,6 +137,15 @@ Then call MCP tools:
 - `get_vip_booking_status`
 - `get_vip_table_availability` (read per-day table availability by venue/date range)
 - `get_vip_table_chart` (read structured table chart with optional per-date status overlay and optional `layout_image_url`)
+
+Conversation policy for `create_vip_booking_request`:
+- Confirm booking date/time in venue local time before submitting.
+- Use dual-date confirmation wording, especially for late-night arrivals (`00:00`-`05:59`).
+- Required confirmation template:
+  - `Just to confirm: you want a table for [Night Day] night ([Night Date]), arriving around [Time] on [Arrival Day], [Arrival Date] ([Timezone]). I'll submit that as [Night Day] night with [Time] arrival. Is that correct?`
+- If the user gives a time like `2am` without a day, ask:
+  - `Do you mean 2:00 AM after Thursday night (Friday morning), or after Friday night (Saturday morning)?`
+- If the user changes day, regenerate confirmation before submission.
 
 Ops-tier sessions also have internal queue tools:
 - `list_vip_reservations` (all outstanding reservations; default statuses: `submitted`, `in_review`, `confirmed`)
@@ -153,6 +163,26 @@ To discover bookable venues first, use:
 
 For internal venue-booking workers, claim queue tasks via DB function:
 - `public.claim_next_vip_agent_task(p_agent_id text)`
+
+### VIP Ops Dashboard
+
+Internal dashboard routes:
+- `GET /ops/login`
+- `POST /ops/login`
+- `POST /ops/logout`
+- `GET /ops/vip-dashboard`
+
+Internal admin API routes (cookie-session protected):
+- `GET /api/v1/admin/vip-bookings`
+- `GET /api/v1/admin/vip-bookings/:id`
+- `PATCH /api/v1/admin/vip-bookings/:id`
+
+Required env vars:
+- `VIP_DASHBOARD_ADMINS` (comma-separated `username:password` pairs)
+
+Optional env vars:
+- `VIP_DASHBOARD_SESSION_TTL_MINUTES` (default: `720`)
+- `VIP_DASHBOARD_SESSION_COOKIE_NAME` (default: `vip_dashboard_session`)
 
 ## Run
 

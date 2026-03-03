@@ -325,6 +325,72 @@ export interface VipReservationListResult {
   reservations: VipReservationSummary[];
 }
 
+export interface VipAdminBookingSummary {
+  booking_request_id: string;
+  status: VipBookingStatus;
+  status_message: string;
+  agent_internal_note: string | null;
+  booking_date: string;
+  arrival_time: string;
+  party_size: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  special_requests: string | null;
+  preferred_table_code: string | null;
+  min_spend: number | null;
+  min_spend_currency: string | null;
+  venue_id: string;
+  venue_name: string | null;
+  created_at: string;
+  updated_at: string;
+  latest_event_note: string | null;
+  latest_event_at: string | null;
+  latest_event_actor_type: "customer" | "agent" | "ops" | "system" | null;
+  latest_task: VipReservationLatestTask | null;
+}
+
+export interface VipAdminBookingListResult {
+  now: string;
+  total_count: number;
+  count: number;
+  limit: number;
+  offset: number;
+  statuses: VipBookingStatus[];
+  bookings: VipAdminBookingSummary[];
+}
+
+export interface VipAdminBookingHistoryEntry {
+  status: VipBookingStatus;
+  at: string;
+  actor_type: "customer" | "agent" | "ops" | "system" | null;
+  note: string | null;
+}
+
+export interface VipBookingEditAuditEntry {
+  audit_id: string;
+  editor_username: string;
+  change_note: string | null;
+  changed_fields: string[];
+  before_values: Record<string, unknown>;
+  after_values: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface VipAdminBookingDetailResult {
+  now: string;
+  booking: VipAdminBookingSummary;
+  history: VipAdminBookingHistoryEntry[];
+  audits: VipBookingEditAuditEntry[];
+}
+
+export interface VipAdminBookingUpdateResult {
+  booking: VipAdminBookingSummary;
+  changed_fields: string[];
+  audit_id: string;
+  updated_at: string;
+}
+
 export type VipTableStatus =
   | "available"
   | "held"

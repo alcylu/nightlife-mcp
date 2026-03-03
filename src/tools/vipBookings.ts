@@ -56,6 +56,17 @@ export const vipBookingStatusOutputSchema = z.object({
   history: z.array(vipBookingHistorySchema),
 });
 
+export const createVipBookingToolDescription = [
+  "Create a VIP table booking request and send it directly to the venue booking desk.",
+  "The venue must have vip_booking_supported=true.",
+  "Before calling this tool, always confirm booking date and arrival time in venue local time.",
+  "Use dual-date wording to avoid midnight confusion.",
+  "For arrivals from 00:00 to 05:59, explicitly include next calendar day in the confirmation.",
+  "Required template: Just to confirm: you want a table for [Night Day] night ([Night Date]), arriving around [Time] on [Arrival Day], [Arrival Date] ([Timezone]). I'll submit that as [Night Day] night with [Time] arrival. Is that correct?",
+  "If the user gives a time like 2am without a day, ask: Do you mean 2:00 AM after Thursday night (Friday morning), or after Friday night (Saturday morning)?",
+  "If the user changes the requested day, regenerate confirmation before calling this tool.",
+].join(" ");
+
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -118,8 +129,7 @@ export function registerVipBookingTools(server: McpServer, deps: ToolDeps): void
   server.registerTool(
     "create_vip_booking_request",
     {
-      description:
-        "Create a VIP table booking request and send it directly to the venue booking desk. The venue must have vip_booking_supported=true.",
+      description: createVipBookingToolDescription,
       inputSchema: createVipBookingInputSchema,
       outputSchema: createVipBookingOutputSchema,
     },

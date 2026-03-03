@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NightlifeError, toolErrorResponse } from "../errors.js";
 import {
+  createVipBookingToolDescription,
   createVipBookingOutputSchema,
   vipBookingStatusOutputSchema,
 } from "./vipBookings.js";
@@ -57,4 +58,14 @@ test("toolErrorResponse supports VIP booking error codes", () => {
       message: "VIP booking request not found.",
     },
   });
+});
+
+test("create_vip_booking_request description enforces dual-date late-night confirmation", () => {
+  assert.match(createVipBookingToolDescription, /dual-date wording/i);
+  assert.match(createVipBookingToolDescription, /00:00 to 05:59/i);
+  assert.match(createVipBookingToolDescription, /Just to confirm:/i);
+  assert.match(
+    createVipBookingToolDescription,
+    /Do you mean 2:00 AM after Thursday night \(Friday morning\), or after Friday night \(Saturday morning\)\?/i,
+  );
 });
