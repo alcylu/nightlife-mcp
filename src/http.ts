@@ -4,6 +4,7 @@ import "dotenv/config";
 import { randomUUID } from "node:crypto";
 import express from "express";
 import type { Request, Response } from "express";
+import cors from "cors";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -628,6 +629,20 @@ async function main(): Promise<void> {
   });
 
   app.use(express.urlencoded({ extended: false }));
+
+  // CORS for REST API — allows browser JS from our domains only
+  app.use("/api/v1", cors({
+    origin: [
+      "https://nightlifetokyo.com",
+      "https://www.nightlifetokyo.com",
+      "https://nightlife-tokyo-development.up.railway.app",
+      "https://nightlife-tokyo-production.up.railway.app",
+      /^http:\/\/localhost(:\d+)?$/,
+    ],
+    methods: ["GET", "OPTIONS"],
+    allowedHeaders: ["x-api-key", "Authorization", "Content-Type", "Accept"],
+    maxAge: 86400,
+  }));
 
   if (process.env.NODE_ENV !== "production") {
     app.get("/debug/recommendations", (_req, res) => {
