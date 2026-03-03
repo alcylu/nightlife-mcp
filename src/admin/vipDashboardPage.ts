@@ -782,11 +782,22 @@ export function renderVipDashboardPage(args: {
     async function requestJson(url, options) {
       const res = await fetch(url, options);
       const text = await res.text();
-      const payload = text ? JSON.parse(text) : {};
+      let payload = {};
+      if (text) {
+        try {
+          payload = JSON.parse(text);
+        } catch (_error) {
+          payload = {};
+        }
+      }
       if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = "/ops/login";
+          throw new Error("Dashboard session expired. Please sign in again.");
+        }
         const errMsg = payload && payload.error && payload.error.message
           ? payload.error.message
-          : "Request failed.";
+          : ("Request failed (" + String(res.status) + ").");
         throw new Error(errMsg);
       }
       return payload;
