@@ -402,6 +402,9 @@ export function renderVipDashboardPage(args: {
       display: grid;
       gap: 9px;
     }
+    .new-booking[hidden] {
+      display: none !important;
+    }
     .new-booking-title {
       margin: 0;
       font-size: 14px;
@@ -1092,6 +1095,8 @@ export function renderVipDashboardPage(args: {
           '<td>' + escapeHtml(String(row.party_size || "-")) + '</td>';
 
         tr.addEventListener("click", () => {
+          // Keep edit/detail context focused when selecting an existing booking.
+          setNewBookingPanelOpen(false);
           state.selectedId = row.booking_request_id;
           renderRows(rows);
           loadDetail(state.selectedId);
