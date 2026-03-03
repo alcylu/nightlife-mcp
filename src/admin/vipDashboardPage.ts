@@ -401,6 +401,54 @@ export function renderVipDashboardPage(args: {
       color: var(--warning);
       font-weight: 600;
     }
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(15, 23, 40, 0.32);
+      z-index: 100;
+    }
+    .confirm-overlay[data-open="true"] {
+      display: flex;
+    }
+    .confirm-dialog {
+      width: 100%;
+      max-width: 420px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 0 24px 80px rgba(15, 23, 40, 0.24);
+      padding: 14px;
+      display: grid;
+      gap: 10px;
+    }
+    .confirm-dialog[data-tone="success"] {
+      border-color: #b7dfc7;
+    }
+    .confirm-dialog[data-tone="warning"] {
+      border-color: #f4c89a;
+    }
+    .confirm-dialog[data-tone="error"] {
+      border-color: #efb1ac;
+    }
+    .confirm-dialog h3 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+    .confirm-dialog p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .confirm-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
     .timeline {
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -583,6 +631,16 @@ export function renderVipDashboardPage(args: {
     </section>
   </main>
 
+  <div class="confirm-overlay" id="saveConfirmOverlay" hidden>
+    <div class="confirm-dialog" id="saveConfirmDialog" data-tone="success" role="dialog" aria-modal="true" aria-labelledby="saveConfirmTitle" aria-describedby="saveConfirmText">
+      <h3 id="saveConfirmTitle">Notice</h3>
+      <p id="saveConfirmText">Booking changes were saved successfully.</p>
+      <div class="confirm-actions">
+        <button type="button" id="saveConfirmOkBtn">OK</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const ALL_STATUSES = ["submitted", "in_review", "confirmed", "rejected", "cancelled"];
     const RESERVATION_VIEW_MODES = [
@@ -694,6 +752,31 @@ export function renderVipDashboardPage(args: {
       const el = $("detailMessage");
       el.className = "messages" + (cls ? " " + cls : "");
       el.textContent = message;
+    }
+
+    function openSaveConfirmDialog(args) {
+      const overlay = $("saveConfirmOverlay");
+      const dialog = $("saveConfirmDialog");
+      const title = $("saveConfirmTitle");
+      const text = $("saveConfirmText");
+      if (!overlay || !dialog || !title || !text) return;
+
+      const tone = args && args.tone ? String(args.tone) : "success";
+      const heading = args && args.title ? String(args.title) : "Notice";
+      const message = args && args.message ? String(args.message) : "Booking changes were saved successfully.";
+
+      dialog.dataset.tone = tone;
+      title.textContent = heading;
+      text.textContent = message;
+      overlay.dataset.open = "true";
+      overlay.removeAttribute("hidden");
+    }
+
+    function closeSaveConfirmDialog() {
+      const overlay = $("saveConfirmOverlay");
+      if (!overlay) return;
+      overlay.dataset.open = "false";
+      overlay.setAttribute("hidden", "hidden");
     }
 
     async function requestJson(url, options) {
@@ -899,15 +982,20 @@ export function renderVipDashboardPage(args: {
       }
     }
 
-    async function loadDetail(bookingId) {
+    async function loadDetail(bookingId, options) {
+      const silent = !!(options && options.silent);
       if (!bookingId || state.loadingDetail) return;
       state.loadingDetail = true;
-      setDetailMessage("Loading detail...", "");
+      if (!silent) {
+        setDetailMessage("Loading detail...", "");
+      }
 
       try {
         const payload = await requestJson("/api/v1/admin/vip-bookings/" + encodeURIComponent(bookingId));
         renderDetail(payload);
-        setDetailMessage("Detail loaded.", "");
+        if (!silent) {
+          setDetailMessage("Detail loaded.", "");
+        }
       } catch (error) {
         setDetailMessage(String(error.message || error), "error");
       } finally {
@@ -969,6 +1057,11 @@ export function renderVipDashboardPage(args: {
           "No editable field changed. Update at least one field to save. Edit Note only saves together with another field change.",
           "warning",
         );
+        openSaveConfirmDialog({
+          title: "No Changes Saved",
+          message: "Update at least one booking field, then save again. Edit Note alone is not saved.",
+          tone: "warning",
+        });
         return;
       }
 
@@ -985,9 +1078,14 @@ export function renderVipDashboardPage(args: {
           body: JSON.stringify(payload),
         });
 
-        setDetailMessage("Booking updated.", "success");
-        await loadDetail(state.selectedId);
+        await loadDetail(state.selectedId, { silent: true });
         await loadBookings(false);
+        setDetailMessage("Booking updated.", "success");
+        openSaveConfirmDialog({
+          title: "Changes Saved",
+          message: "Booking changes saved successfully.",
+          tone: "success",
+        });
       } catch (error) {
         setDetailMessage(String(error.message || error), "error");
       } finally {
@@ -999,6 +1097,12 @@ export function renderVipDashboardPage(args: {
       $("refreshBtn").addEventListener("click", () => loadBookings(false));
       $("reloadDetailBtn").addEventListener("click", () => loadDetail(state.selectedId));
       $("saveBtn").addEventListener("click", saveDetail);
+      $("saveConfirmOkBtn").addEventListener("click", closeSaveConfirmDialog);
+      $("saveConfirmOverlay").addEventListener("click", (event) => {
+        if (event.target === $("saveConfirmOverlay")) {
+          closeSaveConfirmDialog();
+        }
+      });
 
       $("searchTerm").addEventListener("keydown", (event) => {
         if (event.key === "Enter") {
