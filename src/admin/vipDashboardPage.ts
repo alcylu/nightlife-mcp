@@ -397,6 +397,10 @@ export function renderVipDashboardPage(args: {
     }
     .messages.error { color: var(--danger); }
     .messages.success { color: var(--ok); }
+    .messages.warning {
+      color: var(--warning);
+      font-weight: 600;
+    }
     .timeline {
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -557,7 +561,7 @@ export function renderVipDashboardPage(args: {
         <div>
           <label for="fieldEditNote">Edit Note (optional)</label>
           <input id="fieldEditNote" placeholder="Reason for this update" />
-          <div class="field-help">Saved in audit history and used as status-event note when status changes.</div>
+          <div class="field-help">Saved in audit history when at least one booking field changes, and used as status-event note when status changes.</div>
         </div>
 
         <div style="display:flex; gap:8px;">
@@ -961,7 +965,10 @@ export function renderVipDashboardPage(args: {
 
       const payload = buildPatchPayload();
       if (!payload) {
-        setDetailMessage("No changes to save.", "");
+        setDetailMessage(
+          "No editable field changed. Update at least one field to save. Edit Note only saves together with another field change.",
+          "warning",
+        );
         return;
       }
 
