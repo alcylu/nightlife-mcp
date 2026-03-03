@@ -1017,9 +1017,6 @@ export function renderVipDashboardPage(args: {
       await loadBookings(true);
       setInterval(() => {
         loadBookings(false);
-        if (state.selectedId) {
-          loadDetail(state.selectedId);
-        }
       }, 30000);
     }
 
