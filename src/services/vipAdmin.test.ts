@@ -5,6 +5,7 @@ import {
   createVipAdminBooking,
   getVipAdminBookingDetail,
   listVipAdminBookings,
+  listVipAdminVenues,
   updateVipAdminBooking,
 } from "./vipAdmin.js";
 
@@ -364,6 +365,55 @@ test("createVipAdminBooking uses MCP create flow and enqueues task", async () =>
   assert.equal(inserts.vip_booking_requests.length, 1);
   assert.equal(inserts.vip_booking_status_events.length, 1);
   assert.equal(inserts.vip_agent_tasks.length, 1);
+});
+
+test("listVipAdminVenues returns VIP-enabled venue options for dropdown", async () => {
+  const supabase = {
+    from: (table: string) => {
+      if (table === "venues") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => ({
+                limit: async () => ({
+                  data: [
+                    {
+                      id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+                      name: "1 Oak",
+                      city: "tokyo",
+                      vip_booking_enabled: true,
+                    },
+                    {
+                      id: "9b5f4db7-c4cc-4d9f-a8d8-1d8d5ea577cc",
+                      name: null,
+                      city: null,
+                      vip_booking_enabled: true,
+                    },
+                  ],
+                  error: null,
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    },
+  } as any;
+
+  const result = await listVipAdminVenues(supabase);
+  assert.equal(result.count, 2);
+  assert.deepEqual(result.venues[0], {
+    venue_id: "d290f1ee-6c54-4b01-90e6-d701748f0851",
+    venue_name: "1 Oak",
+    city_name: "tokyo",
+  });
+  assert.deepEqual(result.venues[1], {
+    venue_id: "9b5f4db7-c4cc-4d9f-a8d8-1d8d5ea577cc",
+    venue_name: "9b5f4db7-c4cc-4d9f-a8d8-1d8d5ea577cc",
+    city_name: null,
+  });
 });
 
 test("updateVipAdminBooking rejects empty patch", async () => {

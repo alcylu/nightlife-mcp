@@ -44,6 +44,18 @@ export type UpdateVipAdminBookingInput = {
 
 export type CreateVipAdminBookingInput = CreateVipBookingRequestInput;
 
+export type VipAdminVenueOption = {
+  venue_id: string;
+  venue_name: string;
+  city_name: string | null;
+};
+
+export type VipAdminVenueListResult = {
+  now: string;
+  count: number;
+  venues: VipAdminVenueOption[];
+};
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -89,6 +101,13 @@ type VipBookingRequestRow = {
 type VipVenueNameRow = {
   id: string;
   name: string | null;
+};
+
+type VipVenueOptionRow = {
+  id: string;
+  name: string | null;
+  city: string | null;
+  vip_booking_enabled: boolean | null;
 };
 
 type VipReservationEventRow = {
@@ -528,6 +547,37 @@ export async function listVipAdminBookings(
     offset,
     statuses,
     bookings,
+  };
+}
+
+export async function listVipAdminVenues(
+  supabase: SupabaseClient,
+): Promise<VipAdminVenueListResult> {
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("venues")
+    .select("id,name,city,vip_booking_enabled")
+    .eq("vip_booking_enabled", true)
+    .order("name", { ascending: true })
+    .limit(500);
+
+  if (error) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to load VIP-enabled venues.", {
+      cause: error.message,
+    });
+  }
+
+  const rows = Array.isArray(data) ? (data as VipVenueOptionRow[]) : [];
+  const venues = rows.map((row) => ({
+    venue_id: row.id,
+    venue_name: row.name || row.id,
+    city_name: row.city || null,
+  }));
+
+  return {
+    now,
+    count: venues.length,
+    venues,
   };
 }
 

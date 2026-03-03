@@ -6,6 +6,7 @@ import {
   createVipAdminBooking,
   getVipAdminBookingDetail,
   listVipAdminBookings,
+  listVipAdminVenues,
   updateVipAdminBooking,
   type CreateVipAdminBookingInput,
   type UpdateVipAdminBookingPatch,
@@ -73,6 +74,15 @@ export function createVipAdminRouter(supabase: SupabaseClient): Router {
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
+      res.json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  router.get("/vip-venues", async (_req: RequestWithDashboardAuth, res) => {
+    try {
+      const result = await listVipAdminVenues(supabase);
       res.json(result);
     } catch (error) {
       sendError(res, error);

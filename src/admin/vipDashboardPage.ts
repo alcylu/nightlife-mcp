@@ -581,8 +581,10 @@ export function renderVipDashboardPage(args: {
 
           <div class="grid2">
             <div>
-              <label for="newVenueId">Venue ID</label>
-              <input id="newVenueId" placeholder="UUID" />
+              <label for="newVenueId">Venue</label>
+              <select id="newVenueId">
+                <option value="">Loading venues...</option>
+              </select>
             </div>
             <div>
               <label for="newPartySize">Party Size</label>
@@ -838,6 +840,66 @@ export function renderVipDashboardPage(args: {
       $("newSpecialRequests").value = "";
     }
 
+    function optionLabel(venue) {
+      const city = venue.city_name ? " (" + venue.city_name + ")" : "";
+      return (venue.venue_name || venue.venue_id || "Unknown venue") + city;
+    }
+
+    function ensureVenueOption(venueId, venueName, cityName) {
+      const select = $("newVenueId");
+      if (!select || !venueId) {
+        return;
+      }
+      const existing = Array.from(select.options).find((option) => option.value === venueId);
+      if (existing) {
+        return;
+      }
+      const option = document.createElement("option");
+      option.value = venueId;
+      option.textContent = optionLabel({
+        venue_id: venueId,
+        venue_name: venueName || venueId,
+        city_name: cityName || null,
+      });
+      select.appendChild(option);
+    }
+
+    function renderVenueOptions(venues) {
+      const select = $("newVenueId");
+      if (!select) {
+        return;
+      }
+      const currentValue = select.value;
+      select.innerHTML = "";
+
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = "Select VIP venue";
+      select.appendChild(placeholder);
+
+      const list = Array.isArray(venues) ? venues : [];
+      list.forEach((venue) => {
+        if (!venue || !venue.venue_id) {
+          return;
+        }
+        const option = document.createElement("option");
+        option.value = venue.venue_id;
+        option.textContent = optionLabel(venue);
+        select.appendChild(option);
+      });
+
+      if (currentValue && Array.from(select.options).some((option) => option.value === currentValue)) {
+        select.value = currentValue;
+      } else {
+        select.value = "";
+      }
+    }
+
+    async function loadVenueOptions() {
+      const payload = await requestJson("/api/v1/admin/vip-venues");
+      renderVenueOptions(payload.venues || []);
+    }
+
     function setNewBookingPanelOpen(open) {
       const panel = $("newBookingPanel");
       const toggleButton = $("toggleNewBookingBtn");
@@ -861,6 +923,7 @@ export function renderVipDashboardPage(args: {
         return;
       }
 
+      ensureVenueOption(booking.venue_id, booking.venue_name || booking.venue_id, null);
       $("newVenueId").value = booking.venue_id || "";
       $("newBookingDate").value = booking.booking_date || "";
       $("newArrivalTime").value = normalizeTimeInput(booking.arrival_time || "");
@@ -1161,7 +1224,7 @@ export function renderVipDashboardPage(args: {
       const specialRequests = $("newSpecialRequests").value.trim();
 
       if (!venueId) {
-        throw new Error("Venue ID is required.");
+        throw new Error("Venue selection is required.");
       }
       if (!bookingDate) {
         throw new Error("Booking Date is required.");
@@ -1382,11 +1445,17 @@ export function renderVipDashboardPage(args: {
 
     async function init() {
       applyReservationViewDateRange();
-      clearNewBookingForm();
-      setNewBookingPanelOpen(false);
       renderReservationViewFilters();
       renderStatusFilters();
       bindEvents();
+      try {
+        await loadVenueOptions();
+      } catch (_error) {
+        renderVenueOptions([]);
+        setDetailMessage("Failed to load VIP venue options. Click Refresh and try again.", "error");
+      }
+      clearNewBookingForm();
+      setNewBookingPanelOpen(false);
       await loadBookings(true);
       setInterval(() => {
         loadBookings(false);
