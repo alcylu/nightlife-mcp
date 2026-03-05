@@ -183,6 +183,7 @@ export interface UnmetRequestResult {
 export type VipBookingStatus =
   | "submitted"
   | "in_review"
+  | "deposit_required"
   | "confirmed"
   | "rejected"
   | "cancelled";
@@ -211,6 +212,9 @@ export interface VipBookingStatusResult {
   status_message: string;
   latest_note: string | null;
   history: VipBookingStatusHistoryEntry[];
+  deposit_status: string | null;
+  deposit_amount_jpy: number | null;
+  deposit_payment_url: string | null;
 }
 
 export interface VipBookingTransitionResult {
@@ -316,6 +320,9 @@ export interface VipReservationSummary {
   latest_event_at: string | null;
   latest_event_actor_type: "customer" | "agent" | "ops" | "system" | null;
   latest_task: VipReservationLatestTask | null;
+  deposit_status: string | null;
+  deposit_amount_jpy: number | null;
+  deposit_payment_url: string | null;
 }
 
 export interface VipReservationListResult {
@@ -500,4 +507,46 @@ export interface VipTableChartImageUploadResult {
   mime_type: string;
   size_bytes: number;
   uploaded_at: string;
+}
+
+export type VipDepositStatus =
+  | "pending"
+  | "paid"
+  | "expired"
+  | "refunded"
+  | "partially_refunded"
+  | "forfeited"
+  | "not_required";
+
+export interface VipDepositRecord {
+  id: string;
+  booking_request_id: string;
+  venue_id: string;
+  status: VipDepositStatus;
+  amount_jpy: number;
+  deposit_percentage: number;
+  min_spend_jpy: number;
+  stripe_checkout_session_id: string | null;
+  stripe_payment_intent_id: string | null;
+  stripe_checkout_url: string | null;
+  checkout_expires_at: string | null;
+  paid_at: string | null;
+  refund_cutoff_hours: number;
+  partial_refund_percentage: number;
+  refund_amount_jpy: number | null;
+  stripe_refund_id: string | null;
+  refunded_at: string | null;
+  forfeited_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VipVenueDepositConfig {
+  id: string;
+  venue_id: string;
+  deposit_enabled: boolean;
+  deposit_percentage: number;
+  refund_cutoff_hours: number;
+  partial_refund_percentage: number;
+  checkout_expiry_minutes: number;
 }

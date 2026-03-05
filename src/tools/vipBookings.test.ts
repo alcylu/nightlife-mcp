@@ -41,6 +41,9 @@ test("vipBookingStatusOutputSchema accepts customer-safe status payload", () => 
         note: "Checking promoter availability.",
       },
     ],
+    deposit_status: null,
+    deposit_amount_jpy: null,
+    deposit_payment_url: null,
   });
 
   assert.equal(parsed.history.length, 2);

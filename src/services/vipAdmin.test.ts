@@ -25,6 +25,7 @@ test("listVipAdminBookings defaults to all statuses and maps booking context", a
               assert.deepEqual(statuses, [
                 "submitted",
                 "in_review",
+                "deposit_required",
                 "confirmed",
                 "rejected",
                 "cancelled",

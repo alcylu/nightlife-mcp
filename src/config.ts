@@ -37,6 +37,9 @@ const envSchema = z.object({
   VIP_DASHBOARD_ADMINS: z.string().optional(),
   VIP_DASHBOARD_SESSION_TTL_MINUTES: z.coerce.number().int().min(5).max(10080).default(720),
   VIP_DASHBOARD_SESSION_COOKIE_NAME: z.string().default("vip_dashboard_session"),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
 });
 
 export type VipDashboardAdminCredential = {
@@ -63,6 +66,9 @@ export type AppConfig = {
   vipDashboardAdmins: VipDashboardAdminCredential[];
   vipDashboardSessionTtlMinutes: number;
   vipDashboardSessionCookieName: string;
+  stripeSecretKey: string | null;
+  stripeWebhookSecret: string | null;
+  resendApiKey: string | null;
 };
 
 function parseVipDashboardAdmins(raw: string | undefined): VipDashboardAdminCredential[] {
@@ -128,5 +134,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     vipDashboardAdmins,
     vipDashboardSessionTtlMinutes: parsed.VIP_DASHBOARD_SESSION_TTL_MINUTES,
     vipDashboardSessionCookieName: parsed.VIP_DASHBOARD_SESSION_COOKIE_NAME,
+    stripeSecretKey: parsed.STRIPE_SECRET_KEY || null,
+    stripeWebhookSecret: parsed.STRIPE_WEBHOOK_SECRET || null,
+    resendApiKey: parsed.RESEND_API_KEY || null,
   };
 }

@@ -63,6 +63,7 @@ const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const VIP_STATUSES: VipBookingStatus[] = [
   "submitted",
   "in_review",
+  "deposit_required",
   "confirmed",
   "rejected",
   "cancelled",
@@ -665,9 +666,16 @@ export async function getVipAdminBookingDetail(
   };
 }
 
+export type VipAdminBookingOptions = {
+  stripeSecretKey?: string;
+  nightlifeBaseUrl?: string;
+  resendApiKey?: string;
+};
+
 export async function updateVipAdminBooking(
   supabase: SupabaseClient,
   input: UpdateVipAdminBookingInput,
+  options?: VipAdminBookingOptions,
 ): Promise<VipAdminBookingUpdateResult> {
   const bookingRequestId = ensureUuid(input.booking_request_id, "booking_request_id");
   const editorUsername = normalizeActor(input.editor_username);
@@ -704,11 +712,51 @@ export async function updateVipAdminBooking(
     throw new NightlifeError("BOOKING_STATUS_UPDATE_FAILED", "Failed to update VIP booking.");
   }
 
+  const changedFields = Array.isArray(rpcRow.changed_fields) ? rpcRow.changed_fields : [];
+
+  // If status changed via admin dashboard, handle deposit creation + emails
+  if (changedFields.includes("status") && patch.status) {
+    const newStatus = patch.status as VipBookingStatus;
+
+    if (newStatus === "deposit_required" && options?.stripeSecretKey && options?.nightlifeBaseUrl) {
+      try {
+        const { createDepositForBooking } = await import("./deposits.js");
+        await createDepositForBooking(supabase, bookingRequestId, options.stripeSecretKey, options.nightlifeBaseUrl);
+      } catch {
+        // Deposit creation failure is non-blocking for admin
+      }
+    }
+
+    if (options?.resendApiKey) {
+      try {
+        const { sendDepositRequiredEmail, sendBookingConfirmedEmail, sendBookingRejectedEmail } =
+          await import("./email.js");
+
+        if (newStatus === "deposit_required") {
+          const { getDepositForBooking } = await import("./deposits.js");
+          const deposit = await getDepositForBooking(supabase, bookingRequestId);
+          if (deposit?.stripe_checkout_url && deposit.checkout_expires_at) {
+            await sendDepositRequiredEmail(
+              supabase, options.resendApiKey, bookingRequestId,
+              deposit.amount_jpy, deposit.stripe_checkout_url, deposit.checkout_expires_at,
+            );
+          }
+        } else if (newStatus === "confirmed") {
+          await sendBookingConfirmedEmail(supabase, options.resendApiKey, bookingRequestId, false);
+        } else if (newStatus === "rejected") {
+          await sendBookingRejectedEmail(supabase, options.resendApiKey, bookingRequestId);
+        }
+      } catch {
+        // Email failure is non-blocking
+      }
+    }
+  }
+
   const detail = await getVipAdminBookingDetail(supabase, bookingRequestId);
 
   return {
     booking: detail.booking,
-    changed_fields: Array.isArray(rpcRow.changed_fields) ? rpcRow.changed_fields : [],
+    changed_fields: changedFields,
     audit_id: rpcRow.audit_id,
     updated_at: rpcRow.updated_at,
   };
@@ -717,7 +765,10 @@ export async function updateVipAdminBooking(
 export async function createVipAdminBooking(
   supabase: SupabaseClient,
   input: CreateVipAdminBookingInput,
+  options?: VipAdminBookingOptions,
 ): Promise<VipBookingCreateResult> {
   // Reuse the exact flow used by MCP tool `create_vip_booking_request`.
-  return createVipBookingRequest(supabase, input);
+  return createVipBookingRequest(supabase, input, {
+    resendApiKey: options?.resendApiKey,
+  });
 }

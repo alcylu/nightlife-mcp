@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import type { Request, Response } from "express";
 import cors from "cors";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createSupabaseClient } from "./db/supabase.js";
@@ -31,6 +31,11 @@ import {
   renderVipDashboardLoginPage,
   renderVipDashboardPage,
 } from "./admin/vipDashboardPage.js";
+import { createStripeWebhookRouter } from "./routes/stripeWebhook.js";
+import {
+  renderDepositSuccessPage,
+  renderDepositCancelledPage,
+} from "./pages/depositResult.js";
 
 type SessionContext = {
   server: McpServer;
@@ -618,7 +623,14 @@ async function main(): Promise<void> {
     );
   }
 
-  const app = createMcpExpressApp({ host: config.httpHost });
+  const app = express();
+
+  // Stripe webhook needs raw body BEFORE express.json() parser
+  if (config.stripeSecretKey && config.stripeWebhookSecret) {
+    app.use("/stripe/webhook", express.raw({ type: "application/json" }));
+  }
+
+  app.use(express.json());
   const supabase = createSupabaseClient(config);
   const sessions = new Map<string, SessionContext>();
   const dashboardAuth = createDashboardAuth({
@@ -812,6 +824,22 @@ async function main(): Promise<void> {
     },
   );
 
+  // Deposit result pages (public, no auth)
+  app.get("/deposit/success", (_req, res) => {
+    res.type("html").send(renderDepositSuccessPage());
+  });
+  app.get("/deposit/cancelled", (_req, res) => {
+    res.type("html").send(renderDepositCancelledPage());
+  });
+
+  // Stripe webhook (no auth — verified by signature)
+  if (config.stripeSecretKey && config.stripeWebhookSecret) {
+    app.use(
+      "/stripe/webhook",
+      createStripeWebhookRouter(supabase, config.stripeSecretKey, config.stripeWebhookSecret, config.resendApiKey),
+    );
+  }
+
   app.get("/api/v1/openapi.json", (_req, res) => {
     res.json(openApiDocument);
   });
@@ -828,7 +856,11 @@ async function main(): Promise<void> {
     "/api/v1/admin",
     (req: RequestWithDashboardAuth, res, next) =>
       dashboardAuth.requireApiSession(req, res, next),
-    createVipAdminRouter(supabase),
+    createVipAdminRouter(supabase, {
+      stripeSecretKey: config.stripeSecretKey ?? undefined,
+      nightlifeBaseUrl: config.nightlifeBaseUrl,
+      resendApiKey: config.resendApiKey ?? undefined,
+    }),
   );
 
   // REST API v1 — same auth, plain JSON responses

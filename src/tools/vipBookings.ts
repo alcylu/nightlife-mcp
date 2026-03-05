@@ -1,15 +1,18 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AppConfig } from "../config.js";
 import { toNightlifeError, toolErrorResponse } from "../errors.js";
 import { logEvent, recordToolResult } from "../observability/metrics.js";
 import {
+  cancelVipBookingRequest,
   createVipBookingRequest,
   getVipBookingStatus,
 } from "../services/vipBookings.js";
 
 export type ToolDeps = {
   supabase: SupabaseClient;
+  config: AppConfig;
 };
 
 export const createVipBookingInputSchema = {
@@ -26,7 +29,7 @@ export const createVipBookingInputSchema = {
 
 export const createVipBookingOutputSchema = z.object({
   booking_request_id: z.string(),
-  status: z.enum(["submitted", "in_review", "confirmed", "rejected", "cancelled"]),
+  status: z.enum(["submitted", "in_review", "deposit_required", "confirmed", "rejected", "cancelled"]),
   created_at: z.string(),
   message: z.string(),
   preferred_table_code: z.string().nullable(),
@@ -36,7 +39,7 @@ export const createVipBookingOutputSchema = z.object({
 });
 
 const vipBookingHistorySchema = z.object({
-  status: z.enum(["submitted", "in_review", "confirmed", "rejected", "cancelled"]),
+  status: z.enum(["submitted", "in_review", "deposit_required", "confirmed", "rejected", "cancelled"]),
   at: z.string(),
   note: z.string().nullable(),
 });
@@ -49,12 +52,22 @@ export const vipBookingStatusInputSchema = {
 
 export const vipBookingStatusOutputSchema = z.object({
   booking_request_id: z.string(),
-  status: z.enum(["submitted", "in_review", "confirmed", "rejected", "cancelled"]),
+  status: z.enum(["submitted", "in_review", "deposit_required", "confirmed", "rejected", "cancelled"]),
   last_updated_at: z.string(),
   status_message: z.string(),
   latest_note: z.string().nullable(),
   history: z.array(vipBookingHistorySchema),
+  deposit_status: z.string().nullable(),
+  deposit_amount_jpy: z.number().nullable(),
+  deposit_payment_url: z.string().nullable(),
 });
+
+export const cancelVipBookingInputSchema = {
+  booking_request_id: z.string().min(1),
+  customer_email: z.string().min(1),
+  customer_phone: z.string().min(1),
+  cancellation_reason: z.string().max(500).optional(),
+};
 
 export const createVipBookingToolDescription = [
   "Create a VIP table booking request and send it directly to the venue booking desk.",
@@ -136,7 +149,9 @@ export function registerVipBookingTools(server: McpServer, deps: ToolDeps): void
     async (args) => runTool(
       "create_vip_booking_request",
       createVipBookingOutputSchema,
-      async () => createVipBookingRequest(deps.supabase, args),
+      async () => createVipBookingRequest(deps.supabase, args, {
+        resendApiKey: deps.config.resendApiKey ?? undefined,
+      }),
     ),
   );
 
@@ -152,6 +167,24 @@ export function registerVipBookingTools(server: McpServer, deps: ToolDeps): void
       "get_vip_booking_status",
       vipBookingStatusOutputSchema,
       async () => getVipBookingStatus(deps.supabase, args),
+    ),
+  );
+
+  server.registerTool(
+    "cancel_vip_booking_request",
+    {
+      description:
+        "Cancel a VIP booking request. Requires booking ID plus customer email and phone to verify ownership. Works for bookings in submitted, in_review, or confirmed status.",
+      inputSchema: cancelVipBookingInputSchema,
+      outputSchema: vipBookingStatusOutputSchema,
+    },
+    async (args) => runTool(
+      "cancel_vip_booking_request",
+      vipBookingStatusOutputSchema,
+      async () => cancelVipBookingRequest(deps.supabase, args, {
+        stripeSecretKey: deps.config.stripeSecretKey ?? undefined,
+        resendApiKey: deps.config.resendApiKey ?? undefined,
+      }),
     ),
   );
 }

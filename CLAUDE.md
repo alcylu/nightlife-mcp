@@ -82,6 +82,22 @@ Error responses: `{ error: { code, message } }` with appropriate HTTP status (40
 - **Modes**: DB-backed keys (with quota tracking) or env-var fallback keys
 - **Rate limit headers**: `X-RateLimit-Daily-Limit`, `X-RateLimit-Daily-Remaining`, `X-RateLimit-Minute-Limit`, `X-RateLimit-Minute-Remaining`
 
+### CORS (2026-03-03)
+- **Scope**: `/api/v1` routes only (not `/mcp`, not `/ops`)
+- **Allowed origins**: `nightlifetokyo.com`, `www.nightlifetokyo.com`, Railway dev/prod domains, `localhost:*`
+- **Methods**: GET, OPTIONS
+- **Allowed headers**: `x-api-key`, `Authorization`, `Content-Type`, `Accept`
+- **Preflight cache**: 24h (`maxAge: 86400`)
+- **Package**: `cors@^2.8.6` + `@types/cors@^2.8.19`
+
+### Browser API Key (`webmcp-browser`)
+- **Purpose**: WebMCP browser integration on nightlifetokyo.com
+- **ID**: `4fbac1c0-d51a-4a60-92e5-2b79cca32897`
+- **Tier**: free, **Daily quota**: 500, **Minute quota**: 30
+- **Source**: DB-backed (tracked, rate-limited, revocable)
+- **Revoke**: `UPDATE mcp_api_keys SET status = 'revoked' WHERE key_name = 'webmcp-browser'`
+- **Set on**: nightlife-tokyo-next `.env.local` + Railway production + staging as `NEXT_PUBLIC_NIGHTLIFE_API_KEY`
+
 ## Architecture
 
 ```

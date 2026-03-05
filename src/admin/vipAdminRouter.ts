@@ -10,6 +10,7 @@ import {
   updateVipAdminBooking,
   type CreateVipAdminBookingInput,
   type UpdateVipAdminBookingPatch,
+  type VipAdminBookingOptions,
 } from "../services/vipAdmin.js";
 import type { VipBookingStatus } from "../types.js";
 import type { RequestWithDashboardAuth } from "./dashboardAuth.js";
@@ -51,13 +52,16 @@ function sendError(res: Response, error: unknown): void {
   });
 }
 
-export function createVipAdminRouter(supabase: SupabaseClient): Router {
+export function createVipAdminRouter(
+  supabase: SupabaseClient,
+  options?: VipAdminBookingOptions,
+): Router {
   const router = Router();
 
   router.post("/vip-bookings", async (req: RequestWithDashboardAuth, res) => {
     try {
       const body = (req.body || {}) as CreateVipAdminBookingInput;
-      const result = await createVipAdminBooking(supabase, body);
+      const result = await createVipAdminBooking(supabase, body, options);
       res.status(201).json(result);
     } catch (error) {
       sendError(res, error);
@@ -110,7 +114,7 @@ export function createVipAdminRouter(supabase: SupabaseClient): Router {
         editor_username: req.dashboardAdminUsername || "dashboard",
         patch: body.patch || {},
         note: body.note,
-      });
+      }, options);
       res.json(result);
     } catch (error) {
       sendError(res, error);

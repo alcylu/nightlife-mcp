@@ -374,6 +374,10 @@ test("getVipBookingStatus never exposes internal notes", async () => {
                 },
                 error: null,
               }),
+              single: async () => ({
+                data: { deposit_status: null },
+                error: null,
+              }),
             }),
           }),
         };
@@ -399,6 +403,19 @@ test("getVipBookingStatus never exposes internal notes", async () => {
                   ],
                   error: null,
                 }),
+              }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "vip_booking_deposits") {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: null,
+                error: null,
               }),
             }),
           }),
@@ -512,7 +529,7 @@ test("listVipReservations returns outstanding reservations with latest event and
         return {
           select: () => ({
             in: (_column: string, values: string[]) => {
-              assert.deepEqual(values, ["submitted", "in_review", "confirmed"]);
+              assert.deepEqual(values, ["submitted", "in_review", "deposit_required", "confirmed"]);
               return {
                 order: () => ({
                   limit: async () => ({
@@ -599,6 +616,17 @@ test("listVipReservations returns outstanding reservations with latest event and
                 ],
                 error: null,
               }),
+            }),
+          }),
+        };
+      }
+
+      if (table === "vip_booking_deposits") {
+        return {
+          select: () => ({
+            in: async () => ({
+              data: [],
+              error: null,
             }),
           }),
         };

@@ -15,6 +15,13 @@ export type NightlifeErrorCode =
   | "VIP_CLAIM_FAILED"
   | "INVALID_REQUEST"
   | "REQUEST_WRITE_FAILED"
+  | "GUEST_LIST_NOT_AVAILABLE"
+  | "GUEST_LIST_DUPLICATE"
+  | "GUEST_LIST_ENTRY_NOT_FOUND"
+  | "DEPOSIT_CREATION_FAILED"
+  | "DEPOSIT_NOT_FOUND"
+  | "DEPOSIT_REFUND_FAILED"
+  | "STRIPE_ERROR"
   | "DB_QUERY_FAILED"
   | "INTERNAL_ERROR";
 
@@ -63,7 +70,12 @@ export function errorToHttpStatus(code: NightlifeErrorCode): number {
     case "VENUE_NOT_FOUND":
     case "PERFORMER_NOT_FOUND":
     case "BOOKING_REQUEST_NOT_FOUND":
+    case "GUEST_LIST_ENTRY_NOT_FOUND":
+    case "DEPOSIT_NOT_FOUND":
       return 404;
+    case "GUEST_LIST_NOT_AVAILABLE":
+    case "GUEST_LIST_DUPLICATE":
+      return 409;
     default:
       return 500;
   }

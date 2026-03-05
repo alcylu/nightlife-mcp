@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AppConfig } from "../config.js";
 import { toNightlifeError, toolErrorResponse } from "../errors.js";
 import { logEvent, recordToolResult } from "../observability/metrics.js";
 import {
@@ -13,11 +14,13 @@ import {
 
 export type ToolDeps = {
   supabase: SupabaseClient;
+  config: AppConfig;
 };
 
 const vipStatusSchema = z.enum([
   "submitted",
   "in_review",
+  "deposit_required",
   "confirmed",
   "rejected",
   "cancelled",
@@ -75,6 +78,9 @@ const reservationSummarySchema = z.object({
   latest_event_at: z.string().nullable(),
   latest_event_actor_type: z.enum(["customer", "agent", "ops", "system"]).nullable(),
   latest_task: latestTaskSchema.nullable(),
+  deposit_status: z.string().nullable(),
+  deposit_amount_jpy: z.number().nullable(),
+  deposit_payment_url: z.string().nullable(),
 });
 
 export const listVipRequestsForAlertingInputSchema = {
@@ -288,6 +294,10 @@ export function registerVipAgentOpsTools(server: McpServer, deps: ToolDeps): voi
         updateVipBookingStatus(deps.supabase, {
           ...args,
           actor_type: args.actor_type ?? "ops",
+        }, {
+          stripeSecretKey: deps.config.stripeSecretKey ?? undefined,
+          nightlifeBaseUrl: deps.config.nightlifeBaseUrl,
+          resendApiKey: deps.config.resendApiKey ?? undefined,
         }),
     ),
   );

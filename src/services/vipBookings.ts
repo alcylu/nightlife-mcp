@@ -18,6 +18,7 @@ import {
   type VipReservationListResult,
 } from "../types.js";
 import { NightlifeError } from "../errors.js";
+import { logEvent } from "../observability/metrics.js";
 
 export type CreateVipBookingRequestInput = {
   venue_id: string;
@@ -35,6 +36,13 @@ export type GetVipBookingStatusInput = {
   booking_request_id: string;
   customer_email?: string;
   customer_phone?: string;
+};
+
+export type CancelVipBookingRequestInput = {
+  booking_request_id: string;
+  customer_email: string;
+  customer_phone: string;
+  cancellation_reason?: string;
 };
 
 export type UpdateVipBookingStatusInput = {
@@ -88,6 +96,7 @@ const TABLE_CODE_RE = /^[A-Z0-9._-]{1,64}$/;
 const VIP_STATUSES: VipBookingStatus[] = [
   "submitted",
   "in_review",
+  "deposit_required",
   "confirmed",
   "rejected",
   "cancelled",
@@ -103,6 +112,7 @@ const VIP_AGENT_TASK_STATUSES: VipAgentTaskStatus[] = [
 const DEFAULT_OUTSTANDING_VIP_STATUSES: VipBookingStatus[] = [
   "submitted",
   "in_review",
+  "deposit_required",
   "confirmed",
 ];
 
@@ -569,11 +579,15 @@ export function isAllowedVipStatusTransition(
   toStatus: VipBookingStatus,
 ): boolean {
   if (fromStatus === "submitted") {
-    return ["in_review", "confirmed", "rejected", "cancelled"].includes(toStatus);
+    return ["in_review", "deposit_required", "confirmed", "rejected", "cancelled"].includes(toStatus);
   }
 
   if (fromStatus === "in_review") {
-    return ["confirmed", "rejected", "cancelled"].includes(toStatus);
+    return ["deposit_required", "confirmed", "rejected", "cancelled"].includes(toStatus);
+  }
+
+  if (fromStatus === "deposit_required") {
+    return ["confirmed", "cancelled"].includes(toStatus);
   }
 
   if (fromStatus === "confirmed") {
@@ -665,6 +679,7 @@ function normalizeStatusLookupContacts(input: GetVipBookingStatusInput): {
 export async function createVipBookingRequest(
   supabase: SupabaseClient,
   input: CreateVipBookingRequestInput,
+  options?: { resendApiKey?: string },
 ): Promise<VipBookingCreateResult> {
   const venueId = ensureUuid(input.venue_id, "venue_id");
   const bookingDate = normalizeBookingDate(input.booking_date);
@@ -756,6 +771,19 @@ export async function createVipBookingRequest(
     );
   }
 
+  // Send submitted email (fire-and-forget)
+  if (options?.resendApiKey) {
+    try {
+      const { sendBookingSubmittedEmail } = await import("./email.js");
+      await sendBookingSubmittedEmail(supabase, options.resendApiKey, created.id);
+    } catch (emailError) {
+      logEvent("email.send_error", {
+        booking_request_id: created.id,
+        error: emailError instanceof Error ? emailError.message : "Unknown error",
+      });
+    }
+  }
+
   return {
     booking_request_id: created.id,
     status: created.status,
@@ -819,6 +847,34 @@ export async function getVipBookingStatus(
 
   const latestHistory = history[history.length - 1];
 
+  // Load deposit info
+  let depositStatus: string | null = null;
+  let depositAmountJpy: number | null = null;
+  let depositPaymentUrl: string | null = null;
+
+  const { data: depositRow } = await supabase
+    .from("vip_booking_deposits")
+    .select("status,amount_jpy,stripe_checkout_url")
+    .eq("booking_request_id", booking.id)
+    .maybeSingle();
+
+  if (depositRow) {
+    depositStatus = depositRow.status as string;
+    depositAmountJpy = depositRow.amount_jpy as number;
+    depositPaymentUrl =
+      depositRow.status === "pending" ? (depositRow.stripe_checkout_url as string | null) : null;
+  } else {
+    // Check booking's denormalized deposit_status (e.g., not_required)
+    const { data: bookingDeposit } = await supabase
+      .from("vip_booking_requests")
+      .select("deposit_status")
+      .eq("id", booking.id)
+      .single();
+    if (bookingDeposit?.deposit_status) {
+      depositStatus = bookingDeposit.deposit_status as string;
+    }
+  }
+
   return {
     booking_request_id: booking.id,
     status: booking.status,
@@ -826,6 +882,9 @@ export async function getVipBookingStatus(
     status_message: booking.status_message,
     latest_note: latestHistory?.note || null,
     history,
+    deposit_status: depositStatus,
+    deposit_amount_jpy: depositAmountJpy,
+    deposit_payment_url: depositPaymentUrl,
   };
 }
 
@@ -1030,6 +1089,25 @@ export async function listVipReservations(
     }
   }
 
+  // Load deposit info for all bookings
+  const { data: depositRows } = await supabase
+    .from("vip_booking_deposits")
+    .select("booking_request_id,status,amount_jpy,stripe_checkout_url")
+    .in("booking_request_id", bookingRequestIds);
+
+  const depositByBooking = new Map<
+    string,
+    { status: string; amount_jpy: number; stripe_checkout_url: string | null }
+  >();
+  for (const row of (depositRows || []) as Array<{
+    booking_request_id: string;
+    status: string;
+    amount_jpy: number;
+    stripe_checkout_url: string | null;
+  }>) {
+    depositByBooking.set(row.booking_request_id, row);
+  }
+
   const summaries = reservations
     .filter(
       (row): row is VipReservationRow & { status: VipBookingStatus } =>
@@ -1038,6 +1116,7 @@ export async function listVipReservations(
     .map((row) => {
       const latestEvent = latestEventByBooking.get(row.id);
       const latestTask = latestTaskByBooking.get(row.id);
+      const deposit = depositByBooking.get(row.id);
       const latestTaskStatus =
         latestTask && isVipAgentTaskStatus(String(latestTask.status))
           ? (latestTask.status as VipAgentTaskStatus)
@@ -1079,6 +1158,10 @@ export async function listVipReservations(
               updated_at: latestTask.updated_at,
             }
             : null,
+        deposit_status: deposit?.status || null,
+        deposit_amount_jpy: deposit?.amount_jpy || null,
+        deposit_payment_url:
+          deposit?.status === "pending" ? deposit?.stripe_checkout_url || null : null,
       };
     });
 
@@ -1205,9 +1288,170 @@ export async function claimVipRequestAfterAck(
   };
 }
 
+export async function cancelVipBookingRequest(
+  supabase: SupabaseClient,
+  input: CancelVipBookingRequestInput,
+  options?: { stripeSecretKey?: string; resendApiKey?: string },
+): Promise<VipBookingStatusResult> {
+  const bookingRequestId = ensureUuid(input.booking_request_id, "booking_request_id");
+  const customerEmail = normalizeCustomerEmail(input.customer_email);
+  const customerPhone = normalizeCustomerPhone(input.customer_phone);
+  const cancellationReason = normalizeOptionalText(input.cancellation_reason, 500);
+
+  const { data: booking, error: bookingError } = await supabase
+    .from("vip_booking_requests")
+    .select("id,status,updated_at,status_message,customer_email,customer_phone")
+    .eq("id", bookingRequestId)
+    .maybeSingle<VipBookingLookupRow>();
+
+  if (bookingError) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to fetch VIP booking request.", {
+      cause: bookingError.message,
+    });
+  }
+
+  if (!booking || booking.customer_email !== customerEmail || booking.customer_phone !== customerPhone) {
+    throw new NightlifeError("BOOKING_REQUEST_NOT_FOUND", "VIP booking request not found.");
+  }
+
+  if (!isAllowedVipStatusTransition(booking.status, "cancelled")) {
+    throw new NightlifeError(
+      "INVALID_BOOKING_REQUEST",
+      `Cannot cancel a booking that is already ${booking.status}.`,
+    );
+  }
+
+  const statusMessage = cancellationReason || "Cancelled by customer.";
+
+  const { data: updated, error: updateError } = await supabase
+    .from("vip_booking_requests")
+    .update({ status: "cancelled", status_message: statusMessage })
+    .eq("id", bookingRequestId)
+    .select("id,status,updated_at,status_message")
+    .single<{ id: string; status: VipBookingStatus; updated_at: string; status_message: string }>();
+
+  if (updateError || !updated) {
+    throw new NightlifeError(
+      "BOOKING_STATUS_UPDATE_FAILED",
+      "Failed to cancel VIP booking request.",
+      { cause: updateError?.message || "Unknown update error" },
+    );
+  }
+
+  const { error: eventError } = await supabase
+    .from("vip_booking_status_events")
+    .insert({
+      booking_request_id: bookingRequestId,
+      from_status: booking.status,
+      to_status: "cancelled",
+      actor_type: "customer",
+      note: cancellationReason,
+    });
+
+  if (eventError) {
+    throw new NightlifeError(
+      "BOOKING_STATUS_UPDATE_FAILED",
+      "Booking cancelled but event logging failed.",
+      { cause: eventError.message },
+    );
+  }
+
+  const { error: settleError } = await supabase
+    .from("vip_agent_tasks")
+    .update({ status: "done", last_error: null })
+    .eq("booking_request_id", bookingRequestId)
+    .in("status", ["pending", "claimed"]);
+
+  if (settleError) {
+    throw new NightlifeError(
+      "BOOKING_STATUS_UPDATE_FAILED",
+      "Booking cancelled but queue settlement failed.",
+      { cause: settleError.message },
+    );
+  }
+
+  // Process deposit refund if applicable (non-blocking)
+  if (options?.stripeSecretKey) {
+    try {
+      const { processRefundOnCancellation } = await import("./deposits.js");
+      await processRefundOnCancellation(supabase, options.stripeSecretKey, bookingRequestId, { resendApiKey: options?.resendApiKey });
+    } catch (refundError) {
+      logEvent("deposit.refund_error", {
+        booking_request_id: bookingRequestId,
+        error: refundError instanceof Error ? refundError.message : "Unknown error",
+      });
+    }
+  }
+
+  // Send cancellation email (fire-and-forget)
+  if (options?.resendApiKey) {
+    try {
+      const { getDepositForBooking } = await import("./deposits.js");
+      const cancelDeposit = await getDepositForBooking(supabase, bookingRequestId);
+      const depositOutcome = cancelDeposit ? cancelDeposit.status : undefined;
+      const { sendBookingCancelledEmail } = await import("./email.js");
+      await sendBookingCancelledEmail(supabase, options.resendApiKey, bookingRequestId, depositOutcome);
+    } catch (emailError) {
+      logEvent("email.send_error", {
+        booking_request_id: bookingRequestId,
+        error: emailError instanceof Error ? emailError.message : "Unknown error",
+      });
+    }
+  }
+
+  const { data: events, error: eventsError } = await supabase
+    .from("vip_booking_status_events")
+    .select("to_status,note,created_at")
+    .eq("booking_request_id", bookingRequestId)
+    .order("created_at", { ascending: true })
+    .limit(20);
+
+  if (eventsError) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Failed to fetch VIP booking history.", {
+      cause: eventsError.message,
+    });
+  }
+
+  const history = ((events || []) as VipStatusEventRow[])
+    .filter((row) => isVipStatus(row.to_status))
+    .map((row) => ({
+      status: row.to_status,
+      at: row.created_at,
+      note: row.note,
+    }));
+
+  const latestHistory = history[history.length - 1];
+
+  // Load deposit info for response
+  let depositStatus: string | null = null;
+  let depositAmountJpy: number | null = null;
+  const { data: depositRow } = await supabase
+    .from("vip_booking_deposits")
+    .select("status,amount_jpy")
+    .eq("booking_request_id", bookingRequestId)
+    .maybeSingle();
+  if (depositRow) {
+    depositStatus = depositRow.status as string;
+    depositAmountJpy = depositRow.amount_jpy as number;
+  }
+
+  return {
+    booking_request_id: updated.id,
+    status: updated.status,
+    last_updated_at: updated.updated_at,
+    status_message: updated.status_message,
+    latest_note: latestHistory?.note || null,
+    history,
+    deposit_status: depositStatus,
+    deposit_amount_jpy: depositAmountJpy,
+    deposit_payment_url: null,
+  };
+}
+
 export async function updateVipBookingStatus(
   supabase: SupabaseClient,
   input: UpdateVipBookingStatusInput,
+  options?: { stripeSecretKey?: string; nightlifeBaseUrl?: string; resendApiKey?: string },
 ): Promise<VipBookingTransitionResult> {
   const bookingRequestId = ensureUuid(input.booking_request_id, "booking_request_id");
   const toStatus = input.to_status;
@@ -1288,6 +1532,50 @@ export async function updateVipBookingStatus(
         cause: eventError.message,
       },
     );
+  }
+
+  // Create deposit if transitioning to deposit_required and Stripe is configured
+  if (toStatus === "deposit_required" && options?.stripeSecretKey && options?.nightlifeBaseUrl) {
+    try {
+      const { createDepositForBooking } = await import("./deposits.js");
+      await createDepositForBooking(
+        supabase,
+        options.stripeSecretKey,
+        bookingRequestId,
+        options.nightlifeBaseUrl,
+      );
+    } catch (depositError) {
+      logEvent("deposit.creation_error", {
+        booking_request_id: bookingRequestId,
+        error: depositError instanceof Error ? depositError.message : "Unknown error",
+      });
+    }
+  }
+
+  // Send email notifications (fire-and-forget)
+  if (options?.resendApiKey) {
+    try {
+      if (toStatus === "deposit_required") {
+        const { getDepositForBooking } = await import("./deposits.js");
+        const deposit = await getDepositForBooking(supabase, bookingRequestId);
+        if (deposit?.stripe_checkout_url && deposit?.checkout_expires_at) {
+          const { sendDepositRequiredEmail } = await import("./email.js");
+          await sendDepositRequiredEmail(supabase, options.resendApiKey, bookingRequestId, deposit.amount_jpy, deposit.stripe_checkout_url, deposit.checkout_expires_at);
+        }
+      } else if (toStatus === "confirmed") {
+        const { sendBookingConfirmedEmail } = await import("./email.js");
+        await sendBookingConfirmedEmail(supabase, options.resendApiKey, bookingRequestId);
+      } else if (toStatus === "rejected") {
+        const { sendBookingRejectedEmail } = await import("./email.js");
+        await sendBookingRejectedEmail(supabase, options.resendApiKey, bookingRequestId);
+      }
+    } catch (emailError) {
+      logEvent("email.send_error", {
+        booking_request_id: bookingRequestId,
+        to_status: toStatus,
+        error: emailError instanceof Error ? emailError.message : "Unknown error",
+      });
+    }
   }
 
   if (isVipTerminalStatus(toStatus)) {

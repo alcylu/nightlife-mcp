@@ -39,6 +39,8 @@
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "resend": "^4.8.0",
+    "stripe": "^20.4.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

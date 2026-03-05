@@ -143,6 +143,7 @@ export function renderVipDashboardPage(args: {
       --warning: #c96808;
       --submitted: #1e5fb3;
       --in-review: #875bf7;
+      --deposit-required: #c96808;
       --confirmed: #067647;
       --rejected: #b42318;
       --cancelled: #667085;
@@ -356,6 +357,7 @@ export function renderVipDashboardPage(args: {
     }
     .status-submitted { background: var(--submitted); }
     .status-in_review { background: var(--in-review); }
+    .status-deposit_required { background: var(--deposit-required); }
     .status-confirmed { background: var(--confirmed); }
     .status-rejected { background: var(--rejected); }
     .status-cancelled { background: var(--cancelled); }
@@ -658,6 +660,7 @@ export function renderVipDashboardPage(args: {
             <select id="fieldStatus">
               <option value="submitted">submitted</option>
               <option value="in_review">in_review</option>
+              <option value="deposit_required">deposit_required</option>
               <option value="confirmed">confirmed</option>
               <option value="rejected">rejected</option>
               <option value="cancelled">cancelled</option>
@@ -734,7 +737,7 @@ export function renderVipDashboardPage(args: {
   </div>
 
   <script>
-    const ALL_STATUSES = ["submitted", "in_review", "confirmed", "rejected", "cancelled"];
+    const ALL_STATUSES = ["submitted", "in_review", "deposit_required", "confirmed", "rejected", "cancelled"];
     const RESERVATION_VIEW_MODES = [
       { value: "upcoming", label: "Upcoming" },
       { value: "all", label: "All" },
