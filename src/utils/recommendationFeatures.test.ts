@@ -18,6 +18,7 @@ test("feature derivation is stable for a high-energy party profile", () => {
   assert.equal(deriveEnergyScore(genres, name, 9), 5);
   assert.equal(deriveSocialScore(genres, name, 9), 5);
   assert.equal(deriveDiscoveryScore(genres, name, false), 3);
+  assert.equal(deriveDiscoveryScore(genres, name, true), 3);
   assert.equal(deriveBudgetScore("Door: JPY 5000"), 4);
 });
 

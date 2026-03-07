@@ -807,7 +807,12 @@ export async function searchEvents(
       .from("event_occurrences")
       .select(OCCURRENCE_SELECT)
       .eq("published", true)
-      .eq("city_id", city.id)
+      .eq("city_id", city.id);
+
+    if (!input.area && !queryText) {
+      query = query.order("featured", { ascending: false });
+    }
+    query = query
       .order("start_at", { ascending: true })
       .range(baseRange.from, baseRange.to);
 

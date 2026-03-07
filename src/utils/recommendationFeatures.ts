@@ -163,9 +163,6 @@ export function deriveDiscoveryScore(genres: string[], name: string, featured: b
   if (includesAny(text, LOW_DISCOVERY_KEYWORDS)) {
     score -= 1.5;
   }
-  if (featured) {
-    score -= 0.5;
-  }
   return Math.round(clamp(score, 1, 5));
 }
 
