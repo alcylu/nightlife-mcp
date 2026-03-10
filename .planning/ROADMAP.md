@@ -32,8 +32,8 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 Plans:
 - [x] 01-01-PLAN.md — Build vipPricing.ts service (types, operating hours gate, day-defaults aggregation, zone summary, chart URL, booking affordance, tests)
-- [ ] 01-02-PLAN.md — Register get_vip_pricing MCP tool with output schema and behavioral description; wire into server; deprecation notes on old tools
-- [ ] 01-03-PLAN.md — Add REST endpoint GET /api/v1/venues/:id/vip-pricing and OpenAPI spec entry
+- [x] 01-02-PLAN.md — Register get_vip_pricing MCP tool with output schema and behavioral description; wire into server; deprecation notes on old tools
+- [x] 01-03-PLAN.md — Add REST endpoint GET /api/v1/venues/:id/vip-pricing and OpenAPI spec entry
 
 ### Phase 2: Ember Prompt Update
 **Goal**: Ember uses `get_vip_pricing` for all VIP inquiries, presents pricing conversationally, and enforces the mandatory user confirmation gate before submitting any booking request.
@@ -44,10 +44,10 @@ Plans:
   2. Ember presents weekday/weekend pricing ranges in natural conversation without raw field names or JSON
   3. Ember always asks "Would you like me to submit an inquiry?" before calling `create_vip_booking_request` — it never auto-submits
   4. Ember states the table chart is a layout reference only and does not infer availability from it
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 02-01: Rewrite VIP Booking Flow section of `SKILL.md` in openclaw: replace two-tool browse with `get_vip_pricing`, add confirmation gate, add chart interpretation guardrail; audit and replace all old tool name references
+- [ ] 02-01-PLAN.md — Rewrite VIP sections of SKILL.md (Tool Contract, Booking Flow, Freshness Rule, Table Chart, Presentation Rule, Venue Lookup/Knowledge); add confirmation gate and chart guardrail; sync to all generic instances; deploy via oc-sync
 
 ### Phase 3: Cleanup and Event Context
 **Goal**: Old VIP tools are removed from the MCP server, and `get_vip_pricing` responses include event context (busy night signal) and a `pricing_approximate` flag that lets Ember modulate confidence language.
