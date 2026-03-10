@@ -21,13 +21,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### REST API
 
-- [ ] **REST-01**: GET `/api/v1/venues/:id/vip-pricing` returns same data as MCP tool
-- [ ] **REST-02**: REST endpoint uses shared API key auth middleware
+- [x] **REST-01**: GET `/api/v1/venues/:id/vip-pricing` returns same data as MCP tool
+- [x] **REST-02**: REST endpoint uses shared API key auth middleware
 
 ### Tool Lifecycle
 
 - [ ] **LIFE-01**: Old `get_vip_table_availability` and `get_vip_table_chart` tools removed from server registration
-- [ ] **LIFE-02**: New `get_vip_pricing` tool description includes behavioral guidance for agents (when to call, what to do after)
+- [x] **LIFE-02**: New `get_vip_pricing` tool description includes behavioral guidance for agents (when to call, what to do after)
 
 ### Ember Agent
 
@@ -73,10 +73,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VPRC-07 | Phase 3 | Pending |
 | VPRC-08 | Phase 3 | Pending |
 | VPRC-09 | Phase 1 | Done (01-01) |
-| REST-01 | Phase 1 | Pending |
-| REST-02 | Phase 1 | Pending |
+| REST-01 | Phase 1 | Complete |
+| REST-02 | Phase 1 | Complete |
 | LIFE-01 | Phase 3 | Pending |
-| LIFE-02 | Phase 1 | Pending |
+| LIFE-02 | Phase 1 | Complete |
 | EMBR-01 | Phase 2 | Pending |
 | EMBR-02 | Phase 2 | Pending |
 | EMBR-03 | Phase 2 | Pending |

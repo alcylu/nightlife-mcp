@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: executing
+stopped_at: Completed 01-mcp-pricing-tool Phase 1 Plan 03 — REST endpoint and OpenAPI spec for VIP pricing
+last_updated: "2026-03-10T14:36:18.938Z"
+last_activity: 2026-03-10 — Plan 01-01 complete (getVipPricing service layer)
+progress:
+  total_phases: 3
+  completed_phases: 1
+  total_plans: 3
+  completed_plans: 3
+  percent: 100
+---
+
 # Project State
 
 ## Project Reference
@@ -14,7 +30,7 @@ Plan: 1 of 3 in current phase
 Status: In progress
 Last activity: 2026-03-10 — Plan 01-01 complete (getVipPricing service layer)
 
-Progress: [█░░░░░░░░░] 11%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -34,6 +50,8 @@ Progress: [█░░░░░░░░░] 11%
 - Trend: establishing baseline
 
 *Updated after each plan completion*
+| Phase 01-mcp-pricing-tool P02 | 2 | 2 tasks | 3 files |
+| Phase 01-mcp-pricing-tool P03 | 7 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -46,6 +64,11 @@ Recent decisions affecting current work:
 - [Pre-planning]: Old tools stay registered through Phase 1 deploy; removed only after Phase 2 (Ember) is confirmed
 - [Pre-planning]: Generic weekday/weekend pricing ranges from vip_table_day_defaults — not per-table status
 - [Pre-planning]: Event context (VPRC-07) and pricing_approximate (VPRC-08) deferred to Phase 3 to keep Phase 1 scope tight
+- [Phase 01-02]: layout_image_url schema uses z.string().nullable() not z.string().url() — strict URL validation would break on valid stored data
+- [Phase 01-02]: Old VIP tools stay registered with DEPRECATED prefix in description until Phase 2 (Ember) confirmed
+- [Phase 01-02]: vipPricingInputSchema uses plain object (not z.object) — consistent with existing MCP registerTool inputSchema pattern
+- [Phase 01-03]: Route /venues/:id/vip-pricing placed before /venues/:id to prevent Express catch-all conflict
+- [Phase 01-03]: Auth middleware inherited from router level — no extra wiring in route handler
 
 ### Pending Todos
 
@@ -65,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10
-Stopped at: Plan 01-01 complete — getVipPricing service layer implemented and tested (13 tests, all passing). Ready for Plan 01-02 (MCP tool registration).
+Last session: 2026-03-10T14:36:18.936Z
+Stopped at: Completed 01-mcp-pricing-tool Phase 1 Plan 03 — REST endpoint and OpenAPI spec for VIP pricing
 Resume file: None

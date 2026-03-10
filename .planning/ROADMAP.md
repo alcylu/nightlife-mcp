@@ -12,7 +12,7 @@ Replace the two-tool VIP availability flow (`get_vip_table_availability` + `get_
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: MCP Pricing Tool** - Build and deploy `get_vip_pricing` with REST endpoint; old tools stay registered
+- [x] **Phase 1: MCP Pricing Tool** - Build and deploy `get_vip_pricing` with REST endpoint; old tools stay registered (completed 2026-03-10)
 - [ ] **Phase 2: Ember Prompt Update** - Rewrite VIP flow in SKILL.md to use new tool with mandatory confirmation gate
 - [ ] **Phase 3: Cleanup and Event Context** - Remove old tools; add event context and pricing_approximate signal
 
@@ -28,7 +28,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Calling `get_vip_pricing` for a venue with no pricing data returns `pricing_configured: false` with a message
   4. GET `/api/v1/venues/:id/vip-pricing` returns the same shape as the MCP tool response
   5. The old `get_vip_table_availability` and `get_vip_table_chart` tools still respond (not yet removed)
-**Plans:** 3 plans
+**Plans:** 3/3 plans complete
 
 Plans:
 - [x] 01-01-PLAN.md — Build vipPricing.ts service (types, operating hours gate, day-defaults aggregation, zone summary, chart URL, booking affordance, tests)
@@ -70,6 +70,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. MCP Pricing Tool | 1/3 | In progress | - |
+| 1. MCP Pricing Tool | 3/3 | Complete   | 2026-03-10 |
 | 2. Ember Prompt Update | 0/1 | Not started | - |
 | 3. Cleanup and Event Context | 0/2 | Not started | - |
