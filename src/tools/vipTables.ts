@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toNightlifeError, toolErrorResponse } from "../errors.js";
 import { logEvent, recordToolResult } from "../observability/metrics.js";
 import { getVipTableAvailability, getVipTableChart } from "../services/vipTables.js";
+import { getVipPricing } from "../services/vipPricing.js";
 
 type ToolDeps = {
   supabase: SupabaseClient;
@@ -152,7 +153,7 @@ export function registerVipTableTools(server: McpServer, deps: ToolDeps): void {
     "get_vip_table_availability",
     {
       description:
-        "Get VIP table availability for a venue across one or more booking dates, with optional party-size filtering.",
+        "[DEPRECATED — use get_vip_pricing for generic pricing ranges] Get VIP table availability for a venue across one or more booking dates, with optional party-size filtering.",
       inputSchema: vipTableAvailabilityInputSchema,
       outputSchema: vipTableAvailabilityOutputSchema,
     },
@@ -167,7 +168,7 @@ export function registerVipTableTools(server: McpServer, deps: ToolDeps): void {
     "get_vip_table_chart",
     {
       description:
-        "Get structured VIP table chart data for a venue, with optional per-table availability status on a given date.",
+        "[DEPRECATED — use get_vip_pricing for pricing + chart URL] Get structured VIP table chart data for a venue, with optional per-table availability status on a given date.",
       inputSchema: vipTableChartInputSchema,
       outputSchema: vipTableChartOutputSchema,
     },
@@ -175,6 +176,71 @@ export function registerVipTableTools(server: McpServer, deps: ToolDeps): void {
       "get_vip_table_chart",
       vipTableChartOutputSchema,
       async () => getVipTableChart(deps.supabase, args),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// get_vip_pricing tool
+// ---------------------------------------------------------------------------
+
+const VIP_PRICING_DESCRIPTION = `Get VIP pricing information for a venue. Returns honest weekday and weekend minimum spend ranges, zone summaries, table chart image URL, and booking affordance.
+
+WHEN TO CALL: When a user asks about VIP tables, VIP pricing, bottle service costs, minimum spend, or table reservations at a specific venue.
+
+WHAT TO DO AFTER:
+- Present pricing conversationally ("Weekday minimums start around ¥100K, weekends from ¥200K")
+- Show table chart URL as a layout reference only — do not infer availability from the image
+- If booking_supported is true and user is interested, offer to submit an inquiry via create_vip_booking_request
+- Do NOT suggest specific table codes unless the user asks
+
+DO NOT CALL when venue_open is false — no pricing is available for closed nights.`;
+
+const vipPricingInputSchema = {
+  venue_id: z.string().uuid(),
+  date: z.string().optional(),
+};
+
+const vipZonePricingSummarySchema = z.object({
+  zone: z.string(),
+  capacity_min: z.number().int().nullable(),
+  capacity_max: z.number().int().nullable(),
+  weekday_min_spend: z.number().nullable(),
+  weekend_min_spend: z.number().nullable(),
+  currency: z.string(),
+});
+
+export const vipPricingOutputSchema = z.object({
+  venue_id: z.string(),
+  venue_name: z.string().nullable(),
+  venue_open: z.boolean(),
+  venue_closed_message: z.string().nullable(),
+  pricing_configured: z.boolean(),
+  pricing_not_configured_message: z.string().nullable(),
+  weekday_min_spend: z.number().nullable(),
+  weekend_min_spend: z.number().nullable(),
+  currency: z.string(),
+  zones: z.array(vipZonePricingSummarySchema),
+  layout_image_url: z.string().nullable(),
+  booking_supported: z.boolean(),
+  booking_note: z.string().nullable(),
+  generated_at: z.string(),
+  service_date: z.string().nullable(),
+  event_pricing_note: z.string().nullable(),
+});
+
+export function registerVipPricingTool(server: McpServer, deps: ToolDeps): void {
+  server.registerTool(
+    "get_vip_pricing",
+    {
+      description: VIP_PRICING_DESCRIPTION,
+      inputSchema: vipPricingInputSchema,
+      outputSchema: vipPricingOutputSchema,
+    },
+    async (args) => runTool(
+      "get_vip_pricing",
+      vipPricingOutputSchema,
+      async () => getVipPricing(deps.supabase, args),
     ),
   );
 }
