@@ -9,15 +9,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### VIP Pricing Tool
 
-- [ ] **VPRC-01**: MCP tool returns weekday and weekend minimum spend ranges per venue (aggregated from day-defaults)
-- [ ] **VPRC-02**: MCP tool checks venue operating hours and returns `venue_open: false` with message if venue is closed on requested date
-- [ ] **VPRC-03**: MCP tool returns zone-level pricing summary (zone name, capacity range, weekday min, weekend min)
-- [ ] **VPRC-04**: MCP tool returns table chart image URL when available
-- [ ] **VPRC-05**: MCP tool returns explicit `pricing_configured: false` with message when no pricing data exists for a venue
-- [ ] **VPRC-06**: MCP tool returns booking affordance fields (`booking_supported`, `booking_note`) so agent knows when to offer inquiry
+- [x] **VPRC-01**: MCP tool returns weekday and weekend minimum spend ranges per venue (aggregated from day-defaults) *(service layer: 01-01)*
+- [x] **VPRC-02**: MCP tool checks venue operating hours and returns `venue_open: false` with message if venue is closed on requested date *(service layer: 01-01)*
+- [x] **VPRC-03**: MCP tool returns zone-level pricing summary (zone name, capacity range, weekday min, weekend min) *(service layer: 01-01)*
+- [x] **VPRC-04**: MCP tool returns table chart image URL when available *(service layer: 01-01)*
+- [x] **VPRC-05**: MCP tool returns explicit `pricing_configured: false` with message when no pricing data exists for a venue *(service layer: 01-01)*
+- [x] **VPRC-06**: MCP tool returns booking affordance fields (`booking_supported`, `booking_note`) so agent knows when to offer inquiry *(service layer: 01-01)*
 - [ ] **VPRC-07**: MCP tool queries events for the requested date and returns event context / busy night signal
 - [ ] **VPRC-08**: MCP tool returns `pricing_approximate` flag so agent can modulate language ("around" vs "exactly")
-- [ ] **VPRC-09**: MCP tool uses service-day date resolution (6am JST cutoff) for day-of-week classification
+- [x] **VPRC-09**: MCP tool uses service-day date resolution (6am JST cutoff) for day-of-week classification *(service layer: 01-01)*
 
 ### REST API
 
@@ -64,15 +64,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VPRC-01 | Phase 1 | Pending |
-| VPRC-02 | Phase 1 | Pending |
-| VPRC-03 | Phase 1 | Pending |
-| VPRC-04 | Phase 1 | Pending |
-| VPRC-05 | Phase 1 | Pending |
-| VPRC-06 | Phase 1 | Pending |
+| VPRC-01 | Phase 1 | Done (01-01) |
+| VPRC-02 | Phase 1 | Done (01-01) |
+| VPRC-03 | Phase 1 | Done (01-01) |
+| VPRC-04 | Phase 1 | Done (01-01) |
+| VPRC-05 | Phase 1 | Done (01-01) |
+| VPRC-06 | Phase 1 | Done (01-01) |
 | VPRC-07 | Phase 3 | Pending |
 | VPRC-08 | Phase 3 | Pending |
-| VPRC-09 | Phase 1 | Pending |
+| VPRC-09 | Phase 1 | Done (01-01) |
 | REST-01 | Phase 1 | Pending |
 | REST-02 | Phase 1 | Pending |
 | LIFE-01 | Phase 3 | Pending |
@@ -88,4 +88,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after roadmap creation*
+*Last updated: 2026-03-10 after plan 01-01 completion (VPRC-01–06, VPRC-09 done at service layer)*

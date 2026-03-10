@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Build vipPricing.ts service (types, operating hours gate, day-defaults aggregation, zone summary, chart URL, booking affordance, tests)
+- [x] 01-01-PLAN.md — Build vipPricing.ts service (types, operating hours gate, day-defaults aggregation, zone summary, chart URL, booking affordance, tests)
 - [ ] 01-02-PLAN.md — Register get_vip_pricing MCP tool with output schema and behavioral description; wire into server; deprecation notes on old tools
 - [ ] 01-03-PLAN.md — Add REST endpoint GET /api/v1/venues/:id/vip-pricing and OpenAPI spec entry
 
@@ -70,6 +70,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. MCP Pricing Tool | 0/3 | Planning complete | - |
+| 1. MCP Pricing Tool | 1/3 | In progress | - |
 | 2. Ember Prompt Update | 0/1 | Not started | - |
 | 3. Cleanup and Event Context | 0/2 | Not started | - |

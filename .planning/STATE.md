@@ -10,28 +10,28 @@ See: .planning/PROJECT.md (updated 2026-03-10)
 ## Current Position
 
 Phase: 1 of 3 (MCP Pricing Tool)
-Plan: 0 of 3 in current phase
-Status: Ready to plan
-Last activity: 2026-03-10 — Roadmap created
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-03-10 — Plan 01-01 complete (getVipPricing service layer)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 11%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: — min
-- Total execution time: 0 hours
+- Total plans completed: 1
+- Average duration: 3 min
+- Total execution time: 0.05 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 01-mcp-pricing-tool | 1 of 3 | 3 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: —
-- Trend: —
+- Last 5 plans: 01-01 (3 min)
+- Trend: establishing baseline
 
 *Updated after each plan completion*
 
@@ -54,10 +54,17 @@ None yet.
 ### Blockers/Concerns
 
 - [Phase 1 → 2]: Cross-repo dependency. nightlife-mcp deploy must precede openclaw SKILL.md update. Confirm openclaw merge can be coordinated with Phase 1 production deploy timing.
-- [Phase 1]: Service layer must check vip_table_availability per-date overrides before falling back to day-defaults — special event nights have explicit pricing that must not be suppressed.
+- [Phase 1 - RESOLVED in 01-01]: Service layer must check vip_table_availability per-date overrides before falling back to day-defaults — special event nights have explicit pricing that must not be suppressed. DONE: event_pricing_note field added.
+
+### Decisions Made
+
+- [01-01]: Replicated resolveClosedDates locally (not exported from vipTables.ts) — avoids modifying that file's API surface
+- [01-01]: Weekend = Fri/Sat (days 5-6); Weekday = Sun-Thu (0-4) — matches seeded data (CÉ LA VI, Zouk)
+- [01-01]: pricing_configured checks both day-defaults AND vip_default_min_spend to avoid false negatives
+- [01-01]: event_pricing_note set only when vip_table_availability rows have non-null min_spend
 
 ## Session Continuity
 
 Last session: 2026-03-10
-Stopped at: Roadmap created, STATE.md initialized. Ready to plan Phase 1.
+Stopped at: Plan 01-01 complete — getVipPricing service layer implemented and tested (13 tests, all passing). Ready for Plan 01-02 (MCP tool registration).
 Resume file: None
