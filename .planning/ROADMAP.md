@@ -28,12 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Calling `get_vip_pricing` for a venue with no pricing data returns `pricing_configured: false` with a message
   4. GET `/api/v1/venues/:id/vip-pricing` returns the same shape as the MCP tool response
   5. The old `get_vip_table_availability` and `get_vip_table_chart` tools still respond (not yet removed)
-**Plans**: TBD
+**Plans:** 3 plans
 
 Plans:
-- [ ] 01-01: Build `vipPricing.ts` service (operating hours gate, day-defaults aggregation, zone summary, chart URL, booking affordance)
-- [ ] 01-02: Rewrite `tools/vipTables.ts` to register `get_vip_pricing` with outputSchema and behavioral tool description; keep old tools registered with deprecation note
-- [ ] 01-03: Add REST endpoint `GET /api/v1/venues/:id/vip-pricing` with shared auth middleware; deploy to production
+- [ ] 01-01-PLAN.md — Build vipPricing.ts service (types, operating hours gate, day-defaults aggregation, zone summary, chart URL, booking affordance, tests)
+- [ ] 01-02-PLAN.md — Register get_vip_pricing MCP tool with output schema and behavioral description; wire into server; deprecation notes on old tools
+- [ ] 01-03-PLAN.md — Add REST endpoint GET /api/v1/venues/:id/vip-pricing and OpenAPI spec entry
 
 ### Phase 2: Ember Prompt Update
 **Goal**: Ember uses `get_vip_pricing` for all VIP inquiries, presents pricing conversationally, and enforces the mandatory user confirmation gate before submitting any booking request.
@@ -70,6 +70,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. MCP Pricing Tool | 0/3 | Not started | - |
+| 1. MCP Pricing Tool | 0/3 | Planning complete | - |
 | 2. Ember Prompt Update | 0/1 | Not started | - |
 | 3. Cleanup and Event Context | 0/2 | Not started | - |
