@@ -550,3 +550,31 @@ export interface VipVenueDepositConfig {
   partial_refund_percentage: number;
   checkout_expiry_minutes: number;
 }
+
+export interface VipZonePricingSummary {
+  zone: string;
+  capacity_min: number | null;
+  capacity_max: number | null;
+  weekday_min_spend: number | null;
+  weekend_min_spend: number | null;
+  currency: string;
+}
+
+export interface VipPricingResult {
+  venue_id: string;
+  venue_name: string | null;
+  venue_open: boolean;
+  venue_closed_message: string | null;
+  pricing_configured: boolean;
+  pricing_not_configured_message: string | null;
+  weekday_min_spend: number | null;
+  weekend_min_spend: number | null;
+  currency: string;
+  zones: VipZonePricingSummary[];
+  layout_image_url: string | null;
+  booking_supported: boolean;
+  booking_note: string | null;
+  generated_at: string;
+  service_date: string | null;
+  event_pricing_note: string | null;
+}
