@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-mcp-pricing-tool Phase 1 Plan 03 — REST endpoint and OpenAPI spec for VIP pricing
-last_updated: "2026-03-10T14:40:19.801Z"
+stopped_at: "Checkpoint: Task 2 human-verify — awaiting live Ember test (ember/mamad deployed)"
+last_updated: "2026-03-10T15:29:24.711Z"
 last_activity: 2026-03-10 — Plan 01-02 complete (get_vip_pricing MCP tool registration)
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 2
+  total_plans: 4
+  completed_plans: 4
   percent: 100
 ---
 
@@ -52,6 +52,7 @@ Progress: [██████████] 100%
 *Updated after each plan completion*
 | Phase 01-mcp-pricing-tool P02 | 2 | 2 tasks | 3 files |
 | Phase 01-mcp-pricing-tool P03 | 7 | 2 tasks | 2 files |
+| Phase 02-ember-prompt-update P01 | 3 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 01-02]: vipPricingInputSchema uses plain object (not z.object) — consistent with existing MCP registerTool inputSchema pattern
 - [Phase 01-03]: Route /venues/:id/vip-pricing placed before /venues/:id to prevent Express catch-all conflict
 - [Phase 01-03]: Auth middleware inherited from router level — no extra wiring in route handler
+- [Phase 02-ember-prompt-update]: date parameter in get_vip_pricing call is optional — pass only if user mentioned a specific date, omit for general inquiries
+- [Phase 02-ember-prompt-update]: MANDATORY CONFIRMATION GATE phrased as CRITICAL rule with explicit Do NOT call create_vip_booking_request until you have explicit confirmation
+- [Phase 02-ember-prompt-update]: lisa Railway container was offline at deploy time — local files updated correctly, Railway deploy deferred
 
 ### Pending Todos
 
@@ -88,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-10T14:36:18.936Z
-Stopped at: Completed 01-mcp-pricing-tool Phase 1 Plan 03 — REST endpoint and OpenAPI spec for VIP pricing
+Last session: 2026-03-10T15:29:18.465Z
+Stopped at: Checkpoint: Task 2 human-verify — awaiting live Ember test (ember/mamad deployed)
 Resume file: None
