@@ -64,28 +64,28 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| VPRC-01 | — | Pending |
-| VPRC-02 | — | Pending |
-| VPRC-03 | — | Pending |
-| VPRC-04 | — | Pending |
-| VPRC-05 | — | Pending |
-| VPRC-06 | — | Pending |
-| VPRC-07 | — | Pending |
-| VPRC-08 | — | Pending |
-| VPRC-09 | — | Pending |
-| REST-01 | — | Pending |
-| REST-02 | — | Pending |
-| LIFE-01 | — | Pending |
-| LIFE-02 | — | Pending |
-| EMBR-01 | — | Pending |
-| EMBR-02 | — | Pending |
-| EMBR-03 | — | Pending |
+| VPRC-01 | Phase 1 | Pending |
+| VPRC-02 | Phase 1 | Pending |
+| VPRC-03 | Phase 1 | Pending |
+| VPRC-04 | Phase 1 | Pending |
+| VPRC-05 | Phase 1 | Pending |
+| VPRC-06 | Phase 1 | Pending |
+| VPRC-07 | Phase 3 | Pending |
+| VPRC-08 | Phase 3 | Pending |
+| VPRC-09 | Phase 1 | Pending |
+| REST-01 | Phase 1 | Pending |
+| REST-02 | Phase 1 | Pending |
+| LIFE-01 | Phase 3 | Pending |
+| LIFE-02 | Phase 1 | Pending |
+| EMBR-01 | Phase 2 | Pending |
+| EMBR-02 | Phase 2 | Pending |
+| EMBR-03 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-10 after initial definition*
+*Last updated: 2026-03-10 after roadmap creation*
