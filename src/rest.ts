@@ -9,6 +9,7 @@ import { searchPerformers, getPerformerInfo } from "./services/performers.js";
 import { getRecommendations } from "./services/recommendations.js";
 import { listCities } from "./services/cities.js";
 import { listGenres, listAreas } from "./services/helpers.js";
+import { getVipPricing } from "./services/vipPricing.js";
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0
@@ -103,6 +104,19 @@ export function createRestRouter(
         query: str(req.query.query),
         limit: num(req.query.limit),
         offset: num(req.query.offset),
+      });
+      res.json(result);
+    } catch (error) {
+      sendError(res, error);
+    }
+  });
+
+  // GET /api/v1/venues/:id/vip-pricing
+  router.get("/venues/:id/vip-pricing", async (req, res) => {
+    try {
+      const result = await getVipPricing(supabase, {
+        venue_id: req.params.id,
+        date: str(req.query.date),
       });
       res.json(result);
     } catch (error) {
