@@ -178,6 +178,77 @@ export const openApiDocument = {
         },
       },
     },
+    "/venues/{id}/vip-pricing": {
+      get: {
+        operationId: "getVenueVipPricing",
+        summary: "Get VIP pricing for a venue",
+        description: "Returns weekday and weekend minimum spend ranges, zone summaries, table chart image URL, and booking affordance for VIP tables at a venue.",
+        tags: ["Venues"],
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "string", format: "uuid" },
+            description: "Venue UUID",
+          },
+          {
+            name: "date",
+            in: "query",
+            required: false,
+            schema: { type: "string" },
+            description: "Date to check venue open status. Use 'tonight' for service-day-aware resolution or YYYY-MM-DD for a specific date.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "VIP pricing information",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    venue_id: { type: "string", format: "uuid" },
+                    venue_name: { type: "string", nullable: true },
+                    venue_open: { type: "boolean" },
+                    venue_closed_message: { type: "string", nullable: true },
+                    pricing_configured: { type: "boolean" },
+                    pricing_not_configured_message: { type: "string", nullable: true },
+                    weekday_min_spend: { type: "number", nullable: true },
+                    weekend_min_spend: { type: "number", nullable: true },
+                    currency: { type: "string" },
+                    zones: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          zone: { type: "string" },
+                          capacity_min: { type: "integer", nullable: true },
+                          capacity_max: { type: "integer", nullable: true },
+                          weekday_min_spend: { type: "number", nullable: true },
+                          weekend_min_spend: { type: "number", nullable: true },
+                          currency: { type: "string" },
+                        },
+                      },
+                    },
+                    layout_image_url: { type: "string", nullable: true },
+                    booking_supported: { type: "boolean" },
+                    booking_note: { type: "string", nullable: true },
+                    generated_at: { type: "string", format: "date-time" },
+                    service_date: { type: "string", nullable: true },
+                    event_pricing_note: { type: "string", nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          "400": { description: "Invalid request (bad venue ID format)" },
+          "401": auth401,
+          "404": notFound("Venue"),
+          "500": { description: "Internal server error" },
+        },
+      },
+    },
     "/performers": {
       get: {
         summary: "Search performers",
