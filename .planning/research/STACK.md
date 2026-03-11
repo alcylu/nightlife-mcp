@@ -1,151 +1,155 @@
 # Stack Research
 
-**Domain:** MCP tool response design — pricing data for AI agent conversational presentation
-**Researched:** 2026-03-10
-**Confidence:** HIGH (core patterns from official MCP spec + verified against existing codebase)
+**Domain:** Admin dashboard migration — VIP booking management in Next.js 15 with Stripe and Resend
+**Researched:** 2026-03-11
+**Confidence:** HIGH (all versions confirmed via npm registry; patterns verified against existing nlt-admin codebase)
 
 ---
 
 ## The Core Question
 
-How should an MCP tool return VIP pricing data so an AI agent (Ember) can present it naturally in conversation — not dump JSON at the user?
+What stack additions does nlt-admin need to implement:
+1. A VIP booking admin dashboard (list, filter, detail, status update, create)
+2. Stripe checkout session creation from Next.js API routes (server-side only, no client-side Stripe.js)
+3. Stripe webhook handling in Next.js API routes (raw body + signature verification)
+4. Resend email sending from Next.js API routes
 
-The answer comes from two orthogonal concerns:
-
-1. **Response structure** — what shape to return, how to use `content` + `structuredContent`
-2. **Semantic field design** — how to name and describe fields so the LLM reasons about them correctly
-3. **Tool description engineering** — what the description says shapes Ember's behavior more than code does
+nlt-admin already has: Next.js 15, React 19, TypeScript, Tailwind, Radix UI/shadcn, TanStack Query v5, React Hook Form + Zod, Sonner (toasts), Supabase SSR auth with role-based access. The answer is **two new packages only**.
 
 ---
 
 ## Recommended Stack
 
-### Core Technologies
+### New Dependencies (add to nlt-admin)
 
 | Technology | Version | Purpose | Why Recommended |
 |------------|---------|---------|-----------------|
-| `@modelcontextprotocol/sdk` | `^1.26.0` (current: 1.27.1) | MCP server + tool registration | Already in use; v1.x is production-stable. v2 is pre-alpha, expected Q1 2026 — do NOT upgrade yet |
-| `zod` (via `zod/v4`) | `^4.3.6` | Output schema definition + validation | Already in use. `outputSchema` field on `registerTool()` causes SDK to include the schema in the MCP tool manifest, enabling client-side validation and LLM understanding of response shape |
-| TypeScript | `^5.9.3` | Type safety across tool → service boundary | Already in use |
+| `stripe` | `^20.4.1` | Server-side Stripe API — checkout session creation, refunds, webhook verification | Same version already in nightlife-mcp. Matches the Stripe API version `2026-02-25.clover`. Server-only; never imported client-side. The existing `createDepositCheckoutSession()` logic ports directly. |
+| `resend` | `^6.9.3` | Email sending via Resend API | Same package already in nightlife-mcp. Plain HTML string approach (nightlife-mcp already has tested templates) — no new templating dependency needed. |
 
-### Supporting Libraries
+### Existing nlt-admin Capabilities (already there, no additions needed)
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| None new needed | — | — | The existing stack is sufficient for this redesign |
-
-No new dependencies are required for the VIP generic pricing redesign. The existing `@modelcontextprotocol/sdk`, `zod/v4`, and `supabase-js` handle everything.
-
----
-
-## Response Structure Pattern
-
-### Use the dual `content` + `structuredContent` pattern (already established in this codebase)
-
-The existing `runTool()` helper in `src/tools/events.ts` already implements the correct pattern. Match it exactly:
-
-```typescript
-return {
-  content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
-  structuredContent: output as unknown as Record<string, unknown>,
-};
-```
-
-**Why this works:**
-- `structuredContent` — the canonical machine-readable form. MCP spec 2025-06-18 introduced this as the formal structured output field. Used by clients that understand it.
-- `content[0].text` — serialized JSON fallback for clients that only understand text content. Required for backwards compatibility per spec.
-- `outputSchema` on the tool definition — publishes the Zod schema in the MCP tool manifest. Clients and LLMs can use this to understand the response shape before calling the tool.
-
-**Confidence:** HIGH — this is exactly what the MCP 2025-06-18 spec mandates, and the codebase already does it correctly in all other tools.
-
-### What NOT to return
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| Pre-formatted prose in tool response | Bakes presentation into the server — Ember can't adapt tone/language | Return structured fields; let Ember format |
-| Per-table availability status arrays | Venues don't maintain this; implies false accuracy | Weekday/weekend min spend ranges |
-| Raw `vip_table_availability` rows | Too granular, implies specificity the data doesn't have | Aggregated `weekday_min_spend` / `weekend_min_spend` |
-| Null-heavy optional fields | Forces agent to check null before every field | Use concrete values or omit the field if genuinely absent |
+| Technology | Version | How It's Used in the Dashboard |
+|------------|---------|-------------------------------|
+| `@supabase/ssr` | `^0.8.0` | `createSupabaseServerClient()` for auth in API routes; `createServiceRoleClient()` for RPC calls requiring service role |
+| `@tanstack/react-query` | `^5.56.2` | `useQuery` for booking list + detail; `useMutation` for status update + create |
+| `react-hook-form` + `zod` | `^7.53.0` / `^3.23.8` | Booking create form validation; status update form |
+| Radix UI + shadcn components | various | `Table`, `Badge`, `Select`, `Dialog`, `Button`, `Card`, `Input`, `Textarea`, `Skeleton` — all already installed |
+| `sonner` | `^1.5.0` | Toast notifications for status update success/failure — already used project-wide |
+| `lucide-react` | `^0.462.0` | Icons for status badges, action buttons |
+| `date-fns` | `^3.6.0` | Booking date display formatting |
 
 ---
 
-## Semantic Field Design for Pricing Data
+## Installation
 
-This is the highest-leverage decision for conversational quality. Field names and descriptions are read by the LLM — they shape how Ember reasons about and presents data.
-
-### Pricing range fields — name them for what they mean, not how they're stored
-
-```typescript
-// Good — maps to how a human would say it
-weekday_min_spend: number | null,       // "¥100,000 minimum on weekdays"
-weekend_min_spend: number | null,       // "¥200,000 minimum on weekends"
-currency: "JPY",
-pricing_note: string | null,            // human-readable caveat: "1 bottle minimum (cheapest ¥60K)"
-
-// Bad — internal DB terminology leaking out
-default_min_spend: number | null,       // what's a "default"?
-min_spend_amount: number,              // amount of what?
-pricing_approximate: boolean,          // LLM may ignore or misinterpret this flag
+```bash
+# In nlt-admin/ — two new packages only
+npm install stripe@^20.4.1 resend@^6.9.3
 ```
 
-### Include a `_context_for_agent` field for Ember-specific guidance
-
-Research on MCP tool descriptions (arxiv 2602.14878) shows that 97% of tool descriptions lack usage guidance, and adding explicit behavioral guidance improves task success by ~6-15 percentage points. The cleanest place for per-response guidance is a dedicated string field:
-
-```typescript
-pricing_context: string | null
-// Example: "Prices are minimum spend per table, not per person.
-//  Actual spend typically higher — bottles, service charge not included."
-```
-
-The agent reads this alongside the data and can weave it into its response naturally. This is more robust than trying to encode all caveats in the tool description alone.
-
-### Event context field — conversational hook
-
-The PROJECT.md requirement includes "relevant event info for the requested date (e.g., 'busy night — cool event tonight')". This should be a ready-to-use string, not raw event data:
-
-```typescript
-event_context: string | null
-// Example: "Special event tonight: Honey Dijon b2b Peggy Gou"
-// Example: "No special event scheduled"
-// NOT: the full EventSummary object (too much data, Ember doesn't need lineup/price/flyer here)
-```
-
-**Why a string, not an EventSummary object:** The VIP pricing tool has one job — give pricing info and a booking hook. Event data is a contextual hint, not the primary payload. An EventSummary with 8+ fields dilutes the tool's focus and wastes context tokens. A concise string is sufficient.
-
-### Table chart image — return a public URL, nothing more
-
-```typescript
-table_chart_url: string | null
-// Example: "https://...supabase.co/storage/v1/object/public/vip-table-charts/{venue_id}/table-chart.png"
-```
-
-The existing data already stores chart images in Supabase Storage per venue. Return the public URL directly. Ember can present it as "here's the table layout" without needing to understand storage internals.
+No `@types/*` needed — both packages ship their own TypeScript declarations.
 
 ---
 
-## Tool Description Engineering
+## Integration Points with Existing nlt-admin Patterns
 
-The `description` field on `server.registerTool()` is prompt text injected into Ember's context. It determines when Ember calls the tool and what it does with the result.
+### Auth in API Routes (follow the existing admin user endpoint pattern)
 
-For the redesigned VIP pricing tool, the description must do three things explicitly:
-
-1. **State what the tool does** — returns generic pricing ranges, not real-time availability
-2. **State what it does NOT do** — explicitly say it doesn't show per-table live status
-3. **Guide Ember's response behavior** — tell Ember to offer to submit a booking inquiry after presenting pricing
+The existing `src/app/api/admin/users/route.ts` establishes the pattern: verify caller with `createSupabaseServerClient()`, check `user_roles` table for `super_admin`/`admin`, then proceed. VIP API routes must use the same pattern.
 
 ```typescript
-// Good description — behavioral guidance embedded
-description: `Get VIP table pricing information for a venue on a given date.
-Returns weekday/weekend minimum spend ranges and a table chart image URL.
-Does NOT return real-time per-table availability — venues don't maintain that data.
-After presenting pricing, offer to submit a booking inquiry on the user's behalf.`
+// src/app/api/admin/vip-bookings/route.ts
+import { createSupabaseServerClient } from '@/lib/supabase/server';
+import { createServiceRoleClient } from '@/lib/supabase/service-client';
 
-// Bad description — too sparse, Ember improvises
-description: "Get VIP pricing for a venue."
+export async function POST(request: Request) {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // role check: super_admin or admin only
+  // then use createServiceRoleClient() for the RPC call
+}
 ```
 
-**Why this matters:** Research (arxiv 2602.14878) confirms that descriptions with explicit guidelines (when/how to use) improve intermediate task completion by 15% vs descriptions that only state purpose. For a conversational flow where Ember must transition from "here's pricing" to "want me to check with the venue?", the transition needs to be in the description.
+The service role client (`SUPABASE_SERVICE_ROLE_KEY`) is needed for `admin_update_vip_booking_request` RPC — that RPC performs privilege-escalated operations that the anon key cannot do.
+
+### Data Fetching (follow the hook pattern)
+
+All admin pages use the pattern: service function (direct Supabase query) → hook (`useQuery`/`useMutation`) → page component. Create:
+
+- `src/services/vipBookingService.ts` — direct Supabase queries for list, detail, update, create (port from nightlife-mcp `src/services/vipAdmin.ts`)
+- `src/hooks/useVipBookings.ts` — `useQuery`/`useMutation` wrappers (follow `src/hooks/useClientFinancials.ts` pattern)
+
+Status updates with side effects (Stripe, email) go through Next.js API routes, not direct Supabase — the API route calls the RPC, then triggers Stripe/email.
+
+### Stripe — Server-Only, API Routes Only
+
+Stripe must never be imported in client components (`'use client'` files). The `stripe` package is Node.js only. Pattern:
+
+```typescript
+// src/lib/stripe.ts (server-only utility)
+import Stripe from 'stripe';
+
+let stripeInstance: Stripe | null = null;
+
+export function getStripe(): Stripe {
+  if (!stripeInstance) {
+    stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!);
+  }
+  return stripeInstance;
+}
+```
+
+The checkout session creation logic from `nightlife-mcp/src/services/stripe.ts` ports without modification — same API calls, same metadata shape.
+
+### Stripe Webhook — Raw Body via `request.text()`
+
+Next.js 15 App Router: use `request.text()` (not `request.json()`) to get the raw body for Stripe signature verification. This is the confirmed pattern for Next.js 15:
+
+```typescript
+// src/app/api/webhooks/stripe/route.ts
+export async function POST(request: Request) {
+  const body = await request.text();  // NOT request.json()
+  const sig = request.headers.get('stripe-signature')!;
+  const event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
+  // ...
+}
+```
+
+**Important:** Next.js 15 does not pre-parse the body for webhook routes when you call `.text()` — this is working and confirmed by community sources. No `bodyParser: false` config needed (that was Pages Router).
+
+### Resend — Same HTML Template Approach
+
+Port the HTML string templates from `nightlife-mcp/src/emails/templates.ts` directly — they produce tested, styled HTML already in use. Do not add `react-email` or `@react-email/components` for this migration. The templates are self-contained functions with no dependencies; copy them to `src/lib/email/templates.ts` in nlt-admin.
+
+```typescript
+// src/lib/email/resend.ts (server-only utility)
+import { Resend } from 'resend';
+
+export function getResend(): Resend {
+  return new Resend(process.env.RESEND_API_KEY!);
+}
+```
+
+### Page Route Access Guard (follow existing ProtectedRoute pattern)
+
+VIP dashboard pages must be restricted to `super_admin` and `admin` roles. The existing `ProtectedRoute` component checks `isAdmin` from `useAdminAuth`, which includes both roles. Place VIP pages under `src/app/(admin)/ops/vip/` to inherit the `(admin)/layout.tsx` protection automatically.
+
+For extra safety, add an explicit role check inside the hook/service: the Supabase RLS on `vip_booking_requests` already restricts to authenticated users with admin roles — confirm this before removing application-layer checks.
+
+---
+
+## New Environment Variables for nlt-admin (Railway)
+
+| Variable | Description | Where to get it |
+|----------|-------------|-----------------|
+| `STRIPE_SECRET_KEY` | Stripe secret key for checkout creation | Stripe dashboard — same key as nightlife-mcp |
+| `STRIPE_WEBHOOK_SECRET` | Webhook signing secret for nlt-admin's endpoint | Create a new webhook endpoint in Stripe dashboard pointing to nlt-admin's Railway URL |
+| `RESEND_API_KEY` | Resend API key for email sending | Resend dashboard — same key as nightlife-mcp |
+| `NIGHTLIFE_BASE_URL` | Used in deposit email success/cancel URLs | Already in nightlife-mcp; set to `https://nightlifetokyo.com` |
+
+Note: `STRIPE_WEBHOOK_SECRET` must be a **new** endpoint registration in Stripe — the nightlife-mcp webhook secret will not work for nlt-admin's different URL.
 
 ---
 
@@ -153,63 +157,70 @@ description: "Get VIP pricing for a venue."
 
 | Recommended | Alternative | When to Use Alternative |
 |-------------|-------------|-------------------------|
-| Structured JSON + prose Ember prompt | Prose tool response (pre-formatted text) | Only if the target agent has no system prompt control — e.g., a generic client with no customization |
-| `weekday_min_spend` / `weekend_min_spend` as top-level fields | Return full per-day array from `vip_table_day_defaults` | If you need per-day precision (Mon vs Thu pricing differs) — not needed here since the goal is generic ranges |
-| `event_context: string` (summary string) | `nearest_event: EventSummary` (full object) | If the downstream agent needs to deep-link to the event or show lineup — not needed for VIP pricing flow |
-| `pricing_context: string` (free-form hint) | `pricing_approximate: boolean` flag | Boolean flags require Ember to know what to do with `true` — prose is more reliably acted on |
+| `stripe@^20.4.1` (server SDK) | `@stripe/stripe-js` (client SDK) | Only when building customer-facing payment UIs with Stripe Elements. Admin dashboard only creates sessions server-side — never needs client SDK. |
+| HTML string templates (port from nightlife-mcp) | `react-email` + `@react-email/components` | When building new email templates from scratch in a React-native codebase. Migrating existing working HTML templates is faster and avoids a new dependency. |
+| Next.js API routes for Stripe/email side effects | Server Actions | Server Actions work but lack native webhook support (Stripe webhooks require a POST endpoint, not a form action). API routes are the correct primitive for webhook handling. |
+| `createServiceRoleClient()` for RPC | anon client with RLS | When the RPC requires elevated privileges (writing to audit tables, bypassing row-level restrictions). `admin_update_vip_booking_request` RPC needs service role. |
 
 ---
 
-## What NOT to Use
+## What NOT to Add
 
 | Avoid | Why | Use Instead |
 |-------|-----|-------------|
-| `@modelcontextprotocol/sdk` v2 (pre-alpha) | Not production-stable; anticipated Q1 2026. The codebase uses `^1.26.0` — stay on 1.x | Stay on `^1.26.0` / `1.27.x` |
-| Raw Supabase `vip_table_availability` rows in tool response | Per-table data implies real-time accuracy the venues don't provide | Aggregate to weekday/weekend ranges in the service layer |
-| `structuredContent` without `outputSchema` | LLM doesn't know the response shape at tool selection time; misses validation | Always pair with `outputSchema` on `registerTool()` |
-| Image data embedded in response (base64) | Wastes context tokens; table chart images are already in public Supabase Storage | Return a `table_chart_url: string` pointing to the public URL |
+| `@stripe/stripe-js` | Client-side Stripe SDK for payment UIs — not needed. Dashboard only creates sessions, never renders Stripe Elements | `stripe` (server SDK) only |
+| `react-email` / `@react-email/components` | Adds build complexity and a new mental model for templates that already work as plain HTML functions | Port existing HTML template functions from nightlife-mcp |
+| `stripe-webhook` or third-party webhook libraries | Unnecessary — `stripe.webhooks.constructEvent()` in the Node SDK handles verification | Built-in `stripe` SDK method |
+| `nodemailer` or `sendgrid` | Different email providers; Resend is already in nightlife-mcp and tested | `resend` |
+| `@tanstack/react-table` | The VIP list is a bounded dataset (~50 rows per page). Using TanStack Table adds significant setup for a simple admin table. Radix `Table` component is sufficient. | `@radix-ui/react-table` (already available via shadcn `table.tsx`) |
 
 ---
 
 ## Stack Patterns by Variant
 
-**If the venue has no pricing data (no day-defaults, no venue default):**
-- Return `weekday_min_spend: null`, `weekend_min_spend: null`
-- Return `pricing_context: "Contact venue directly for pricing"` rather than omitting the field
-- Return `venue_open: false` if operating hours confirm the venue is closed on that day
+**For the booking list page:**
+- Use `useQuery` with `queryKey: ['vip-bookings', filters]` and `staleTime: 30_000`
+- No infinite scroll needed — ops will page through 50 bookings at a time
+- Client-side filter state (status, date range, search) triggers a new query key, not client-side filtering of cached data
 
-**If the venue has pricing for weekends but not weekdays:**
-- Return `weekday_min_spend: null`, `weekend_min_spend: 200000`
-- Return `pricing_context: "Weekend pricing confirmed. Weekday pricing not available — contact venue."`
-- Do not invent a weekday number from the weekend figure
+**For the booking detail page:**
+- Use `useQuery` with `queryKey: ['vip-booking', id]`
+- Status history + edit audits fetched in the same query as the booking detail (follow `getVipAdminBookingDetail()` from nightlife-mcp which already joins these)
+- Status update is a `useMutation` that calls the nlt-admin API route (which calls the RPC + triggers Stripe/email)
 
-**If the requested date is outside the date where pricing is known:**
-- Fall back to day-of-week from `vip_table_day_defaults` (existing 4-level fallback logic still applies)
-- Surface the pricing even if `booking_date` is approximate
+**For the booking create form:**
+- React Hook Form + Zod (matching the `CreateVipAdminBookingInput` shape from nightlife-mcp)
+- Venue selector fetches from `listVipAdminVenues()` (port the service function)
+- On submit: POST to `/api/admin/vip-bookings`, invalidate the list query on success
+
+**For Stripe webhook route (deposit paid/expired):**
+- `export const dynamic = 'force-dynamic'` at the top of the route — prevents Next.js static optimization from breaking webhook handling
+- Route at `src/app/api/webhooks/stripe/route.ts` (separate from admin API routes — no auth middleware, verified by Stripe signature instead)
 
 ---
 
 ## Version Compatibility
 
-| Package | Version | Notes |
-|---------|---------|-------|
-| `@modelcontextprotocol/sdk` | `^1.26.0` | Pin to 1.x. v2 breaks API; not production-ready as of 2026-03-10 |
-| `zod` | `^4.3.6` (imported as `zod/v4`) | Already in use. `outputSchema` on `registerTool()` takes a Zod schema object — return the same schema instance used for validation |
-| `@supabase/supabase-js` | `^2.97.0` | No changes needed for this feature |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `stripe@^20.4.1` | Node.js 18+, TypeScript 5+ | Ships own types. Pins Stripe API version `2026-02-25.clover`. Works with Next.js 15 standalone output. |
+| `resend@^6.9.3` | Node.js 18+, TypeScript 5+ | Ships own types. `html` prop for string templates, `react` prop for React Email components — use `html` prop only. |
+| Both | `@supabase/supabase-js@^2.50.0` | No conflict — they operate on different systems (Stripe API, Resend API) independently of Supabase |
+| Both | Next.js 15.5 / React 19 | Server-only packages; never imported in client components. No React version dependency. |
 
 ---
 
 ## Sources
 
-- [MCP Tools Specification (2025-06-18)](https://modelcontextprotocol.io/specification/2025-06-18/server/tools) — `structuredContent`, `outputSchema`, content types, backwards compat requirement — HIGH confidence
-- [Anthropic: Implement Tool Use](https://platform.claude.com/docs/en/agents-and-tools/tool-use/implement-tool-use) — "return only high-signal information", lean response design, stable identifiers — HIGH confidence
-- [arxiv: MCP Tool Descriptions Are Smelly (2602.14878)](https://arxiv.org/html/2602.14878v1) — tool description quality, 6-component framework, 15% improvement from guidelines — MEDIUM confidence (academic paper, not official docs)
-- [TypeScript SDK GitHub](https://github.com/modelcontextprotocol/typescript-sdk) — v1.x production stable, v2 pre-alpha, 1.27.1 current — HIGH confidence
-- [npm: @modelcontextprotocol/sdk](https://www.npmjs.com/package/@modelcontextprotocol/sdk) — current version 1.27.1 — HIGH confidence
-- [Zod v4 Release Notes](https://zod.dev/v4) — `zod/v4` import path, breaking changes from v3 — HIGH confidence
-- Existing codebase (`src/tools/events.ts`, `src/tools/venues.ts`) — `runTool()` helper, dual content/structuredContent pattern — HIGH confidence (source of truth for this project)
+- npm registry (live query 2026-03-11): `stripe@20.4.1`, `resend@6.9.3` — HIGH confidence
+- [Stripe Node SDK changelog](https://github.com/stripe/stripe-node/blob/master/CHANGELOG.md) — v20.4.x pins API version `2026-02-25.clover` — HIGH confidence
+- [Stripe webhooks Next.js 15 — Medium (John Gragson, 2025)](https://medium.com/@gragson.john/stripe-checkout-and-webhook-in-a-next-js-15-2025-925d7529855e) — `request.text()` for raw body in App Router — MEDIUM confidence (community, not official docs)
+- [Stripe webhook docs](https://docs.stripe.com/webhooks/signature) — signature verification requirements — HIGH confidence
+- [Resend docs — Send with Next.js](https://resend.com/docs/send-with-nextjs) — `html` prop for HTML string emails — HIGH confidence
+- Existing nightlife-mcp codebase (`src/services/stripe.ts`, `src/services/email.ts`, `src/services/deposits.ts`) — exact API shape and logic to port — HIGH confidence (live code)
+- Existing nlt-admin codebase (`src/app/api/admin/users/route.ts`, `src/lib/supabase/server.ts`, `src/hooks/useClientFinancials.ts`) — auth pattern, hook pattern, service pattern — HIGH confidence (live code)
 
 ---
 
-*Stack research for: VIP generic pricing redesign — MCP tool response design for conversational AI*
-*Researched: 2026-03-10*
+*Stack research for: VIP dashboard migration — Next.js 15 admin dashboard with Stripe + Resend*
+*Researched: 2026-03-11*

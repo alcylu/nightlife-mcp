@@ -1,323 +1,416 @@
 # Architecture Research
 
-**Domain:** VIP generic pricing tool in an MCP server + AI agent system
-**Researched:** 2026-03-10
-**Confidence:** HIGH (MCP spec direct, codebase read directly, agent prompt files read directly)
+**Domain:** Admin dashboard migration — Express SSR to Next.js 15 App Router
+**Researched:** 2026-03-11
+**Confidence:** HIGH — based on direct source inspection of both codebases
 
 ## Standard Architecture
 
 ### System Overview
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    Ember AI Agent (openclaw)                  │
-│  ┌────────────────────────────────────────────────────────┐   │
-│  │  SKILL.md (system-prompt-equivalent for VIP flow)      │   │
-│  │  tokyo-clubs.json (venue_id lookup + vibe tags)        │   │
-│  └─────────────────────────┬──────────────────────────────┘   │
-│                             │ tool calls via nlt.mjs           │
-└─────────────────────────────┼────────────────────────────────┘
-                              │ HTTP MCP (api.nightlife.dev/mcp)
-┌─────────────────────────────▼────────────────────────────────┐
-│                   nightlife-mcp (Express + MCP SDK)           │
-│                                                               │
-│   Tool Layer (src/tools/)                                     │
-│  ┌─────────────────┐  ┌──────────────────┐  ┌─────────────┐  │
-│  │ get_vip_pricing │  │create_vip_booking│  │get_vip_     │  │
-│  │    (new)        │  │   _request       │  │booking_     │  │
-│  └────────┬────────┘  └────────┬─────────┘  │status       │  │
-│           │                    │             └─────────────┘  │
-│   Service Layer (src/services/)                               │
-│  ┌─────────────────┐  ┌──────────────────┐                   │
-│  │ vipPricing.ts   │  │  vipBookings.ts  │                   │
-│  │ (new, read-only)│  │  (existing)      │                   │
-│  └────────┬────────┘  └────────┬─────────┘                   │
-│           │                    │                              │
-└───────────┼────────────────────┼──────────────────────────────┘
-            │ Supabase client    │
-┌───────────▼────────────────────▼──────────────────────────────┐
-│                      Supabase (shared DB)                      │
-│  vip_venue_tables   vip_table_day_defaults   event_occurrences │
-│  venue_operating_hours   vip_booking_requests                  │
-└───────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      nlt-admin (Next.js 15)                      │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │  (admin) route group — ProtectedRoute + AdminShell         │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │  │
+│  │  │ /vip         │  │ /vip/[id]    │  │ /vip/new         │  │  │
+│  │  │ list page    │  │ detail page  │  │ create page      │  │  │
+│  │  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘  │  │
+│  └─────────┼─────────────────┼──────────────────┼─────────────┘  │
+│            │ client fetch    │                  │                  │
+│  ┌─────────▼─────────────────▼──────────────────▼─────────────┐  │
+│  │  API Routes  /api/vip/*  (server-only, service-role client) │  │
+│  │  ┌──────────────────────┐  ┌──────────────────────────────┐ │  │
+│  │  │ GET/POST             │  │ GET/PATCH                    │ │  │
+│  │  │ /api/vip/bookings    │  │ /api/vip/bookings/[id]       │ │  │
+│  │  └──────────────────────┘  │ → RPC + Stripe + Resend      │ │  │
+│  │  ┌──────────────────────┐  └──────────────────────────────┘ │  │
+│  │  │ GET /api/vip/venues  │                                   │  │
+│  │  └──────────────────────┘                                   │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+├─────────────────────────────────────────────────────────────────┤
+│                  Supabase (shared DB)                             │
+│  vip_booking_requests  vip_booking_status_events                  │
+│  vip_booking_edit_audits  vip_agent_tasks                         │
+│  venues  admin_update_vip_booking_request RPC                     │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                  External Services (server-only)                  │
+│  ┌──────────────────┐       ┌────────────────────────────────┐   │
+│  │  Stripe (deposit │       │  Resend (transactional email)  │   │
+│  │  checkout)       │       │  via RESEND_API_KEY            │   │
+│  │  STRIPE_SECRET   │       │                                │   │
+│  └──────────────────┘       └────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ### Component Responsibilities
 
-| Component | Responsibility | Communicates With |
-|-----------|---------------|-------------------|
-| Ember SKILL.md | VIP flow instructions, tone rules, tool sequencing | Agent runtime only (not the MCP server) |
-| tokyo-clubs.json | venue_id lookup, vibe/crowd tags | Read by Ember at request time |
-| `get_vip_pricing` tool (new) | Return weekday/weekend min-spend ranges + table chart URL + event snapshot for a venue/date | `vipPricing.ts` service |
-| `vipPricing.ts` service (new) | Query `vip_table_day_defaults` aggregated by weekday vs. weekend; attach event from `event_occurrences`; return `layout_image_url` from `vip_venue_tables` | Supabase |
-| `create_vip_booking_request` tool | Accept customer details + optional preferred_table_code; persist to `vip_booking_requests`; send Resend transactional email | `vipBookings.ts` (unchanged) |
-| `vipBookings.ts` service | All booking CRUD, status transitions, email dispatch | Supabase, Resend |
-| `get_vip_booking_status` tool | Customer-facing status polling | `vipBookings.ts` (unchanged) |
+| Component | Responsibility | Implementation |
+|-----------|----------------|----------------|
+| `(admin)/vip/page.tsx` | List page shell | Thin wrapper, renders `VipBookingsPage` view |
+| `(admin)/vip/[id]/page.tsx` | Detail page shell | Thin wrapper, renders `VipBookingDetailPage` view |
+| `(admin)/vip/new/page.tsx` | Create page shell | Thin wrapper, renders `VipBookingCreatePage` view |
+| `views/vip/VipBookingsPage.tsx` | List UI — filters, table, pagination | Client component, fetches `/api/vip/bookings` |
+| `views/vip/VipBookingDetailPage.tsx` | Detail UI — status history, edit audits, actions | Client component, fetches `/api/vip/bookings/[id]` |
+| `views/vip/VipBookingCreatePage.tsx` | Create booking form | Client component, POSTs to `/api/vip/bookings` |
+| `api/vip/bookings/route.ts` | List + create | Service-role Supabase; ported query logic |
+| `api/vip/bookings/[id]/route.ts` | Detail + update | Service-role Supabase + Stripe + Resend on status change |
+| `api/vip/venues/route.ts` | VIP-enabled venue list for dropdowns | Service-role Supabase read |
+| `services/vipAdminService.ts` | Query functions (ported from nightlife-mcp) | Pure functions accepting `SupabaseClient` |
+| `components/layout/AdminNavConfig.ts` | Navigation | MODIFIED — add VIP nav section |
 
 ## Recommended Project Structure
 
-The redesign touches two repos and three files.
-
-### nightlife-mcp changes
-
 ```
 src/
+├── app/
+│   ├── (admin)/
+│   │   └── vip/                      # NEW — VIP booking section
+│   │       ├── page.tsx              # NEW — list page shell
+│   │       ├── new/
+│   │       │   └── page.tsx          # NEW — create booking shell
+│   │       └── [id]/
+│   │           └── page.tsx          # NEW — detail/edit shell
+│   └── api/
+│       └── vip/                      # NEW — server-side API routes
+│           ├── bookings/
+│           │   ├── route.ts          # NEW — GET (list) + POST (create)
+│           │   └── [id]/
+│           │       └── route.ts      # NEW — GET (detail) + PATCH (update)
+│           └── venues/
+│               └── route.ts          # NEW — GET (vip-enabled venue list)
 ├── services/
-│   ├── vipPricing.ts        # NEW — generic pricing query
-│   └── vipBookings.ts       # UNCHANGED
-├── tools/
-│   ├── vipTables.ts         # REPLACE — rename/rewrite to get_vip_pricing
-│   └── vipBookings.ts       # UNCHANGED
-└── server.ts                # MINOR — swap registerVipTableTools for registerVipPricingTool
-```
-
-### openclaw / Ember changes
-
-```
-sync/instances/ember/workspace/
-└── skills/nightlife-concierge/
-    └── SKILL.md             # UPDATE — rewrite VIP Booking Flow section only
+│   └── vipAdminService.ts            # NEW — query layer ported from nightlife-mcp
+├── views/
+│   └── vip/                          # NEW — all VIP view components
+│       ├── VipBookingsPage.tsx       # NEW — list view
+│       ├── VipBookingDetailPage.tsx  # NEW — detail/edit view
+│       └── VipBookingCreatePage.tsx  # NEW — create form
+├── components/
+│   └── vip/                          # NEW — shared VIP UI components
+│       ├── VipStatusBadge.tsx        # NEW — status color-coded badge
+│       ├── VipBookingCard.tsx        # NEW — booking summary card
+│       └── VipBookingFilters.tsx     # NEW — status/date/search filters
+├── types/
+│   └── vip.ts                        # NEW — TypeScript types ported from nightlife-mcp
+└── components/layout/
+    └── AdminNavConfig.ts             # MODIFIED — add VIP nav section
 ```
 
 ### Structure Rationale
 
-- **One new service file (`vipPricing.ts`):** Keeps pricing query logic isolated from the existing `vipBookings.ts` and `vipTables.ts`. The old `vipTables.ts` service had per-table availability logic that won't be used; the new file is purpose-built for aggregated ranges.
-- **Replace `vipTables.ts` tool, not add alongside it:** The project spec says "replace existing VIP tool (not new tool)" to avoid a deprecation dance. External consumers (Ember, hotel APIs) update to the new contract in one migration.
-- **SKILL.md is the only Ember file that changes:** The booking submission, cancellation, and status-check flows are correct. Only the "Step 1-4" browse section (what Ember does before collecting customer details) changes.
+- **`app/(admin)/vip/`**: The `(admin)` route group automatically applies `ProtectedRoute` and `AdminShell` via its `layout.tsx`. All pages inside automatically require auth. The thin-shell pattern matches every existing admin section (`venues/page.tsx`, `finance/clients/page.tsx`).
+- **`app/api/vip/`**: Stripe and Resend are server-only concerns. Routing all mutations through API routes ensures side effects never run client-side and the `STRIPE_SECRET_KEY` never reaches the browser.
+- **`services/vipAdminService.ts`**: Direct port of nightlife-mcp's `vipAdmin.ts` query functions. Accepts a `SupabaseClient` parameter — same contract, no rewrite needed beyond removing Express-specific imports.
+- **`types/vip.ts`**: Copy the six VIP types from nightlife-mcp's `types.ts`. These are stable DB-level interfaces, not likely to diverge.
 
 ## Architectural Patterns
 
-### Pattern 1: Aggregated Range Response (not per-table status)
+### Pattern 1: Thin Page Shell + View Component
 
-**What:** The `get_vip_pricing` tool aggregates `vip_table_day_defaults` into two numbers: weekday min and weekend min. It does not return individual table status columns (`available`, `held`, `booked`). Those columns remain in the DB for future use but are not surfaced.
+**What:** Page files under `app/(admin)/` are minimal `'use client'` wrappers that render one view component. All UI state, data fetching, and interaction logic lives in `views/vip/`.
 
-**When to use:** Any time the source data cannot be kept fresh by the venues. Surface the honest floor (minimum spend ranges) rather than a stale per-table status that implies live inventory.
+**When to use:** All VIP pages. This matches every existing admin section in nlt-admin.
 
-**Trade-offs:**
-- Pro: Honest, no false "available" signals.
-- Pro: Zero maintenance burden on venues — the seeded day-default rows don't require ongoing updates.
-- Con: Agent cannot say "table A3 is open." Instead: "tables from ¥150K — want me to check with the venue?" This is fine because the booking inquiry handles specifics.
+**Trade-offs:** One extra file per route, but enables view component testing in isolation and keeps routing concerns separate from display logic.
 
-**Example shape (tool output):**
+**Example:**
 ```typescript
-{
-  venue_id: string;
-  venue_name: string | null;
-  booking_date: string | null;       // the requested date (null if no date given)
-  venue_open: boolean | null;        // null when date not given
-  weekday_min_spend: number | null;  // JPY; null if no data
-  weekend_min_spend: number | null;  // JPY; null if no data
-  currency: "JPY";
-  pricing_note: string | null;       // e.g. "Prices may vary for special events"
-  layout_image_url: string | null;   // table chart image from Supabase storage
-  event_on_date: {                   // from event_occurrences, if date provided
-    event_id: string;
-    name: string;
-    start_time: string | null;
-    genres: string[];
-    flyer_url: string | null;
-  } | null;
-  generated_at: string;
+// app/(admin)/vip/page.tsx
+'use client';
+import VipBookingsPage from '@/views/vip/VipBookingsPage';
+export default function VipPage() {
+  return <VipBookingsPage />;
 }
 ```
 
-### Pattern 2: Tool Description as Behavioral Contract
+### Pattern 2: Client Component Fetches from Own API Route
 
-**What:** The tool description in `server.registerTool()` is the agent's behavioral instruction, not just a summary. The MCP spec (2025-06-18) treats tool descriptions as model-controlled discovery metadata — the agent reads them at tool-selection time. Embedding flow guidance directly in the description (the pattern already used in `createVipBookingToolDescription`) tells the agent when and how to call the tool without requiring the caller's system prompt to be updated.
+**What:** View components (`'use client'`) call `fetch('/api/vip/...')` using React state and `useEffect`. No direct Supabase client calls from VIP view components.
 
-**When to use:** When the tool has non-obvious prerequisites or sequencing rules. The existing `create_vip_booking_request` description already demonstrates this with its multi-line guidance on late-night date clarification. Apply the same to `get_vip_pricing`.
+**When to use:** All VIP data operations — reads and writes. Even list fetches go through API routes for consistency.
 
-**Example description guidance for `get_vip_pricing`:**
+**Trade-offs:** One extra HTTP hop vs direct Supabase from browser. Justified because: (1) status updates need server-side Stripe/Resend; (2) consistent auth pattern across all operations; (3) service-role key never exposed to browser.
+
+**Example:**
+```typescript
+// views/vip/VipBookingsPage.tsx
+'use client';
+const [bookings, setBookings] = useState(null);
+useEffect(() => {
+  fetch('/api/vip/bookings?statuses=submitted,in_review')
+    .then(r => r.json())
+    .then(setBookings);
+}, []);
 ```
-"Get weekday/weekend VIP minimum spend ranges and table chart for a venue.
- Call this before create_vip_booking_request to give the user pricing context.
- If the user specifies a date, pass it as booking_date to receive venue-open status
- and event context for that night. Returns layout_image_url — send this URL to the
- user so they can see the table chart.
- Do NOT reuse results from earlier in the conversation — call fresh each time."
+
+### Pattern 3: API Route Auth — Server Client + Role Check
+
+**What:** Every `/api/vip/*` route authenticates via `createSupabaseServerClient()` (reads the session cookie), checks `user_roles` for `admin` or `super_admin`, then switches to `createServiceRoleClient()` for the actual query. This is the exact pattern used by `app/api/admin/users/route.ts`.
+
+**When to use:** All VIP API routes without exception.
+
+**Trade-offs:** Two Supabase round-trips per request (auth check + operation). Acceptable for an internal ops tool.
+
+**Example:**
+```typescript
+export async function GET(request: Request) {
+  // 1. Auth check (session cookie via SSR client)
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  // 2. Role check
+  const { data: roles } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
+  const isAdmin = roles?.some(r => ['admin', 'super_admin'].includes(r.role));
+  if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // 3. Service-role client for the actual query
+  const serviceClient = createServiceRoleClient();
+  const result = await listVipAdminBookings(serviceClient, parseParams(request));
+  return NextResponse.json(result);
+}
 ```
 
-**Trade-offs:**
-- Pro: Description travels with the tool to every client (hotel APIs, new agent instances) — no per-client prompt engineering required.
-- Con: Long descriptions increase token cost on every tool-list response. Keep to 3-5 actionable sentences.
+### Pattern 4: Status Update with Non-Blocking Side Effects
 
-### Pattern 3: Stateless Tools, Conversational State in Agent
+**What:** PATCH `/api/vip/bookings/[id]` calls the `admin_update_vip_booking_request` RPC (atomic: booking update + status_event + edit_audit in one transaction), then conditionally triggers Stripe and Resend in `try/catch` blocks that do not affect the HTTP response.
 
-**What:** Each MCP tool call is self-contained. The "browse → inquire → submit" flow is not encoded in server-side session state. Instead, the agent accumulates context across turns (pricing info from `get_vip_pricing`, then customer details collected via natural conversation, then `create_vip_booking_request` with all fields). No server-side session tracking is needed.
+**When to use:** Only the PATCH route on bookings. Side effects are fire-and-forget.
 
-**When to use:** This is the canonical MCP pattern. The MCP spec explicitly describes tools as model-controlled and single-invocation. Multi-step state lives in the LLM's context window, not in the server.
-
-**Trade-offs:**
-- Pro: Server remains horizontally scalable and stateless — the existing Railway deployment model is unchanged.
-- Pro: No server-side session timeout issues.
-- Con: If the conversation resets, pricing context is lost. Mitigated by the "Freshness Rule" in SKILL.md (always re-call the tool).
-
-### Pattern 4: Separate Browse and Submit Tools (Current)
-
-**What:** The three-step flow maps naturally to two tools: one for browsing (`get_vip_pricing`) and one for committing (`create_vip_booking_request`). The inquiry step ("want me to check with the venue?") is a conversational turn, not a tool call.
-
-**When to use:** When browse and submit have different failure modes and different input contracts. Browse is read-only, always safe, requires only venue_id. Submit is write, requires customer PII, triggers emails, and has downstream ops consequences.
-
-**Do NOT consolidate into one tool.** The composable-tools pattern from enterprise MCP research says: combine when operations must happen atomically. Browse-then-submit is not atomic — the user may browse three venues before deciding. Keeping them separate lets the agent call `get_vip_pricing` for 1 Oak, then CÉ LA VI, then submit only for Zouk, all in one conversation.
+**Trade-offs:** Side effects can silently fail. This is the same design as the existing nightlife-mcp implementation — deliberate, because an admin should never be blocked from changing booking status due to a transient Stripe or Resend error.
 
 ## Data Flow
 
-### Request Flow: Browse Phase
+### Booking List Flow
 
 ```
-User: "What's the VIP situation at 1 Oak this Saturday?"
+User opens /vip
     |
-Ember reads tokyo-clubs.json → resolves venue_id
+VipBookingsPage mounts (client component)
     |
-get_vip_pricing(venue_id, booking_date="2026-03-14")
+fetch('/api/vip/bookings?statuses=submitted,in_review&limit=50')
     |
-vipPricing.ts:
-  1. Fetch vip_venue_tables WHERE venue_id → get layout_image_url
-  2. Fetch vip_table_day_defaults WHERE venue_id → aggregate by weekday/weekend
-  3. Check venue_operating_hours for that day-of-week → set venue_open
-  4. Fetch event_occurrences WHERE venue_id, service_date=2026-03-14 → event context
+API route: auth check → role check → createServiceRoleClient()
     |
-Response: { weekend_min_spend: 150000, layout_image_url: "...", event_on_date: {...} }
+listVipAdminBookings(serviceClient, filters)
+    → SELECT vip_booking_requests WHERE status IN (...)
+    → load venue names for unique venue_ids
+    → load latest vip_booking_status_events per booking
+    → load latest vip_agent_tasks per booking
     |
-Ember presents: "This Saturday at 1 Oak — [event name] with [artists]. VIP from ¥150K.
-                 Here's the table layout: [URL]. Want me to put in a request?"
+JSON → VipBookingsPage renders table with status badges and filters
 ```
 
-### Request Flow: Submit Phase
+### Status Update Flow (with side effects)
 
 ```
-User: "Yes, table for 4, arriving 11pm. [provides name/email/phone]"
+Admin clicks "Mark Deposit Required"
     |
-Ember collects fields conversationally
+PATCH /api/vip/bookings/{id}
+  body: { patch: { status: "deposit_required" }, note: "Sent deposit link." }
     |
-Ember confirms dual-date (late-night arrival check from SKILL.md rules)
+API route: auth check → role check
     |
-create_vip_booking_request({
-  venue_id, booking_date, arrival_time, party_size,
-  customer_name, customer_email, customer_phone,
-  special_requests
-})
+admin_update_vip_booking_request RPC
+  (atomic: updates booking row + inserts status_event + inserts edit_audit)
     |
-vipBookings.ts:
-  1. INSERT into vip_booking_requests
-  2. Attach preferred_table_code if given (soft fail if unknown)
-  3. Populate min_spend from 4-level pricing fallback (existing logic, unchanged)
-  4. Send Resend email to ops
+rpcRow.changed_fields includes "status"?
+  YES → newStatus === "deposit_required"?
+    YES →
+      try { createDepositForBooking() → Stripe checkout → insert vip_booking_deposits }
+      catch { log, continue }
+      try { sendDepositRequiredEmail() → Resend }
+      catch { log, continue }
     |
-Response: { booking_request_id, status: "submitted", min_spend: 150000, ... }
+getVipAdminBookingDetail() → fresh detail with updated history + audits
     |
-Ember: "I've put in the request — booking ref XYZ. We'll hear back from the venue."
+JSON response (200) → VipBookingDetailPage refreshes
+```
+
+### Manual Booking Create Flow
+
+```
+Admin fills create form → POST /api/vip/bookings
+  body: CreateVipAdminBookingInput
     |
-nlt.mjs auto-registers to watchlist → background poller handles follow-up
+API route: auth check → role check
+    |
+createVipAdminBooking() → createVipBookingRequest()
+  (same path as MCP tool create_vip_booking_request)
+  → INSERT vip_booking_requests
+  → 4-level pricing fallback populates min_spend
+  → sendBookingSubmittedEmail() (Resend)
+    |
+JSON 201 → redirect to detail page
 ```
 
 ### Key Data Flows
 
-1. **Pricing aggregation:** `vip_table_day_defaults` → group by weekday (Sun-Thu, days 0-4) vs. weekend (Fri-Sat, days 5-6) → take `MIN(min_spend)` per bucket → return both values. This uses the same seeded data that currently drives the 4-level fallback chain.
-
-2. **Event context attachment:** `event_occurrences` lookup on venue_id + service_date is already used in `getVenueInfo()` in `venues.ts`. `vipPricing.ts` can use the same pattern (or call `getVenueInfo` internally) — no new DB queries needed.
-
-3. **Chart image URL:** Already stored in `vip_venue_tables.layout_image_url` (a Supabase Storage public URL). `vipTables.ts` already fetches it in `getVipTableChart()`. The new service copies this pattern.
-
-4. **Booking submission:** Completely unchanged. `vipBookings.ts` is not modified.
-
-## Scaling Considerations
-
-| Scale | Architecture Adjustments |
-|-------|--------------------------|
-| 3 venues (now) | Current approach works fine. Single DB query per tool call. |
-| 10-30 venues | Same queries, more rows — still fast. `vip_table_day_defaults` row count scales linearly; no index changes needed. |
-| 100+ venues | Aggregation query (`GROUP BY venue_id, CASE day_of_week`) may benefit from a materialized view or a simple cached layer in the service. Not needed yet. |
-
-### Scaling Priorities
-
-1. **First bottleneck:** `vip_table_day_defaults` scan grows as venues are added. Use a simple in-memory cache (30-60s TTL) in `vipPricing.ts` keyed by `venue_id` if response time degrades. Not needed for 3 venues.
-2. **Second bottleneck:** Layout image URL. Already served from Supabase Storage CDN — no scaling concern.
-
-## Anti-Patterns
-
-### Anti-Pattern 1: Exposing Per-Table Status in the New Tool
-
-**What people do:** Keep `status: "available" | "blocked"` per table in the response because the DB has the data.
-
-**Why it's wrong:** Venues won't maintain this data. "Available" will be stale within days. The agent will present false availability to users, damaging trust. The whole point of this redesign is to drop the per-table status surface from the public API.
-
-**Do this instead:** Return `weekday_min_spend` and `weekend_min_spend` only. If a user wants specifics, that's what the booking inquiry is for.
-
-### Anti-Pattern 2: Encoding Conversational Flow in the MCP Tool
-
-**What people do:** Add a `step` parameter ("step": "browse" | "inquire" | "submit") to a single omnibus tool, or use server-side session state to track conversation progress.
-
-**Why it's wrong:** MCP tools are stateless by design (MCP spec 2025-06-18). Session state in the server creates scaling problems and breaks horizontal deployment. The LLM's context window already tracks where the user is in the flow.
-
-**Do this instead:** Keep browse (`get_vip_pricing`) and submit (`create_vip_booking_request`) as separate, focused tools. The inquiry step is a conversational turn guided by SKILL.md.
-
-### Anti-Pattern 3: Updating Agent Flow in Server Code
-
-**What people do:** Write the "want me to put in a request?" prompt text inside the tool response, forcing the agent to parrot it.
-
-**Why it's wrong:** The tool response is structured data. Prompt engineering belongs in SKILL.md (or the equivalent system prompt layer), not in JSON fields that the agent then re-interprets.
-
-**Do this instead:** Return structured data. Let SKILL.md define how Ember presents it. The tool description (in `server.registerTool`) can note "present pricing and then ask if the user wants to proceed" — that's appropriate because it's tool-selection guidance, not message text.
-
-### Anti-Pattern 4: Modifying `create_vip_booking_request` or `vipBookings.ts`
-
-**What people do:** Change the booking schema to reference pricing data, since we now have a generic pricing step.
-
-**Why it's wrong:** The booking tool and service are working correctly. The 4-level fallback chain inside `createVipBookingRequest` already populates `min_spend` from `vip_table_day_defaults`. Modifying it for the pricing redesign creates regression risk with no benefit.
-
-**Do this instead:** Leave `vipBookings.ts` entirely untouched. The new `vipPricing.ts` is a read-only service that runs before the booking, independently.
+1. **Venue dropdown for create form:** GET `/api/vip/venues` → `listVipAdminVenues()` → `venues WHERE vip_booking_enabled = true`. Used to populate the venue selector in the create booking form.
+2. **Detail view:** GET `/api/vip/bookings/[id]` → `getVipAdminBookingDetail()` → booking summary + full `vip_booking_status_events` history + `vip_booking_edit_audits`.
+3. **Deposit link regeneration (future):** PATCH with a `regenerate_deposit` flag → calls `regenerateDepositCheckout()` from nightlife-mcp's `deposits.ts`. Port this function alongside `createDepositForBooking`.
 
 ## Integration Points
+
+### New vs Modified
+
+| Item | Status | Notes |
+|------|--------|-------|
+| `app/(admin)/vip/page.tsx` | NEW | Thin shell |
+| `app/(admin)/vip/new/page.tsx` | NEW | Thin shell |
+| `app/(admin)/vip/[id]/page.tsx` | NEW | Thin shell |
+| `app/api/vip/bookings/route.ts` | NEW | GET list + POST create |
+| `app/api/vip/bookings/[id]/route.ts` | NEW | GET detail + PATCH update |
+| `app/api/vip/venues/route.ts` | NEW | GET vip-enabled venues |
+| `services/vipAdminService.ts` | NEW | Ported from nightlife-mcp `vipAdmin.ts` |
+| `views/vip/VipBookingsPage.tsx` | NEW | List UI |
+| `views/vip/VipBookingDetailPage.tsx` | NEW | Detail/edit UI |
+| `views/vip/VipBookingCreatePage.tsx` | NEW | Create form UI |
+| `components/vip/VipStatusBadge.tsx` | NEW | Shared status display |
+| `types/vip.ts` | NEW | Ported types from nightlife-mcp |
+| `components/layout/AdminNavConfig.ts` | MODIFIED | Add VIP nav section under a new "VIP" or "Bookings" section |
+| `lib/supabase/service-client.ts` | UNCHANGED | Already exists — `createServiceRoleClient()` |
+| `lib/supabase/server.ts` | UNCHANGED | Already exists — `createSupabaseServerClient()` |
+| `nightlife-mcp/src/admin/` | DELETED (later) | Remove after nlt-admin is verified in production |
 
 ### External Services
 
 | Service | Integration Pattern | Notes |
 |---------|---------------------|-------|
-| Supabase | Existing `createClient()` pattern via `src/db/supabase.ts` | `vipPricing.ts` receives the client as a parameter, same as all other services |
-| Supabase Storage | Public URL stored in `vip_venue_tables.layout_image_url` | Already populated for 3 venues; `vipPricing.ts` reads it, does not upload |
-| Resend (email) | Only triggered by `createVipBookingRequest` | Not touched by this redesign |
-| Ember / openclaw | Calls MCP tools via `nlt.mjs` over HTTP | SKILL.md update replaces `get_vip_table_availability` + `get_vip_table_chart` calls with a single `get_vip_pricing` call in the browse phase |
+| Stripe | Server-only. `STRIPE_SECRET_KEY` env var. Called from PATCH route. | `stripe` package must be added to nlt-admin. Port `stripe.ts` + `createDepositForBooking()` from nightlife-mcp. |
+| Resend | Server-only. `RESEND_API_KEY` env var. Called from multiple routes. | `resend` package must be added to nlt-admin. Port `email.ts` + `templates.ts` from nightlife-mcp, or import as shared module. |
+| Supabase | `createServiceRoleClient()` for queries; `createSupabaseServerClient()` for auth | Both already exist in nlt-admin. `SUPABASE_SERVICE_ROLE_KEY` must be set on Railway (verify it is). |
+
+### Env Vars Required on nlt-admin Railway
+
+| Var | Purpose | Status |
+|-----|---------|--------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase connection | Present |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser auth client | Present |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role API routes | Present (verify) |
+| `STRIPE_SECRET_KEY` | Deposit checkout creation | MISSING — must add |
+| `RESEND_API_KEY` | Transactional emails | MISSING — must add |
+| `NIGHTLIFE_BASE_URL` | Stripe success/cancel redirect URLs | MISSING — must add (`https://nightlifetokyo.com`) |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| `tools/vipTables.ts` → `services/vipPricing.ts` | Direct function call (same process) | Replace `registerVipTableTools` import in `server.ts` with `registerVipPricingTool` |
-| `tools/vipBookings.ts` → `services/vipBookings.ts` | Direct function call (unchanged) | No changes required |
-| `server.ts` → tool registrations | Import swap only | Remove `registerVipTableTools`, add `registerVipPricingTool` |
-| Ember SKILL.md → MCP tools | HTTP tool calls via `nlt.mjs` | Browse phase changes from 2 calls to 1; submit phase unchanged |
+| View components → API routes | HTTP fetch (JSON) | Client components never call Supabase directly for VIP data |
+| API routes → vipAdminService | Direct function call | Service functions accept `SupabaseClient` — same signature as nightlife-mcp |
+| API routes → Stripe | Direct SDK call (`stripe` package) | Non-blocking in PATCH route |
+| API routes → Resend | Direct SDK call (`resend` package) | Non-blocking in PATCH and POST routes |
+| nlt-admin → nightlife-mcp | None at runtime | nightlife-mcp plays no role in the new dashboard |
 
-## Build Order
+## Build Order (Dependency-Aware)
 
-The dependency chain is clear and linear:
+Build bottom-up. Each layer can be tested before the next layer is added.
 
-```
-1. vipPricing.ts service (read-only DB queries)
-        |
-2. vipTables.ts tool file (rename/rewrite to expose get_vip_pricing)
-        |
-3. server.ts (swap registration import)
-        |
-4. REST endpoint (add GET /api/v1/venues/:id/vip-pricing if REST parity needed)
-        |
-5. SKILL.md (update Ember VIP flow to use new tool)
-        |
-6. Test end-to-end in Ember conversation
-```
+**Step 1 — Types (no deps)**
+- Create `types/vip.ts` — copy `VipAdminBookingSummary`, `VipAdminBookingListResult`, `VipAdminBookingDetailResult`, `VipAdminBookingUpdateResult`, `VipAdminBookingHistoryEntry`, `VipBookingEditAuditEntry`, `VipBookingStatus` from nightlife-mcp `types.ts`.
 
-Steps 1-3 are a single MCP server PR. Step 5 is a separate openclaw change. They can be merged in order: deploy the MCP server first (new tool available), then update SKILL.md (Ember switches to using it). The old tools can be removed from `server.ts` once Ember is confirmed to use the new path.
+**Step 2 — Service layer (deps: types, Supabase)**
+- Create `services/vipAdminService.ts` — port `listVipAdminBookings`, `listVipAdminVenues`, `getVipAdminBookingDetail`, `updateVipAdminBooking`, `createVipAdminBooking` from nightlife-mcp `vipAdmin.ts`. Remove Express-specific imports. Accept `SupabaseClient` parameter.
+
+**Step 3 — Read-only API routes (deps: service layer)**
+- `app/api/vip/venues/route.ts` — GET only. Needed by create form.
+- `app/api/vip/bookings/route.ts` — GET only first.
+- `app/api/vip/bookings/[id]/route.ts` — GET only first.
+- All three use the auth pattern from `api/admin/users/route.ts`.
+
+**Step 4 — List and detail UI (deps: read routes)**
+- `components/vip/VipStatusBadge.tsx` — status colors, used everywhere.
+- `views/vip/VipBookingsPage.tsx` — list with status filter, date filter, search, pagination.
+- `views/vip/VipBookingDetailPage.tsx` — detail with history timeline and audit log (read-only first).
+- Page shells for `/vip` and `/vip/[id]`.
+- Add VIP entry to `AdminNavConfig.ts`.
+
+**Step 5 — Mutation: create (deps: venues route, Resend)**
+- Add `resend` package. Port `email.ts` and `templates.ts`.
+- Add POST to `app/api/vip/bookings/route.ts`.
+- `views/vip/VipBookingCreatePage.tsx` — create form.
+- Page shell for `/vip/new`.
+- Add `RESEND_API_KEY` to Railway.
+
+**Step 6 — Mutation: update with side effects (deps: Stripe, Resend)**
+- Add `stripe` package. Port `stripe.ts` and `createDepositForBooking()` from `deposits.ts`.
+- Add PATCH to `app/api/vip/bookings/[id]/route.ts` with Stripe + Resend side effects.
+- Enable edit actions in `VipBookingDetailPage.tsx`.
+- Add `STRIPE_SECRET_KEY` and `NIGHTLIFE_BASE_URL` to Railway.
+
+**Step 7 — Verification and cleanup**
+- Smoke test all status transitions in production (submitted → in_review → deposit_required → confirmed → rejected).
+- Confirm deposit email sends and Stripe checkout URL is valid.
+- Remove `src/admin/` from nightlife-mcp after verified.
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Direct Supabase from Client Components for VIP Data
+
+**What people do:** Import the `supabase` browser client in view components and query `vip_booking_requests` directly, as other admin views do for non-sensitive reads.
+
+**Why it's wrong:** Status updates must trigger Stripe and Resend on the server. If reads are client-direct but writes go through API routes, the auth and data-fetch patterns are split. The service-role key (needed for full read access) must never reach the browser.
+
+**Do this instead:** All VIP data operations go through `/api/vip/*` routes — both reads and writes.
+
+### Anti-Pattern 2: Bypassing the admin_update_vip_booking_request RPC
+
+**What people do:** Direct `UPDATE vip_booking_requests SET status = ...` instead of calling the RPC.
+
+**Why it's wrong:** The RPC is a single atomic transaction: it updates the booking, inserts a `vip_booking_status_events` row, and inserts a `vip_booking_edit_audits` row. Bypassing it means the audit trail can silently fall out of sync on any partial failure.
+
+**Do this instead:** Always route status changes through the `admin_update_vip_booking_request` RPC. Direct table writes are only acceptable for fields outside the RPC's scope (none identified yet).
+
+### Anti-Pattern 3: Blocking HTTP Response on Side-Effect Failures
+
+**What people do:** Await Stripe/Resend without try/catch, letting a transient Stripe rate-limit return a 500 to the admin.
+
+**Why it's wrong:** The booking state has already been durably updated in Supabase via the RPC. A failed side effect does not un-do that. Returning 500 confuses the admin about whether the booking was actually updated.
+
+**Do this instead:** Wrap every side effect in `try/catch`. Log the failure. Return 200 with the booking's current state. The deposit link can be regenerated manually; emails can be retried.
+
+### Anti-Pattern 4: Removing nightlife-mcp Admin Code Before Production Verification
+
+**What people do:** Delete `src/admin/` from nightlife-mcp at the same time as deploying nlt-admin.
+
+**Why it's wrong:** If nlt-admin has an undetected bug (side effects not firing, auth edge case), there is no fallback. The Express dashboard, while ugly, is functional and handles real bookings.
+
+**Do this instead:** Keep nightlife-mcp admin code intact until nlt-admin has been verified in production — specifically: at least one successful status change with Stripe deposit creation and confirmation email.
+
+## Scaling Considerations
+
+This is an internal ops tool used by 1-3 admins. Scaling is not a design constraint.
+
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1-5 admins | Current design is sufficient. |
+| 5-50 admins | Same design. Next.js + Supabase handles this trivially. |
+| 50+ admins | Not a realistic scenario for this tool. |
 
 ## Sources
 
-- MCP Tools Specification 2025-06-18: https://modelcontextprotocol.io/specification/2025-06-18/server/tools
-- Designing Composable Tools for Enterprise MCP: https://dev.to/zaynelt/designing-composable-tools-for-enterprise-mcp-from-theory-to-practice-3df
-- MCP multi-step conversational flow (elicitation): https://workos.com/blog/mcp-features-guide
-- MCP tool description as behavioral contract: https://composio.dev/blog/how-to-effectively-use-prompts-resources-and-tools-in-mcp
-- Tool consolidation patterns (GitHub MCP example): https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1915
-- Existing codebase: `src/tools/vipTables.ts`, `src/tools/vipBookings.ts`, `src/services/vipTables.ts`, `src/services/vipBookings.ts`, `src/types.ts`, `src/server.ts`
-- Ember agent: `sync/instances/ember/workspace/skills/nightlife-concierge/SKILL.md`
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/admin/vipAdminRouter.ts`
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/admin/dashboardAuth.ts`
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/vipAdmin.ts`
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/deposits.ts`
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/email.ts`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/app/(admin)/layout.tsx`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/components/auth/ProtectedRoute.tsx`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/hooks/useAdminAuth.ts`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/lib/supabase/service-client.ts`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/lib/supabase/server.ts`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/app/api/admin/users/route.ts`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/components/layout/AdminNavConfig.ts`
+- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/components/layout/AdminShell.tsx`
+- `.planning/PROJECT.md` (v2.0 milestone context)
+- `CLAUDE.md` (nightlife-mcp technical spec)
+- `CLAUDE.md` (nlt-admin project spec)
 
 ---
-*Architecture research for: VIP generic pricing redesign — nightlife-mcp + Ember*
-*Researched: 2026-03-10*
+*Architecture research for: VIP Dashboard Migration — nightlife-mcp to nlt-admin*
+*Researched: 2026-03-11*
