@@ -38,13 +38,13 @@ created: 2026-03-11
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 3-01-01 | 01 | 1 | VPRC-07 | unit | `npm test -- --test-name-pattern "event_name"` | ❌ W0 | ⬜ pending |
-| 3-01-02 | 01 | 1 | VPRC-07 | unit | `npm test -- --test-name-pattern "busy_night"` | ❌ W0 | ⬜ pending |
-| 3-01-03 | 01 | 1 | VPRC-08 | unit | `npm test -- --test-name-pattern "pricing_approximate"` | ❌ W0 | ⬜ pending |
-| 3-02-01 | 02 | 1 | LIFE-01 | manual smoke | Deploy + MCP call attempt | ✅ | ⬜ pending |
-| 3-fix | 01 | 1 | (fix) | unit | `npm test -- --test-name-pattern "closed venue"` | ✅ | ⬜ pending |
+| 3-01-01 | 01 | 1 | VPRC-07 | unit | `npm test -- --test-name-pattern "event_name"` | W0 | pending |
+| 3-01-02 | 01 | 1 | VPRC-07 | unit | `npm test -- --test-name-pattern "busy_night"` | W0 | pending |
+| 3-01-03 | 01 | 1 | VPRC-08 | unit | `npm test -- --test-name-pattern "pricing_approximate"` | W0 | pending |
+| 3-01-02 | 01 | 1 | LIFE-01 | manual smoke | Deploy + MCP call attempt | yes | pending |
+| 3-fix | 01 | 1 | (fix) | unit | `npm test -- --test-name-pattern "closed venue"` | yes | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending / green / red / flaky*
 
 ---
 
