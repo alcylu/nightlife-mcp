@@ -41,14 +41,14 @@ Requirements for VIP dashboard migration from nightlife-mcp to nlt-admin. Each m
 
 ### Dashboard List
 
-- [ ] **DASH-01**: Admin can view a paginated list of VIP bookings with status badges
-- [ ] **DASH-02**: Admin can filter bookings by status (multi-select)
-- [ ] **DASH-03**: Admin can filter bookings by date range
-- [ ] **DASH-04**: Admin can search bookings by customer name, email, or phone
-- [ ] **DASH-05**: Admin can filter bookings by venue
-- [ ] **DASH-06**: Admin sees agent task status badge on booking list rows
-- [ ] **DASH-07**: Admin sees empty state with clear-filters CTA when no results match
-- [ ] **DASH-08**: Admin booking list auto-refreshes in background every 60 seconds
+- [x] **DASH-01**: Admin can view a paginated list of VIP bookings with status badges
+- [x] **DASH-02**: Admin can filter bookings by status (multi-select)
+- [x] **DASH-03**: Admin can filter bookings by date range
+- [x] **DASH-04**: Admin can search bookings by customer name, email, or phone
+- [x] **DASH-05**: Admin can filter bookings by venue
+- [x] **DASH-06**: Admin sees agent task status badge on booking list rows
+- [x] **DASH-07**: Admin sees empty state with clear-filters CTA when no results match
+- [x] **DASH-08**: Admin booking list auto-refreshes in background every 60 seconds
 
 ### Booking Detail
 
@@ -132,14 +132,14 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EMBR-01 | Phase 4 (v1.0) | Complete |
 | EMBR-02 | Phase 4 (v1.0) | Complete |
 | EMBR-03 | Phase 4 (v1.0) | Complete |
-| DASH-01 | Phase 6 (v2.0) | Pending |
-| DASH-02 | Phase 6 (v2.0) | Pending |
-| DASH-03 | Phase 6 (v2.0) | Pending |
-| DASH-04 | Phase 6 (v2.0) | Pending |
-| DASH-05 | Phase 6 (v2.0) | Pending |
-| DASH-06 | Phase 6 (v2.0) | Pending |
-| DASH-07 | Phase 6 (v2.0) | Pending |
-| DASH-08 | Phase 6 (v2.0) | Pending |
+| DASH-01 | Phase 6 (v2.0) | Complete |
+| DASH-02 | Phase 6 (v2.0) | Complete |
+| DASH-03 | Phase 6 (v2.0) | Complete |
+| DASH-04 | Phase 6 (v2.0) | Complete |
+| DASH-05 | Phase 6 (v2.0) | Complete |
+| DASH-06 | Phase 6 (v2.0) | Complete |
+| DASH-07 | Phase 6 (v2.0) | Complete |
+| DASH-08 | Phase 6 (v2.0) | Complete |
 | DETAIL-01 | Phase 6 (v2.0) | Complete |
 | DETAIL-02 | Phase 6 (v2.0) | Complete |
 | DETAIL-03 | Phase 6 (v2.0) | Complete |
