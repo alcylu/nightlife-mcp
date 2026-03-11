@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: VIP Dashboard Migration
 status: planning
-stopped_at: Completed 06-02 — awaiting human-verify checkpoint (Task 3)
-last_updated: "2026-03-11T08:01:53.794Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-11T09:32:42.817Z"
 last_activity: 2026-03-11 — v2.0 roadmap created
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 10
-  completed_plans: 10
+  completed_phases: 7
+  total_plans: 11
+  completed_plans: 11
   percent: 0
 ---
 
@@ -49,6 +49,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06 P01 | 15 | 2 tasks | 6 files |
 | Phase 06 P03 | 5 | 2 tasks | 5 files |
 | Phase 06-foundation-read-only-dashboard P02 | 5 | 2 tasks | 7 files |
+| Phase 07 P01 | 6 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,10 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 06]: AuditText union type (typeof TEXT.en | typeof TEXT.ja) fixes TypeScript literal type incompatibility when passing i18n text as component prop
 - [Phase 06]: keepPreviousData in useVipBookingList prevents flicker during 60s auto-refresh and filter changes
 - [Phase 06]: AdminGuard as inline component in page file — consistent with VipBookingDetailPage pattern
+- [Phase 07]: Zod parsed.data spread causes TypeScript optional-field mismatch — fix by destructuring into explicit named fields in route and dialog onSubmit
+- [Phase 07]: lookupAdminTablePricing ported as private helper in vipAdminService.ts (not cross-repo import) to keep nlt-admin self-contained
+- [Phase 07]: Admin-created bookings skip resolveBookingWindow() date check, email send, and vip_agent_tasks insert — ops owns the booking directly
+- [Phase 07]: agent_internal_note saved via UPDATE after INSERT — keeps base INSERT payload minimal and avoids schema coupling
 
 ### Pending Todos
 
@@ -77,6 +82,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T08:01:53.791Z
-Stopped at: Completed 06-02 — awaiting human-verify checkpoint (Task 3)
+Last session: 2026-03-11T09:32:42.814Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None
