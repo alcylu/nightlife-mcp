@@ -577,4 +577,7 @@ export interface VipPricingResult {
   generated_at: string;
   service_date: string | null;
   event_pricing_note: string | null;
+  event_name: string | null;       // name of event on requested date
+  busy_night: boolean;             // true when event exists on requested date
+  pricing_approximate: boolean;    // true when pricing from venue-level default (no day-defaults)
 }

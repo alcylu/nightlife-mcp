@@ -228,10 +228,11 @@ test("getVipPricing returns venue_open false for closed venue", async () => {
 
   assert.equal(result.venue_open, false);
   assert.ok(result.venue_closed_message, "venue_closed_message should be non-null");
-  assert.equal(result.pricing_configured, false);
-  assert.deepEqual(result.zones, []);
-  assert.equal(result.weekday_min_spend, null);
-  assert.equal(result.weekend_min_spend, null);
+  // Service correctly returns pricing even for closed dates (day-defaults still exist):
+  assert.equal(result.pricing_configured, true);
+  assert.ok(result.zones.length > 0, "zones should still have data");
+  assert.equal(result.weekday_min_spend, 100000);
+  assert.equal(result.weekend_min_spend, 200000);
 });
 
 // ---------------------------------------------------------------------------
@@ -491,4 +492,104 @@ test("getVipPricing throws INVALID_REQUEST for non-UUID venue_id", async () => {
       return true;
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// VPRC-07: Event context — event_name and busy_night
+// ---------------------------------------------------------------------------
+
+test("getVipPricing returns event_name and busy_night true when event exists on date", async () => {
+  // 2026-03-13 is a Friday; stub an event that starts at 22:00 JST (after 6am cutoff → same service date)
+  const supabase = createStub({
+    eventOccurrences: [
+      { start_at: "2026-03-13T13:00:00.000Z", name_en: "Friday Night Special", name_i18n: null },
+    ],
+  });
+  const result = await getVipPricing(supabase as never, {
+    venue_id: VENUE_ID,
+    date: "2026-03-13",
+  });
+
+  assert.equal(result.event_name, "Friday Night Special");
+  assert.equal(result.busy_night, true);
+});
+
+test("getVipPricing returns event_name null and busy_night false when no event", async () => {
+  const supabase = createStub({
+    eventOccurrences: [],
+  });
+  const result = await getVipPricing(supabase as never, {
+    venue_id: VENUE_ID,
+    date: "2026-03-09",
+  });
+
+  assert.equal(result.event_name, null);
+  assert.equal(result.busy_night, false);
+});
+
+test("getVipPricing returns event_name null and busy_night false when no date provided", async () => {
+  const supabase = createStub();
+  const result = await getVipPricing(supabase as never, {
+    venue_id: VENUE_ID,
+    // no date param
+  });
+
+  assert.equal(result.event_name, null);
+  assert.equal(result.busy_night, false);
+});
+
+test("getVipPricing uses name_i18n.en fallback when name_en is null", async () => {
+  const supabase = createStub({
+    eventOccurrences: [
+      { start_at: "2026-03-13T13:00:00.000Z", name_en: null, name_i18n: { en: "I18N Event" } },
+    ],
+  });
+  const result = await getVipPricing(supabase as never, {
+    venue_id: VENUE_ID,
+    date: "2026-03-13",
+  });
+
+  assert.equal(result.event_name, "I18N Event");
+  assert.equal(result.busy_night, true);
+});
+
+// ---------------------------------------------------------------------------
+// VPRC-08: pricing_approximate flag
+// ---------------------------------------------------------------------------
+
+test("getVipPricing sets pricing_approximate false when day-defaults exist", async () => {
+  // Default stub has day-defaults
+  const supabase = createStub();
+  const result = await getVipPricing(supabase as never, {
+    venue_id: VENUE_ID,
+    date: "2026-03-09",
+  });
+
+  assert.equal(result.pricing_approximate, false);
+});
+
+test("getVipPricing sets pricing_approximate true when only vip_default_min_spend exists", async () => {
+  const supabase = createStub({
+    dayDefaults: [],
+    venue: { ...DEFAULT_VENUE, vip_default_min_spend: 100000 },
+  });
+  const result = await getVipPricing(supabase as never, {
+    venue_id: VENUE_ID,
+    date: "2026-03-09",
+  });
+
+  assert.equal(result.pricing_approximate, true);
+});
+
+test("getVipPricing sets pricing_approximate false when pricing_configured false", async () => {
+  const supabase = createStub({
+    dayDefaults: [],
+    venue: { ...DEFAULT_VENUE, vip_default_min_spend: null },
+  });
+  const result = await getVipPricing(supabase as never, {
+    venue_id: VENUE_ID,
+    date: "2026-03-09",
+  });
+
+  assert.equal(result.pricing_approximate, false);
 });

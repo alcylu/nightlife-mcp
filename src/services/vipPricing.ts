@@ -56,8 +56,26 @@ type VipTableDayDefaultRow = {
 };
 
 // ---------------------------------------------------------------------------
+// Internal types
+// ---------------------------------------------------------------------------
+
+type PricingDateContext = {
+  closedDates: Set<string>;
+  eventByDate: Map<string, string>;
+};
+
+// ---------------------------------------------------------------------------
 // Helpers (self-contained — copied patterns from services/vipTables.ts)
 // ---------------------------------------------------------------------------
+
+function extractEventName(row: { name_en: string | null; name_i18n: unknown }): string {
+  if (row.name_en) return row.name_en;
+  if (row.name_i18n && typeof row.name_i18n === "object" && !Array.isArray(row.name_i18n)) {
+    const i18n = row.name_i18n as Record<string, unknown>;
+    if (typeof i18n.en === "string" && i18n.en) return i18n.en;
+  }
+  return "Event";
+}
 
 function ensureUuid(input: string, field: string): string {
   const normalized = String(input || "").trim();
@@ -162,9 +180,9 @@ async function resolvePricingClosedDates(
   venueId: string,
   dates: string[],
   city: { timezone: string; cutoff: string },
-): Promise<Set<string>> {
+): Promise<PricingDateContext> {
   if (dates.length === 0) {
-    return new Set();
+    return { closedDates: new Set(), eventByDate: new Map() };
   }
 
   const firstDate = dates[0];
@@ -180,14 +198,15 @@ async function resolvePricingClosedDates(
   // Fetch published events in the date window
   const { data: eventRows } = await supabase
     .from("event_occurrences")
-    .select("start_at")
+    .select("start_at,name_en,name_i18n")
     .eq("venue_id", venueId)
     .eq("published", true)
     .gte("start_at", windowStart)
     .lt("start_at", windowEnd);
 
   const datesWithEvents = new Set<string>();
-  for (const row of (eventRows || []) as Array<{ start_at: string }>) {
+  const eventByDate = new Map<string, string>();
+  for (const row of (eventRows || []) as Array<{ start_at: string; name_en: string | null; name_i18n: unknown }>) {
     const eventDate = new Date(row.start_at);
     const formatter = new Intl.DateTimeFormat("en-CA", {
       timeZone: city.timezone,
@@ -218,6 +237,9 @@ async function resolvePricingClosedDates(
       hour < cutoffHour || (hour === cutoffHour && minute < cutoffMinute);
     const serviceDate = beforeCutoff ? addDaysToIsoDate(localDate, -1) : localDate;
     datesWithEvents.add(serviceDate);
+    if (!eventByDate.has(serviceDate)) {
+      eventByDate.set(serviceDate, extractEventName(row));
+    }
   }
 
   // Fetch operating hours
@@ -252,7 +274,7 @@ async function resolvePricingClosedDates(
     // No operating hours configured → don't block
   }
 
-  return closed;
+  return { closedDates: closed, eventByDate };
 }
 
 // ---------------------------------------------------------------------------
@@ -351,41 +373,27 @@ export async function getVipPricing(
   // 3. Resolve city context
   const city = await fetchPricingCityContext(supabase, venue.city_id);
 
-  // 4. Determine service date
+  // 4. Determine service date (null when no date requested)
   let serviceDate: string | null = null;
   const dateInput = input.date?.trim().toLowerCase();
-  if (!dateInput || dateInput === "tonight") {
+  if (dateInput === "tonight") {
     serviceDate = getCurrentServiceDate(new Date(), city.timezone, city.cutoff);
-  } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
+  } else if (dateInput && /^\d{4}-\d{2}-\d{2}$/.test(dateInput)) {
     serviceDate = dateInput;
-  } else {
-    // Unknown date format — fall back to current service date
-    serviceDate = getCurrentServiceDate(new Date(), city.timezone, city.cutoff);
   }
+  // When no date provided: serviceDate stays null — return general pricing only
 
-  // 5. Run open-day check
-  const closedDates = await resolvePricingClosedDates(supabase, venueId, [serviceDate], city);
-  const venueOpen = !closedDates.has(serviceDate);
-
-  if (!venueOpen) {
-    return {
-      venue_id: venueId,
-      venue_name: venueName,
-      venue_open: false,
-      venue_closed_message: `${venueName || "This venue"} appears to be closed on ${serviceDate}.`,
-      pricing_configured: false,
-      pricing_not_configured_message: null,
-      weekday_min_spend: null,
-      weekend_min_spend: null,
-      currency: "JPY",
-      zones: [],
-      layout_image_url: null,
-      booking_supported: venue.vip_booking_enabled === true,
-      booking_note: null,
-      generated_at: new Date().toISOString(),
-      service_date: serviceDate,
-      event_pricing_note: null,
-    };
+  // 5. Run open-day check (only when a specific date was requested)
+  let venueOpen: boolean | null = null;
+  let venueClosedMessage: string | null = null;
+  let eventName: string | null = null;
+  if (serviceDate) {
+    const { closedDates, eventByDate } = await resolvePricingClosedDates(supabase, venueId, [serviceDate], city);
+    venueOpen = !closedDates.has(serviceDate);
+    venueClosedMessage = venueOpen
+      ? null
+      : `${venueName || "This venue"} appears to be closed on ${serviceDate}.`;
+    eventName = eventByDate.get(serviceDate) ?? null;
   }
 
   // 6. Fetch active vip_venue_tables
@@ -434,12 +442,13 @@ export async function getVipPricing(
   // 9. Aggregate pricing
   const aggregated = aggregatePricing(tables, dayDefaults);
 
-  // 10. Determine pricing_configured
+  // 10. Determine pricing_configured and pricing_approximate
   const venueDefaultMinSpend = coerceMinSpend(venue.vip_default_min_spend);
   const pricingConfigured = dayDefaults.length > 0 || venueDefaultMinSpend !== null;
   const pricingNotConfiguredMessage = pricingConfigured
     ? null
     : "VIP pricing information is not yet available for this venue.";
+  const pricingApproximate = dayDefaults.length === 0 && venueDefaultMinSpend !== null;
 
   // 11. Extract layout_image_url
   const layoutImageUrl =
@@ -449,11 +458,12 @@ export async function getVipPricing(
   const bookingSupported = venue.vip_booking_enabled === true;
 
   // 13. Return result
+  const busyNight = eventName !== null;
   return {
     venue_id: venueId,
     venue_name: venueName,
-    venue_open: true,
-    venue_closed_message: null,
+    venue_open: venueOpen === null ? true : venueOpen,
+    venue_closed_message: venueClosedMessage,
     pricing_configured: pricingConfigured,
     pricing_not_configured_message: pricingNotConfiguredMessage,
     weekday_min_spend: aggregated.weekday_min_spend,
@@ -466,5 +476,8 @@ export async function getVipPricing(
     generated_at: new Date().toISOString(),
     service_date: serviceDate,
     event_pricing_note: eventPricingNote,
+    event_name: eventName,
+    busy_night: busyNight,
+    pricing_approximate: pricingApproximate,
   };
 }
