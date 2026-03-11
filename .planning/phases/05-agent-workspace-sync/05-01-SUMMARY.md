@@ -62,7 +62,7 @@ completed: 2026-03-11
 - **Duration:** ~8 min
 - **Started:** 2026-03-11T03:00:00Z
 - **Completed:** 2026-03-11T03:08:00Z
-- **Tasks:** 2 of 3 complete (Task 3 is checkpoint:human-verify)
+- **Tasks:** 3 of 3 complete
 - **Files modified:** 7 (in openclaw repo)
 
 ## Accomplishments
@@ -78,7 +78,7 @@ Each task was committed atomically (in the openclaw repo):
 
 1. **Task 1: Replace stale VIP tool references in 3 AGENTS.md files** - `d761c1f` (feat)
 2. **Task 2: Add busy_night and pricing_approximate field guidance to SKILL.md** - `51998ca` (feat)
-3. **Task 3: Deploy via oc-sync** - Checkpoint reached, deployment automation complete
+3. **Task 3: Deploy via oc-sync** - Checkpoint approved by human (ember + mamad deployed, lisa deferred offline)
 
 ## Files Created/Modified
 
@@ -119,8 +119,18 @@ None — plan executed exactly as written. The deployment automation (yes | oc-s
 
 - ember and mamad agents will now correctly call get_vip_pricing for VIP asks and properly handle busy_night + pricing_approximate fields
 - lisa: local files are correct; push is the only remaining step when container recovers
-- Phase 5 plan 01 complete pending human approval of deployment checkpoint
+- Phase 5 plan 01 complete — deployment checkpoint approved by human
 
 ---
 *Phase: 05-agent-workspace-sync*
 *Completed: 2026-03-11*
+
+## Self-Check: PASSED
+
+- ember/AGENTS.md: FOUND
+- mamad/AGENTS.md: FOUND
+- lisa/AGENTS.md: FOUND
+- ember/SKILL.md: FOUND
+- SUMMARY.md: FOUND
+- Commit d761c1f (Task 1): FOUND in openclaw repo
+- Commit 51998ca (Task 2): FOUND in openclaw repo
