@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: VIP Dashboard Migration
-status: ready_to_plan
-stopped_at: null
-last_updated: "2026-03-11"
-last_activity: 2026-03-11 — v2.0 roadmap created (Phases 6-9)
+status: planning
+stopped_at: Completed 06-01-PLAN.md — VIP foundation layer (types, service layer, API routes)
+last_updated: "2026-03-11T05:53:13.188Z"
+last_activity: 2026-03-11 — v2.0 roadmap created
 progress:
-  total_phases: 4
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 9
+  completed_phases: 5
+  total_plans: 10
+  completed_plans: 8
   percent: 0
 ---
 
@@ -46,6 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 | - | - | - | - |
 
 *Updated after each plan completion*
+| Phase 06 P01 | 15 | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -55,6 +56,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Pre-milestone]: Stripe + Resend side effects move to nlt-admin API routes
 - [Pre-milestone]: Access restricted to super_admin + admin roles only
 - [Pre-milestone]: Phase 9 (cleanup) gated — 48h production operation required before Express removal
+- [Phase 06]: Threw plain Error objects in vipAdminService (no NightlifeError) — nlt-admin has no error class, API routes translate to HTTP status codes directly
+- [Phase 06]: getVipAdminBookingDetail returns null for not-found instead of throwing — API route cleanly returns 404 without catching specific error types
+- [Phase 06]: Crown icon available in lucide-react 0.462.0 — no Star fallback needed
 
 ### Pending Todos
 
@@ -68,6 +72,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11
-Stopped at: Roadmap creation complete — ready to plan Phase 6
+Last session: 2026-03-11T05:53:13.186Z
+Stopped at: Completed 06-01-PLAN.md — VIP foundation layer (types, service layer, API routes)
 Resume file: None

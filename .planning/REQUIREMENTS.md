@@ -69,9 +69,9 @@ Requirements for VIP dashboard migration from nightlife-mcp to nlt-admin. Each m
 
 ### Access Control
 
-- [ ] **AUTH-01**: VIP dashboard pages accessible only to super_admin and admin roles
-- [ ] **AUTH-02**: VIP API routes verify role server-side (not just UI-gated)
-- [ ] **AUTH-03**: VIP section appears in nlt-admin navigation for authorized users
+- [x] **AUTH-01**: VIP dashboard pages accessible only to super_admin and admin roles
+- [x] **AUTH-02**: VIP API routes verify role server-side (not just UI-gated)
+- [x] **AUTH-03**: VIP section appears in nlt-admin navigation for authorized users
 
 ### Cleanup
 
@@ -151,9 +151,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MUTATE-05 | Phase 8 (v2.0) | Pending |
 | MUTATE-06 | Phase 7 (v2.0) | Pending |
 | MUTATE-07 | Phase 7 (v2.0) | Pending |
-| AUTH-01 | Phase 6 (v2.0) | Pending |
-| AUTH-02 | Phase 6 (v2.0) | Pending |
-| AUTH-03 | Phase 6 (v2.0) | Pending |
+| AUTH-01 | Phase 6 (v2.0) | Complete |
+| AUTH-02 | Phase 6 (v2.0) | Complete |
+| AUTH-03 | Phase 6 (v2.0) | Complete |
 | CLEAN-01 | Phase 9 (v2.0) | Pending |
 | CLEAN-02 | Phase 9 (v2.0) | Pending |
 | CLEAN-03 | Phase 9 (v2.0) | Pending |
