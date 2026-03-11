@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: VIP Dashboard Migration
-status: defining_requirements
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-03-11"
-last_activity: 2026-03-11 — Milestone v2.0 started
+last_activity: 2026-03-11 — v2.0 roadmap created (Phases 6-9)
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,23 +21,40 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-11)
 
 **Core value:** Users get accurate, trustworthy VIP pricing information and a frictionless path to submit a booking inquiry — no false promises about live availability.
-**Current focus:** Defining requirements for v2.0 VIP Dashboard Migration
+**Current focus:** Phase 6 — Foundation and Read-Only Dashboard (nlt-admin)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-11 — Milestone v2.0 started
+Phase: 6 of 9 (Foundation and Read-Only Dashboard)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-03-11 — v2.0 roadmap created
+
+Progress: [░░░░░░░░░░] 0%
+
+## Performance Metrics
+
+**Velocity:**
+- Total plans completed: 0 (v2.0)
+- Average duration: —
+- Total execution time: —
+
+**By Phase:**
+
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| - | - | - | - |
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
 - [Pre-milestone]: Supabase-direct queries from nlt-admin (no nightlife-mcp admin API intermediary)
-- [Pre-milestone]: Stripe deposit + Resend email side effects move to nlt-admin API routes
-- [Pre-milestone]: Access restricted to super_admin + admin roles
-- [Pre-milestone]: Full feature parity — list, detail, update, create, email triggers
+- [Pre-milestone]: Stripe + Resend side effects move to nlt-admin API routes
+- [Pre-milestone]: Access restricted to super_admin + admin roles only
+- [Pre-milestone]: Phase 9 (cleanup) gated — 48h production operation required before Express removal
 
 ### Pending Todos
 
@@ -45,11 +62,12 @@ None yet.
 
 ### Blockers/Concerns
 
-- Cross-repo dependency: nlt-admin dashboard must be built and verified before nightlife-mcp admin code removal
-- nlt-admin Railway env needs STRIPE_SECRET_KEY and RESEND_API_KEY
+- Cross-repo dependency: nlt-admin dashboard (Phases 6-8) must be complete and production-proven before Phase 9
+- nlt-admin Railway service needs STRIPE_SECRET_KEY, RESEND_API_KEY, NIGHTLIFE_CONSUMER_URL added before any code touches Stripe/Resend
+- Research flag: Confirm whether `admin_update_vip_booking_request` RPC is SECURITY DEFINER before implementing PATCH route (Phase 8)
 
 ## Session Continuity
 
 Last session: 2026-03-11
-Stopped at: Milestone initialization
+Stopped at: Roadmap creation complete — ready to plan Phase 6
 Resume file: None

@@ -132,38 +132,38 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EMBR-01 | Phase 4 (v1.0) | Complete |
 | EMBR-02 | Phase 4 (v1.0) | Complete |
 | EMBR-03 | Phase 4 (v1.0) | Complete |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
-| DASH-05 | — | Pending |
-| DASH-06 | — | Pending |
-| DASH-07 | — | Pending |
-| DASH-08 | — | Pending |
-| DETAIL-01 | — | Pending |
-| DETAIL-02 | — | Pending |
-| DETAIL-03 | — | Pending |
-| DETAIL-04 | — | Pending |
-| MUTATE-01 | — | Pending |
-| MUTATE-02 | — | Pending |
-| MUTATE-03 | — | Pending |
-| MUTATE-04 | — | Pending |
-| MUTATE-05 | — | Pending |
-| MUTATE-06 | — | Pending |
-| MUTATE-07 | — | Pending |
-| AUTH-01 | — | Pending |
-| AUTH-02 | — | Pending |
-| AUTH-03 | — | Pending |
-| CLEAN-01 | — | Pending |
-| CLEAN-02 | — | Pending |
-| CLEAN-03 | — | Pending |
+| DASH-01 | Phase 6 (v2.0) | Pending |
+| DASH-02 | Phase 6 (v2.0) | Pending |
+| DASH-03 | Phase 6 (v2.0) | Pending |
+| DASH-04 | Phase 6 (v2.0) | Pending |
+| DASH-05 | Phase 6 (v2.0) | Pending |
+| DASH-06 | Phase 6 (v2.0) | Pending |
+| DASH-07 | Phase 6 (v2.0) | Pending |
+| DASH-08 | Phase 6 (v2.0) | Pending |
+| DETAIL-01 | Phase 6 (v2.0) | Pending |
+| DETAIL-02 | Phase 6 (v2.0) | Pending |
+| DETAIL-03 | Phase 6 (v2.0) | Pending |
+| DETAIL-04 | Phase 6 (v2.0) | Pending |
+| MUTATE-01 | Phase 8 (v2.0) | Pending |
+| MUTATE-02 | Phase 8 (v2.0) | Pending |
+| MUTATE-03 | Phase 8 (v2.0) | Pending |
+| MUTATE-04 | Phase 7 (v2.0) | Pending |
+| MUTATE-05 | Phase 8 (v2.0) | Pending |
+| MUTATE-06 | Phase 7 (v2.0) | Pending |
+| MUTATE-07 | Phase 7 (v2.0) | Pending |
+| AUTH-01 | Phase 6 (v2.0) | Pending |
+| AUTH-02 | Phase 6 (v2.0) | Pending |
+| AUTH-03 | Phase 6 (v2.0) | Pending |
+| CLEAN-01 | Phase 9 (v2.0) | Pending |
+| CLEAN-02 | Phase 9 (v2.0) | Pending |
+| CLEAN-03 | Phase 9 (v2.0) | Pending |
 
 **Coverage:**
 - v1.0 requirements: 16 total (all complete)
 - v2.0 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25 ⚠️
+- Mapped to phases: 25
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-11 after v2.0 milestone start*
+*Last updated: 2026-03-11 — v2.0 traceability complete (Phases 6-9)*
