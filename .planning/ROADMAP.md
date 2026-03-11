@@ -13,8 +13,8 @@ Replace the two-tool VIP availability flow (`get_vip_table_availability` + `get_
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: MCP Pricing Tool** - Build and deploy `get_vip_pricing` with REST endpoint; old tools stay registered (completed 2026-03-10)
-- [ ] **Phase 2: Ember Prompt Update** - Rewrite VIP flow in SKILL.md to use new tool with mandatory confirmation gate
-- [ ] **Phase 3: Cleanup and Event Context** - Remove old tools; add event context and pricing_approximate signal
+- [x] **Phase 2: Ember Prompt Update** - Rewrite VIP flow in SKILL.md to use new tool with mandatory confirmation gate (completed 2026-03-11)
+- [x] **Phase 3: Cleanup and Event Context** - Remove old tools; add event context and pricing_approximate signal (completed 2026-03-11)
 
 ## Phase Details
 
@@ -44,10 +44,10 @@ Plans:
   2. Ember presents weekday/weekend pricing ranges in natural conversation without raw field names or JSON
   3. Ember always asks "Would you like me to submit an inquiry?" before calling `create_vip_booking_request` — it never auto-submits
   4. Ember states the table chart is a layout reference only and does not infer availability from it
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 02-01-PLAN.md — Rewrite VIP sections of SKILL.md (Tool Contract, Booking Flow, Freshness Rule, Table Chart, Presentation Rule, Venue Lookup/Knowledge); add confirmation gate and chart guardrail; sync to all generic instances; deploy via oc-sync
+- [x] 02-01-PLAN.md — Rewrite VIP sections of SKILL.md (Tool Contract, Booking Flow, Freshness Rule, Table Chart, Presentation Rule, Venue Lookup/Knowledge); add confirmation gate and chart guardrail; sync to all generic instances; deploy via oc-sync
 
 ### Phase 3: Cleanup and Event Context
 **Goal**: Old VIP tools are removed from the MCP server, and `get_vip_pricing` responses include event context (busy night signal) and a `pricing_approximate` flag that lets Ember modulate confidence language.
@@ -57,10 +57,10 @@ Plans:
   1. Calling `get_vip_table_availability` or `get_vip_table_chart` returns a tool-not-found error (tools removed from server registration)
   2. Calling `get_vip_pricing` for a date with an event returns the event name and `busy_night: true` in the response
   3. When pricing comes from approximate sources (venue-level default), `pricing_approximate: true` is present in the response
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
-- [ ] 03-01-PLAN.md — Fix failing test, add event context (VPRC-07) + pricing_approximate (VPRC-08) to service/types/schemas, commit old tool removal (LIFE-01), update OpenAPI spec
+- [x] 03-01-PLAN.md — Fix failing test, add event context (VPRC-07) + pricing_approximate (VPRC-08) to service/types/schemas, commit old tool removal (LIFE-01), update OpenAPI spec
 
 ### Phase 4: Phase 2 Verification & Metadata Hygiene
 **Goal**: Phase 2 (Ember Prompt Update) is formally verified with a VERIFICATION.md, closing the orphaned status of EMBR-01/02/03. SUMMARY frontmatter gaps across all phases are fixed.
@@ -73,7 +73,7 @@ Plans:
   3. Re-audit shows 0 orphaned requirements
 
 Plans:
-- [ ] 04-01-PLAN.md — Verify Phase 2 work (create VERIFICATION.md) and fix SUMMARY frontmatter across all phases
+- [x] 04-01-PLAN.md — Verify Phase 2 work (create VERIFICATION.md) and fix SUMMARY frontmatter across all phases
 
 ### Phase 5: Agent Workspace Sync
 **Goal**: AGENTS.md files in ember/mamad/lisa no longer reference removed tools, SKILL.md includes guidance for busy_night and pricing_approximate fields, and lisa serves the current SKILL.md.
@@ -96,7 +96,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. MCP Pricing Tool | 3/3 | Complete   | 2026-03-10 |
-| 2. Ember Prompt Update | 0/1 | Not started | - |
-| 3. Cleanup and Event Context | 0/1 | Not started | - |
+| 2. Ember Prompt Update | 1/1 | Complete   | 2026-03-11 |
+| 3. Cleanup and Event Context | 1/1 | Complete   | 2026-03-11 |
 | 4. Phase 2 Verification & Metadata Hygiene | 1/1 | Complete   | 2026-03-11 |
 | 5. Agent Workspace Sync | 0/1 | Not started | - |
