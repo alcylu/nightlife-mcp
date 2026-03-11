@@ -164,7 +164,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 (Phase 9 gated: 48h product
 | 3. Cleanup and Event Context | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 4. Phase 2 Verification and Metadata Hygiene | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 5. Agent Workspace Sync | v1.0 | 1/1 | Complete | 2026-03-11 |
-| 6. Foundation and Read-Only Dashboard | 1/3 | In Progress|  | - |
+| 6. Foundation and Read-Only Dashboard | 2/3 | In Progress|  | - |
 | 7. Create Booking Mutation | v2.0 | 0/TBD | Not started | - |
 | 8. Status Update with Stripe and Resend | v2.0 | 0/TBD | Not started | - |
 | 9. Cleanup | v2.0 | 0/TBD | Not started | - |

@@ -52,10 +52,10 @@ Requirements for VIP dashboard migration from nightlife-mcp to nlt-admin. Each m
 
 ### Booking Detail
 
-- [ ] **DETAIL-01**: Admin can view full booking detail (customer info, venue, table code, min spend, special requests)
-- [ ] **DETAIL-02**: Admin can view status history timeline with actor, timestamp, and notes
-- [ ] **DETAIL-03**: Admin can view edit audit log with field-level before/after values
-- [ ] **DETAIL-04**: Admin can see agent task status on booking detail
+- [x] **DETAIL-01**: Admin can view full booking detail (customer info, venue, table code, min spend, special requests)
+- [x] **DETAIL-02**: Admin can view status history timeline with actor, timestamp, and notes
+- [x] **DETAIL-03**: Admin can view edit audit log with field-level before/after values
+- [x] **DETAIL-04**: Admin can see agent task status on booking detail
 
 ### Mutations
 
@@ -140,10 +140,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DASH-06 | Phase 6 (v2.0) | Pending |
 | DASH-07 | Phase 6 (v2.0) | Pending |
 | DASH-08 | Phase 6 (v2.0) | Pending |
-| DETAIL-01 | Phase 6 (v2.0) | Pending |
-| DETAIL-02 | Phase 6 (v2.0) | Pending |
-| DETAIL-03 | Phase 6 (v2.0) | Pending |
-| DETAIL-04 | Phase 6 (v2.0) | Pending |
+| DETAIL-01 | Phase 6 (v2.0) | Complete |
+| DETAIL-02 | Phase 6 (v2.0) | Complete |
+| DETAIL-03 | Phase 6 (v2.0) | Complete |
+| DETAIL-04 | Phase 6 (v2.0) | Complete |
 | MUTATE-01 | Phase 8 (v2.0) | Pending |
 | MUTATE-02 | Phase 8 (v2.0) | Pending |
 | MUTATE-03 | Phase 8 (v2.0) | Pending |
