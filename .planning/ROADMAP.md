@@ -57,11 +57,10 @@ Plans:
   1. Calling `get_vip_table_availability` or `get_vip_table_chart` returns a tool-not-found error (tools removed from server registration)
   2. Calling `get_vip_pricing` for a date with an event returns the event name and `busy_night: true` in the response
   3. When pricing comes from approximate sources (venue-level default), `pricing_approximate: true` is present in the response
-**Plans**: TBD
+**Plans:** 1 plan
 
 Plans:
-- [ ] 03-01: Add event context lookup to `vipPricing.ts` service (query event_occurrences for the requested date, attach event_name + busy_night flag)
-- [ ] 03-02: Add `pricing_approximate` flag to service output based on fallback level; remove old tool registrations from `server.ts`; deploy and verify old tool names are gone
+- [ ] 03-01-PLAN.md — Fix failing test, add event context (VPRC-07) + pricing_approximate (VPRC-08) to service/types/schemas, commit old tool removal (LIFE-01), update OpenAPI spec
 
 ## Progress
 
@@ -72,4 +71,4 @@ Phases execute in numeric order: 1 → 2 → 3
 |-------|----------------|--------|-----------|
 | 1. MCP Pricing Tool | 3/3 | Complete   | 2026-03-10 |
 | 2. Ember Prompt Update | 0/1 | Not started | - |
-| 3. Cleanup and Event Context | 0/2 | Not started | - |
+| 3. Cleanup and Event Context | 0/1 | Not started | - |
