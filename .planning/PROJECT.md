@@ -2,21 +2,11 @@
 
 ## What This Is
 
-The nightlife-mcp VIP operations system: MCP tools and REST API for VIP table pricing and booking requests, plus an admin dashboard for ops to manage bookings. The admin dashboard is being migrated from nightlife-mcp's server-rendered Express UI to nlt-admin (Next.js) for a proper admin experience with role-based access.
+The nightlife-mcp VIP operations system: MCP tools and REST API for VIP table pricing and booking requests. The admin dashboard has been fully migrated to nlt-admin (Next.js) — nightlife-mcp is now a clean MCP server + REST API with zero admin surface.
 
 ## Core Value
 
 Users get accurate, trustworthy VIP pricing information and a frictionless path to submit a booking inquiry — no false promises about "live" availability.
-
-## Current Milestone: v2.0 VIP Dashboard Migration
-
-**Goal:** Move the VIP booking admin dashboard from nightlife-mcp into nlt-admin (Next.js), with full feature parity, Supabase-direct queries, and Stripe/email side effects via Next.js API routes. Remove all dashboard code from nightlife-mcp.
-
-**Target features:**
-- VIP booking dashboard in nlt-admin (list, detail, update, create)
-- Status change side effects (Stripe deposit creation, Resend emails) in nlt-admin API routes
-- Access restricted to super_admin + admin roles
-- Admin dashboard code removed from nightlife-mcp
 
 ## Requirements
 
@@ -32,13 +22,14 @@ Users get accurate, trustworthy VIP pricing information and a frictionless path 
 - ✓ Old VIP tools removed (get_vip_table_availability, get_vip_table_chart) — v1.0 Phase 3
 - ✓ Event context + pricing_approximate signals — v1.0 Phase 3
 - ✓ Agent workspace sync (AGENTS.md + SKILL.md) — v1.0 Phase 5
+- ✓ VIP booking dashboard in nlt-admin with full CRUD — v2.0
+- ✓ Status change side effects (Stripe deposits, Resend emails) in nlt-admin API routes — v2.0
+- ✓ Access restricted to super_admin + admin roles — v2.0
+- ✓ Admin dashboard code removed from nightlife-mcp — v2.0
 
 ### Active
 
-- [ ] VIP booking dashboard in nlt-admin with full CRUD
-- [ ] Status change side effects (Stripe deposits, Resend emails) in nlt-admin API routes
-- [ ] Access restricted to super_admin + admin roles
-- [ ] Admin dashboard code removed from nightlife-mcp
+(No active requirements — planning next milestone)
 
 ### Out of Scope
 
@@ -46,21 +37,18 @@ Users get accurate, trustworthy VIP pricing information and a frictionless path 
 - VIP dashboard access for venue_organizer role — admin-only for now
 - Multi-city VIP expansion — venue-by-venue rollout, separate effort
 - Redesigning the booking request submission flow — works fine as-is
+- Real-time websocket push — 2 ops users, low volume, 1-min polling sufficient
+- Bulk status update — per-booking side effects (Stripe, email) make bulk risky
+- Email template editing UI — templates are stable, change via code deploy
 
 ## Context
 
-- **Current dashboard**: Server-rendered HTML in nightlife-mcp (`src/admin/`), cookie-based auth with env-var credentials (`VIP_DASHBOARD_ADMINS`), Express routes at `/ops/`. Full CRUD: booking list with filters, detail with status history + edit audits, status updates with deposit/email triggers, manual booking creation.
-- **nlt-admin**: Next.js 15 app at `~/Apps/nlt-admin/`, deployed on Railway. Has Supabase auth with role-based access (super_admin, admin, event_organizer, etc.). Same Supabase project as nightlife-mcp.
-- **Side effects**: Status changes trigger Stripe checkout session creation (deposit_required) and Resend emails (deposit_required, confirmed, rejected). These currently live in `src/services/vipAdmin.ts` via dynamic imports of `deposits.ts` and `email.ts`.
-- **DB tables**: `vip_booking_requests`, `vip_booking_status_events`, `vip_agent_tasks`, `vip_booking_edit_audits`, `admin_update_vip_booking_request` RPC.
-- **Two repos**: Dashboard build in nlt-admin, cleanup in nightlife-mcp.
-
-## Constraints
-
-- **Same Supabase**: nlt-admin already connects to the same Supabase project — no data migration needed
-- **Cross-repo**: Dashboard build (nlt-admin) must be complete before nightlife-mcp admin code removal
-- **Stripe/Resend secrets**: nlt-admin needs `STRIPE_SECRET_KEY` and `RESEND_API_KEY` env vars on Railway
-- **RPC dependency**: `admin_update_vip_booking_request` RPC is used for atomic status updates with audit trail — nlt-admin must use the same RPC
+Shipped v2.0 with 18,863 LOC TypeScript.
+Tech stack: TypeScript, @modelcontextprotocol/sdk, Express, Supabase.
+nlt-admin (Next.js 15) handles all VIP admin UI at ~/Apps/nlt-admin/.
+Admin dashboard fully migrated from nightlife-mcp Express to nlt-admin Next.js.
+nightlife-mcp now has zero admin surface — MCP tools + REST API only.
+Side effects (Stripe deposits, Resend emails) now live in nlt-admin API routes.
 
 ## Key Decisions
 
@@ -70,9 +58,17 @@ Users get accurate, trustworthy VIP pricing information and a frictionless path 
 | Generic pricing, not per-table status | Venues won't maintain availability data | ✓ Good |
 | Keep DB structure for future | Per-date/per-table schema may be useful later when venues adopt | ✓ Good |
 | Include event context in response | Helps user understand if it's a busy night | ✓ Good |
-| Supabase-direct from nlt-admin | Same DB, no need for nightlife-mcp as intermediary | — Pending |
-| Stripe/email in nlt-admin API routes | Keeps all admin logic in one app, cleaner separation | — Pending |
-| super_admin + admin only | VIP ops is internal; venue access deferred | — Pending |
+| Supabase-direct from nlt-admin | Same DB, no need for nightlife-mcp as intermediary | ✓ Good |
+| Stripe/email in nlt-admin API routes | Keeps all admin logic in one app, cleaner separation | ✓ Good |
+| super_admin + admin only | VIP ops is internal; venue access deferred | ✓ Good |
+| Non-blocking side effects | Stripe/Resend failures don't block status updates | ✓ Good |
+| 4-level pricing fallback | Covers all data availability scenarios without breaking | ✓ Good |
+
+## Constraints
+
+- **Same Supabase**: nlt-admin connects to the same Supabase project — no data migration needed
+- **RPC dependency**: `admin_update_vip_booking_request` RPC used for atomic status updates with audit trail
+- **Stripe/Resend secrets**: nlt-admin needs `STRIPE_SECRET_KEY` and `RESEND_API_KEY` env vars on Railway
 
 ---
-*Last updated: 2026-03-11 after v2.0 milestone start*
+*Last updated: 2026-03-12 after v2.0 milestone*
