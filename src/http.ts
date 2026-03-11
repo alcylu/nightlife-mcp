@@ -25,12 +25,6 @@ import { createApiKeyAuthMiddleware, type RequestWithAuth } from "./middleware/a
 import { createRestRouter } from "./rest.js";
 import { apiReference } from "@scalar/express-api-reference";
 import { openApiDocument } from "./openapi.js";
-import { createDashboardAuth, type RequestWithDashboardAuth } from "./admin/dashboardAuth.js";
-import { createVipAdminRouter } from "./admin/vipAdminRouter.js";
-import {
-  renderVipDashboardLoginPage,
-  renderVipDashboardPage,
-} from "./admin/vipDashboardPage.js";
 import { createStripeWebhookRouter } from "./routes/stripeWebhook.js";
 import {
   renderDepositSuccessPage,
@@ -633,14 +627,6 @@ async function main(): Promise<void> {
   app.use(express.json());
   const supabase = createSupabaseClient(config);
   const sessions = new Map<string, SessionContext>();
-  const dashboardAuth = createDashboardAuth({
-    admins: config.vipDashboardAdmins,
-    sessionTtlMinutes: config.vipDashboardSessionTtlMinutes,
-    sessionCookieName: config.vipDashboardSessionCookieName,
-    secureCookies: process.env.NODE_ENV === "production",
-  });
-
-  app.use(express.urlencoded({ extended: false }));
 
   // CORS for REST API — allows browser JS from our domains only
   app.use("/api/v1", cors({
@@ -762,68 +748,6 @@ async function main(): Promise<void> {
     res.status(204).end();
   });
 
-  app.get("/ops/login", (_req, res) => {
-    res.type("html").send(
-      renderVipDashboardLoginPage({
-        adminsConfigured: dashboardAuth.adminsConfigured,
-      }),
-    );
-  });
-
-  app.post("/ops/login", (req, res) => {
-    if (!dashboardAuth.adminsConfigured) {
-      res
-        .status(503)
-        .type("html")
-        .send(
-          renderVipDashboardLoginPage({
-            adminsConfigured: false,
-            error: "Dashboard login is not configured on this server.",
-          }),
-        );
-      return;
-    }
-
-    const username = String(req.body?.username || "");
-    const password = String(req.body?.password || "");
-    const authenticatedAs = dashboardAuth.authenticate(username, password);
-
-    if (!authenticatedAs) {
-      res
-        .status(401)
-        .type("html")
-        .send(
-          renderVipDashboardLoginPage({
-            adminsConfigured: true,
-            error: "Invalid credentials.",
-          }),
-        );
-      return;
-    }
-
-    const sessionId = dashboardAuth.createSession(authenticatedAs);
-    dashboardAuth.issueSessionCookie(res, sessionId);
-    res.redirect("/ops/vip-dashboard");
-  });
-
-  app.post("/ops/logout", (req, res) => {
-    const sessionId = dashboardAuth.readSessionId(req);
-    dashboardAuth.destroySession(sessionId);
-    dashboardAuth.clearSessionCookie(res);
-    res.redirect("/ops/login");
-  });
-
-  app.get(
-    "/ops/vip-dashboard",
-    (req: RequestWithDashboardAuth, res, next) =>
-      dashboardAuth.requirePageSession(req, res, next),
-    (req: RequestWithDashboardAuth, res) => {
-      res
-        .type("html")
-        .send(renderVipDashboardPage({ username: req.dashboardAdminUsername || "ops" }));
-    },
-  );
-
   // Deposit result pages (public, no auth)
   app.get("/deposit/success", (_req, res) => {
     res.type("html").send(renderDepositSuccessPage());
@@ -849,17 +773,6 @@ async function main(): Promise<void> {
       content: openApiDocument as Record<string, unknown>,
       theme: "kepler",
       _integration: "express",
-    }),
-  );
-
-  app.use(
-    "/api/v1/admin",
-    (req: RequestWithDashboardAuth, res, next) =>
-      dashboardAuth.requireApiSession(req, res, next),
-    createVipAdminRouter(supabase, {
-      stripeSecretKey: config.stripeSecretKey ?? undefined,
-      nightlifeBaseUrl: config.nightlifeBaseUrl,
-      resendApiKey: config.resendApiKey ?? undefined,
     }),
   );
 

@@ -89,7 +89,7 @@ export async function sendBookingSubmittedEmail(
   await sendVipEmail(resendApiKey, {
     to: data.customerEmail,
     subject: `VIP Request Received — ${data.venueName}`,
-    html: emailLayout(bookingSubmittedContent(data)),
+    html: emailLayout(bookingSubmittedContent({ ...data })),
   });
 }
 
