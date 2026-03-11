@@ -293,3 +293,4 @@ Before entering the 4-level pricing fallback, VIP table queries check if the ven
 ### P2
 - Multi-city expansion (next 5 cities after Tokyo)
 - Hotel concierge dashboard (separate frontend)
+- RapidAPI Hub listing — free/freemium tier only for developer awareness; keep paid tiers on nightlife.dev to avoid 25% commission. Low effort (~2-3h) since OpenAPI spec already exists. Not a revenue channel — top-of-funnel lead gen only.

@@ -65,10 +65,12 @@ export function emailLayout(content: string): string {
 </html>`;
 }
 
-export function bookingSubmittedContent(data: BookingEmailData): string {
+export function bookingSubmittedContent(data: BookingEmailData & { dashboardUrl?: string }): string {
+  const dashboardLink = data.dashboardUrl ? ctaButton(data.dashboardUrl, "View in Dashboard") : "";
   return `<h1 style="margin:0 0 8px;font-size:22px;color:#e6edf3">VIP Request Received</h1>
 <p style="margin:0 0 20px;color:#9da7b3;font-size:14px;line-height:1.5">Hi ${escapeHtml(data.customerName)}, your VIP table request has been submitted. Our team will review it and get back to you shortly.</p>
-${detailsTable(data)}`;
+${detailsTable(data)}
+${dashboardLink}`;
 }
 
 export function depositRequiredContent(data: BookingEmailData & { depositAmountJpy: number; checkoutUrl: string; expiresAt: string }): string {
