@@ -31,9 +31,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Ember Agent
 
-- [ ] **EMBR-01**: Ember SKILL.md updated to use `get_vip_pricing` instead of old two-tool flow
-- [ ] **EMBR-02**: Ember SKILL.md includes mandatory confirmation gate before calling `create_vip_booking_request`
-- [ ] **EMBR-03**: Ember SKILL.md explicitly states table chart is layout reference only — do not infer availability from image
+- [x] **EMBR-01**: Ember SKILL.md updated to use `get_vip_pricing` instead of old two-tool flow
+- [x] **EMBR-02**: Ember SKILL.md includes mandatory confirmation gate before calling `create_vip_booking_request`
+- [x] **EMBR-03**: Ember SKILL.md explicitly states table chart is layout reference only — do not infer availability from image
 
 ## v2 Requirements
 
@@ -77,9 +77,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REST-02 | Phase 1 | Complete |
 | LIFE-01 | Phase 3 | Complete |
 | LIFE-02 | Phase 1 | Complete |
-| EMBR-01 | Phase 4 | Pending |
-| EMBR-02 | Phase 4 | Pending |
-| EMBR-03 | Phase 4 | Pending |
+| EMBR-01 | Phase 4 | Complete |
+| EMBR-02 | Phase 4 | Complete |
+| EMBR-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total
@@ -88,4 +88,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-10*
-*Last updated: 2026-03-11 — EMBR-01/02/03 reset to Pending, reassigned to Phase 4 (gap closure)*
+*Last updated: 2026-03-11 — EMBR-01/02/03 marked Complete (Phase 4 verification)*
