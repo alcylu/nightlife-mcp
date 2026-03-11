@@ -62,13 +62,41 @@ Plans:
 Plans:
 - [ ] 03-01-PLAN.md — Fix failing test, add event context (VPRC-07) + pricing_approximate (VPRC-08) to service/types/schemas, commit old tool removal (LIFE-01), update OpenAPI spec
 
+### Phase 4: Phase 2 Verification & Metadata Hygiene
+**Goal**: Phase 2 (Ember Prompt Update) is formally verified with a VERIFICATION.md, closing the orphaned status of EMBR-01/02/03. SUMMARY frontmatter gaps across all phases are fixed.
+**Depends on**: Phase 2, Phase 3 (work already done, this phase verifies and documents it)
+**Requirements**: EMBR-01, EMBR-02, EMBR-03
+**Gap Closure:** Closes orphaned requirements and metadata gaps from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. Phase 2 has a VERIFICATION.md that confirms EMBR-01, EMBR-02, EMBR-03 are satisfied
+  2. All phase SUMMARY files list their verified requirements in `requirements-completed` frontmatter
+  3. Re-audit shows 0 orphaned requirements
+
+Plans:
+- [ ] 04-01-PLAN.md — Verify Phase 2 work (create VERIFICATION.md) and fix SUMMARY frontmatter across all phases
+
+### Phase 5: Agent Workspace Sync
+**Goal**: AGENTS.md files in ember/mamad/lisa no longer reference removed tools, SKILL.md includes guidance for busy_night and pricing_approximate fields, and lisa serves the current SKILL.md.
+**Depends on**: Phase 4 (verification complete before external sync)
+**Requirements**: (no new requirements — closes integration risks and tech debt)
+**Gap Closure:** Closes integration risks and tech debt from v1.0 audit
+**Success Criteria** (what must be TRUE):
+  1. AGENTS.md in ember, mamad, and lisa workspaces no longer list `get_vip_table_availability` or `get_vip_table_chart`
+  2. SKILL.md VIP Presentation Rule includes instructions for `busy_night` and `pricing_approximate` fields
+  3. lisa Railway container serves the current SKILL.md
+
+Plans:
+- [ ] 05-01-PLAN.md — Update AGENTS.md in 3 workspaces, add field guidance to SKILL.md, deploy to lisa
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. MCP Pricing Tool | 3/3 | Complete   | 2026-03-10 |
 | 2. Ember Prompt Update | 0/1 | Not started | - |
 | 3. Cleanup and Event Context | 0/1 | Not started | - |
+| 4. Phase 2 Verification & Metadata Hygiene | 0/1 | Not started | - |
+| 5. Agent Workspace Sync | 0/1 | Not started | - |
