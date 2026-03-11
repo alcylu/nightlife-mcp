@@ -157,7 +157,10 @@ Plans:
   1. `src/admin/` directory no longer exists in nightlife-mcp
   2. All `/ops/*` Express routes are removed from nightlife-mcp's HTTP server and return 404
   3. Dashboard auth middleware (`VIP_DASHBOARD_ADMINS`) and related config are removed from nightlife-mcp
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 09-01-PLAN.md — Delete admin directory, service layer, and all dashboard references from http.ts and config.ts
 
 ## Progress
 
@@ -174,4 +177,4 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 (Phase 9 gated: 48h product
 | 6. Foundation and Read-Only Dashboard | v2.0 | 3/3 | Complete | 2026-03-11 |
 | 7. Create Booking Mutation | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 8. Status Update with Stripe and Resend | 2/2 | Complete   | 2026-03-11 | - |
-| 9. Cleanup | v2.0 | 0/TBD | Not started | - |
+| 9. Cleanup | v2.0 | 0/1 | Not started | - |
