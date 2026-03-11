@@ -59,11 +59,11 @@ Requirements for VIP dashboard migration from nightlife-mcp to nlt-admin. Each m
 
 ### Mutations
 
-- [ ] **MUTATE-01**: Admin can update booking status through full pipeline (submitted → in_review → deposit_required → confirmed/rejected/cancelled)
-- [ ] **MUTATE-02**: Status change to deposit_required automatically creates Stripe checkout session
-- [ ] **MUTATE-03**: Status changes to deposit_required/confirmed/rejected automatically send email via Resend
+- [x] **MUTATE-01**: Admin can update booking status through full pipeline (submitted → in_review → deposit_required → confirmed/rejected/cancelled)
+- [x] **MUTATE-02**: Status change to deposit_required automatically creates Stripe checkout session
+- [x] **MUTATE-03**: Status changes to deposit_required/confirmed/rejected automatically send email via Resend
 - [x] **MUTATE-04**: Admin can create a booking on behalf of a customer with venue selector
-- [ ] **MUTATE-05**: Admin can set customer-visible status message on status update
+- [x] **MUTATE-05**: Admin can set customer-visible status message on status update
 - [x] **MUTATE-06**: Admin can write internal notes (not customer-visible) on booking
 - [x] **MUTATE-07**: Admin can add a change note explaining edits
 
@@ -144,11 +144,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DETAIL-02 | Phase 6 (v2.0) | Complete |
 | DETAIL-03 | Phase 6 (v2.0) | Complete |
 | DETAIL-04 | Phase 6 (v2.0) | Complete |
-| MUTATE-01 | Phase 8 (v2.0) | Pending |
-| MUTATE-02 | Phase 8 (v2.0) | Pending |
-| MUTATE-03 | Phase 8 (v2.0) | Pending |
+| MUTATE-01 | Phase 8 (v2.0) | Complete |
+| MUTATE-02 | Phase 8 (v2.0) | Complete |
+| MUTATE-03 | Phase 8 (v2.0) | Complete |
 | MUTATE-04 | Phase 7 (v2.0) | Complete |
-| MUTATE-05 | Phase 8 (v2.0) | Pending |
+| MUTATE-05 | Phase 8 (v2.0) | Complete |
 | MUTATE-06 | Phase 7 (v2.0) | Complete |
 | MUTATE-07 | Phase 7 (v2.0) | Complete |
 | AUTH-01 | Phase 6 (v2.0) | Complete |

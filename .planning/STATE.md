@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: VIP Dashboard Migration
 status: planning
-stopped_at: Completed 07-01-PLAN.md
-last_updated: "2026-03-11T09:36:48.514Z"
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-11T10:30:25.175Z"
 last_activity: 2026-03-11 — v2.0 roadmap created
 progress:
   total_phases: 9
   completed_phases: 7
-  total_plans: 11
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 0
 ---
 
@@ -50,6 +50,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06 P03 | 5 | 2 tasks | 5 files |
 | Phase 06-foundation-read-only-dashboard P02 | 5 | 2 tasks | 7 files |
 | Phase 07 P01 | 6 | 2 tasks | 6 files |
+| Phase 08 P01 | 5 | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 07]: lookupAdminTablePricing ported as private helper in vipAdminService.ts (not cross-repo import) to keep nlt-admin self-contained
 - [Phase 07]: Admin-created bookings skip resolveBookingWindow() date check, email send, and vip_agent_tasks insert — ops owns the booking directly
 - [Phase 07]: agent_internal_note saved via UPDATE after INSERT — keeps base INSERT payload minimal and avoids schema coupling
+- [Phase 08]: normalizeActor and normalizeOptionalText added as private helpers in vipAdminService.ts for updateVipAdminBooking
+- [Phase 08]: Deposit join in buildBookingSummaries is non-fatal: depositError logged with empty Map fallback to preserve booking data
+- [Phase 08]: createDepositForBooking uses correct parameter order from deposits.ts definition, not the incorrect vipAdmin.ts call site
 
 ### Pending Todos
 
@@ -82,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T09:32:42.814Z
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-03-11T10:30:25.172Z
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
