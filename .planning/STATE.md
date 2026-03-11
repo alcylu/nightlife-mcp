@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: VIP Dashboard Migration
 status: planning
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-11T10:30:25.175Z"
+stopped_at: "Checkpoint: Task 3 human-verify in 08-02-PLAN.md"
+last_updated: "2026-03-11T10:35:48.927Z"
 last_activity: 2026-03-11 — v2.0 roadmap created
 progress:
   total_phases: 9
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 13
-  completed_plans: 12
+  completed_plans: 13
   percent: 0
 ---
 
@@ -51,6 +51,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 06-foundation-read-only-dashboard P02 | 5 | 2 tasks | 7 files |
 | Phase 07 P01 | 6 | 2 tasks | 6 files |
 | Phase 08 P01 | 5 | 2 tasks | 9 files |
+| Phase 08 P02 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 08]: normalizeActor and normalizeOptionalText added as private helpers in vipAdminService.ts for updateVipAdminBooking
 - [Phase 08]: Deposit join in buildBookingSummaries is non-fatal: depositError logged with empty Map fallback to preserve booking data
 - [Phase 08]: createDepositForBooking uses correct parameter order from deposits.ts definition, not the incorrect vipAdmin.ts call site
+- [Phase 08]: useUpdateVipBookingStatus lives in useVipBookingDetail.ts (not a new file) — both hooks share the same query key context and belong together
+- [Phase 08]: Dialog resets form on both close and successful submit — prevents stale state on reopen
+- [Phase 08]: Deposit link bar placed between header row and Separator for immediate visual prominence before info cards
 
 ### Pending Todos
 
@@ -86,6 +90,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T10:30:25.172Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-03-11T10:35:48.924Z
+Stopped at: Checkpoint: Task 3 human-verify in 08-02-PLAN.md
 Resume file: None
