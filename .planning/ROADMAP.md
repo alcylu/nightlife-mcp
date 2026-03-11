@@ -127,7 +127,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 07-01-PLAN.md — Types, service function, POST API route, mutation hook, create-booking dialog, and list page integration
+- [x] 07-01-PLAN.md — Types, service function, POST API route, mutation hook, create-booking dialog, and list page integration
 
 ### Phase 8: Status Update with Stripe and Resend
 **Goal**: Ops can move bookings through the complete status pipeline, with Stripe checkout sessions created automatically on `deposit_required` transitions and Resend emails dispatched on `deposit_required`, `confirmed`, and `rejected` transitions.
@@ -138,7 +138,11 @@ Plans:
   2. Transitioning a booking to `deposit_required` automatically creates a Stripe checkout session and the deposit link is visible on the booking detail
   3. The customer receives an email at the appropriate transitions (deposit_required, confirmed, rejected) and the admin can set a customer-visible status message that appears in that email
   4. A failed Stripe or Resend call does not block the status update — the admin's action succeeds and the failure is surfaced separately
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 08-01-PLAN.md — Install Stripe/Resend, port deposit and email services, add updateVipAdminBooking service function and PATCH API route
+- [ ] 08-02-PLAN.md — VipUpdateStatusDialog component with transition map, mutation hook, wired into booking detail page
 
 ### Phase 9: Cleanup
 **Goal**: All Express admin dashboard code is removed from nightlife-mcp, leaving only MCP tools and REST API. nlt-admin is the sole interface for VIP booking management.
@@ -168,6 +172,6 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 (Phase 9 gated: 48h product
 | 4. Phase 2 Verification and Metadata Hygiene | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 5. Agent Workspace Sync | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 6. Foundation and Read-Only Dashboard | v2.0 | 3/3 | Complete | 2026-03-11 |
-| 7. Create Booking Mutation | 1/1 | Complete   | 2026-03-11 | - |
-| 8. Status Update with Stripe and Resend | v2.0 | 0/TBD | Not started | - |
+| 7. Create Booking Mutation | v2.0 | 1/1 | Complete | 2026-03-11 |
+| 8. Status Update with Stripe and Resend | v2.0 | 0/2 | Not started | - |
 | 9. Cleanup | v2.0 | 0/TBD | Not started | - |
