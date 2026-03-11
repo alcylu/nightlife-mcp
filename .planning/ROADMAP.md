@@ -112,9 +112,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 06-01-PLAN.md — VIP types, service layer, API routes with admin role guard, nav config
-- [ ] 06-02-PLAN.md — Booking list page with filters, badges, pagination, empty state, auto-refresh
-- [ ] 06-03-PLAN.md — Booking detail page with status timeline, audit log, agent task badge
+- [x] 06-01-PLAN.md — VIP types, service layer, API routes with admin role guard, nav config
+- [x] 06-02-PLAN.md — Booking list page with filters, badges, pagination, empty state, auto-refresh
+- [x] 06-03-PLAN.md — Booking detail page with status timeline, audit log, agent task badge
 
 ### Phase 7: Create Booking Mutation
 **Goal**: Ops can create VIP booking requests on behalf of walk-in, phone, and LINE customers directly from nlt-admin, including internal notes and a change note explaining the creation context.
@@ -124,7 +124,10 @@ Plans:
   1. An admin user can fill a create-booking form with customer info, venue selector, table code, min spend, and special requests, and submit it successfully
   2. A submitted booking appears immediately in the booking list with `submitted` status
   3. Admin can add an internal note (not customer-visible) and a change note when creating a booking
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 07-01-PLAN.md — Types, service function, POST API route, mutation hook, create-booking dialog, and list page integration
 
 ### Phase 8: Status Update with Stripe and Resend
 **Goal**: Ops can move bookings through the complete status pipeline, with Stripe checkout sessions created automatically on `deposit_required` transitions and Resend emails dispatched on `deposit_required`, `confirmed`, and `rejected` transitions.
@@ -164,7 +167,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 (Phase 9 gated: 48h product
 | 3. Cleanup and Event Context | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 4. Phase 2 Verification and Metadata Hygiene | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 5. Agent Workspace Sync | v1.0 | 1/1 | Complete | 2026-03-11 |
-| 6. Foundation and Read-Only Dashboard | 3/3 | Complete   | 2026-03-11 | - |
-| 7. Create Booking Mutation | v2.0 | 0/TBD | Not started | - |
+| 6. Foundation and Read-Only Dashboard | v2.0 | 3/3 | Complete | 2026-03-11 |
+| 7. Create Booking Mutation | v2.0 | 0/1 | Not started | - |
 | 8. Status Update with Stripe and Resend | v2.0 | 0/TBD | Not started | - |
 | 9. Cleanup | v2.0 | 0/TBD | Not started | - |
