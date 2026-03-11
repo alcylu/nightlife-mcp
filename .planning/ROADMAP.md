@@ -95,7 +95,7 @@ Plans:
 - [x] **Phase 6: Foundation and Read-Only Dashboard** - Types, service layer, API routes, and read-only list + detail UI in nlt-admin with role guard (completed 2026-03-11)
 - [x] **Phase 7: Create Booking Mutation** - Ops can create bookings on behalf of customers; Resend email on submit (completed 2026-03-11)
 - [x] **Phase 8: Status Update with Stripe and Resend** - Full status pipeline with Stripe deposit creation and email dispatch on transitions (completed 2026-03-11)
-- [ ] **Phase 9: Cleanup** - Remove all admin dashboard code from nightlife-mcp after 48h production verification gate
+- [x] **Phase 9: Cleanup** - Remove all admin dashboard code from nightlife-mcp after 48h production verification gate (completed 2026-03-11)
 
 ## Phase Details
 
@@ -177,4 +177,4 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 (Phase 9 gated: 48h product
 | 6. Foundation and Read-Only Dashboard | v2.0 | 3/3 | Complete | 2026-03-11 |
 | 7. Create Booking Mutation | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 8. Status Update with Stripe and Resend | 2/2 | Complete   | 2026-03-11 | - |
-| 9. Cleanup | v2.0 | 0/1 | Not started | - |
+| 9. Cleanup | 1/1 | Complete   | 2026-03-11 | - |

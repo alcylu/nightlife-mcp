@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: VIP Dashboard Migration
 status: planning
-stopped_at: "Checkpoint: Task 3 human-verify in 08-02-PLAN.md"
-last_updated: "2026-03-11T10:35:48.927Z"
+stopped_at: Completed 09-cleanup-01-PLAN.md
+last_updated: "2026-03-11T15:25:19.715Z"
 last_activity: 2026-03-11 — v2.0 roadmap created
 progress:
   total_phases: 9
-  completed_phases: 8
-  total_plans: 13
-  completed_plans: 13
+  completed_phases: 9
+  total_plans: 14
+  completed_plans: 14
   percent: 0
 ---
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 07 P01 | 6 | 2 tasks | 6 files |
 | Phase 08 P01 | 5 | 2 tasks | 9 files |
 | Phase 08 P02 | 2 | 2 tasks | 3 files |
+| Phase 09-cleanup P01 | 4 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,7 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase 08]: useUpdateVipBookingStatus lives in useVipBookingDetail.ts (not a new file) — both hooks share the same query key context and belong together
 - [Phase 08]: Dialog resets form on both close and successful submit — prevents stale state on reopen
 - [Phase 08]: Deposit link bar placed between header row and Separator for immediate visual prominence before info cards
+- [Phase 09-cleanup]: dashboardBaseUrl removed from email.ts sendBookingSubmittedEmail — nlt-admin handles ops notifications, /ops/vip-dashboard no longer exists
 
 ### Pending Todos
 
@@ -90,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-11T10:35:48.924Z
-Stopped at: Checkpoint: Task 3 human-verify in 08-02-PLAN.md
+Last session: 2026-03-11T15:25:19.713Z
+Stopped at: Completed 09-cleanup-01-PLAN.md
 Resume file: None

@@ -75,9 +75,9 @@ Requirements for VIP dashboard migration from nightlife-mcp to nlt-admin. Each m
 
 ### Cleanup
 
-- [ ] **CLEAN-01**: Express admin dashboard code removed from nightlife-mcp (src/admin/)
-- [ ] **CLEAN-02**: Admin API routes removed from nightlife-mcp Express server
-- [ ] **CLEAN-03**: Dashboard auth middleware and config removed from nightlife-mcp
+- [x] **CLEAN-01**: Express admin dashboard code removed from nightlife-mcp (src/admin/)
+- [x] **CLEAN-02**: Admin API routes removed from nightlife-mcp Express server
+- [x] **CLEAN-03**: Dashboard auth middleware and config removed from nightlife-mcp
 
 ## Future Requirements
 
@@ -154,9 +154,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | AUTH-01 | Phase 6 (v2.0) | Complete |
 | AUTH-02 | Phase 6 (v2.0) | Complete |
 | AUTH-03 | Phase 6 (v2.0) | Complete |
-| CLEAN-01 | Phase 9 (v2.0) | Pending |
-| CLEAN-02 | Phase 9 (v2.0) | Pending |
-| CLEAN-03 | Phase 9 (v2.0) | Pending |
+| CLEAN-01 | Phase 9 (v2.0) | Complete |
+| CLEAN-02 | Phase 9 (v2.0) | Complete |
+| CLEAN-03 | Phase 9 (v2.0) | Complete |
 
 **Coverage:**
 - v1.0 requirements: 16 total (all complete)
