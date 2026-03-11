@@ -84,7 +84,7 @@ Plans:
 
 ---
 
-### 🚧 v2.0 VIP Dashboard Migration (In Progress)
+### v2.0 VIP Dashboard Migration (In Progress)
 
 **Milestone Goal:** Move the VIP booking admin dashboard from nightlife-mcp into nlt-admin (Next.js), with full feature parity, Supabase-direct queries, and Stripe/email side effects via Next.js API routes. Remove all dashboard code from nightlife-mcp.
 
@@ -109,7 +109,12 @@ Plans:
   3. A non-admin user (event_organizer, unauthenticated) receives a 403 response from every `/api/vip/*` route and cannot access VIP pages
   4. The booking list refreshes automatically every 60 seconds without a page reload
   5. When filters produce no results, an empty state with a clear-filters call to action is shown rather than a blank list
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 06-01-PLAN.md — VIP types, service layer, API routes with admin role guard, nav config
+- [ ] 06-02-PLAN.md — Booking list page with filters, badges, pagination, empty state, auto-refresh
+- [ ] 06-03-PLAN.md — Booking detail page with status timeline, audit log, agent task badge
 
 ### Phase 7: Create Booking Mutation
 **Goal**: Ops can create VIP booking requests on behalf of walk-in, phone, and LINE customers directly from nlt-admin, including internal notes and a change note explaining the creation context.
@@ -159,7 +164,7 @@ Phases execute in numeric order: 6 → 7 → 8 → 9 (Phase 9 gated: 48h product
 | 3. Cleanup and Event Context | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 4. Phase 2 Verification and Metadata Hygiene | v1.0 | 1/1 | Complete | 2026-03-11 |
 | 5. Agent Workspace Sync | v1.0 | 1/1 | Complete | 2026-03-11 |
-| 6. Foundation and Read-Only Dashboard | v2.0 | 0/TBD | Not started | - |
+| 6. Foundation and Read-Only Dashboard | v2.0 | 0/3 | Not started | - |
 | 7. Create Booking Mutation | v2.0 | 0/TBD | Not started | - |
 | 8. Status Update with Stripe and Resend | v2.0 | 0/TBD | Not started | - |
 | 9. Cleanup | v2.0 | 0/TBD | Not started | - |
