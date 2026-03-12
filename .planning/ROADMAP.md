@@ -36,7 +36,7 @@
 #### Phase Checklist
 
 - [x] **Phase 10: DB Infrastructure and Normalization Utility** - Enable PostgreSQL extensions, create IMMUTABLE wrapper + GIN index + fuzzy RPC, build shared normalizeQuery() utility (completed 2026-03-12)
-- [ ] **Phase 11: Venue Fuzzy Search Integration** - Wire venues service to the fuzzy RPC with two-pass strategy; "CeLaVi", "1oak", "Zeuk" all return correct results
+- [x] **Phase 11: Venue Fuzzy Search Integration** - Wire venues service to the fuzzy RPC with two-pass strategy; "CeLaVi", "1oak", "Zeuk" all return correct results (completed 2026-03-12)
 - [ ] **Phase 12: Events and Performers Normalization** - Apply normalizeQuery() to event and performer text matching; accent-variant queries return correct results
 
 ## Phase Details
@@ -70,7 +70,7 @@ Plans:
 **Plans:** 1 plan
 
 Plans:
-- [ ] 11-01-PLAN.md — Two-pass fuzzy fallback: guard logic + RPC wiring + aggregation in searchVenues()
+- [x] 11-01-PLAN.md — Two-pass fuzzy fallback: guard logic + RPC wiring + aggregation in searchVenues()
 
 ### Phase 12: Events and Performers Normalization
 **Goal**: The `search_events` and `search_performers` MCP tools and their REST counterparts return correct results for accent-variant queries by normalizing the search needle in TypeScript before matching — no DB changes, no RPC calls, no changes to tool interfaces.
@@ -96,7 +96,7 @@ Plans:
 | 8. Status + Stripe/Resend | v2.0 | 2/2 | Complete | 2026-03-11 |
 | 9. Cleanup | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 10. DB Infrastructure and Normalization Utility | v3.0 | 2/2 | Complete | 2026-03-12 |
-| 11. Venue Fuzzy Search Integration | v3.0 | 0/1 | Not started | - |
+| 11. Venue Fuzzy Search Integration | v3.0 | 1/1 | Complete | 2026-03-12 |
 | 12. Events and Performers Normalization | v3.0 | 0/? | Not started | - |
 
 ---

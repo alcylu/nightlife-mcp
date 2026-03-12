@@ -23,10 +23,10 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 
 ### Venue Fuzzy Search
 
-- [ ] **VEN-01**: Two-pass search strategy — exact/normalized match first, fuzzy fallback on zero results
-- [ ] **VEN-02**: Typo-tolerant venue search — "Zoook" finds "Zouk", "celavy" finds "CÉ LA VI"
-- [ ] **VEN-03**: Fuzzy results ranked by match quality (similarity score)
-- [ ] **VEN-04**: Fuzzy search scoped by city (no cross-city false positives)
+- [x] **VEN-01**: Two-pass search strategy — exact/normalized match first, fuzzy fallback on zero results
+- [x] **VEN-02**: Typo-tolerant venue search — "Zoook" finds "Zouk", "celavy" finds "CÉ LA VI"
+- [x] **VEN-03**: Fuzzy results ranked by match quality (similarity score)
+- [x] **VEN-04**: Fuzzy search scoped by city (no cross-city false positives)
 
 ### Events/Performers Normalization
 
@@ -63,10 +63,10 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 | NORM-02 | Phase 10 | Complete |
 | NORM-03 | Phase 10 | Complete |
 | NORM-04 | Phase 10 | Complete |
-| VEN-01 | Phase 11 | Pending |
-| VEN-02 | Phase 11 | Pending |
-| VEN-03 | Phase 11 | Pending |
-| VEN-04 | Phase 11 | Pending |
+| VEN-01 | Phase 11 | Complete |
+| VEN-02 | Phase 11 | Complete |
+| VEN-03 | Phase 11 | Complete |
+| VEN-04 | Phase 11 | Complete |
 | EP-01 | Phase 12 | Pending |
 | EP-02 | Phase 12 | Pending |
 
@@ -77,4 +77,4 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-03-12*
-*Last updated: 2026-03-12 — traceability mapped after roadmap creation*
+*Last updated: 2026-03-12 — VEN-01 through VEN-04 marked complete after Phase 11-01 execution*

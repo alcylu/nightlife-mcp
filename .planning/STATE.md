@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Fuzzy Search
 status: executing
-stopped_at: Phase 10 complete — all DB migrations deployed and verified in production
-last_updated: "2026-03-12T10:19:05.791Z"
-last_activity: "2026-03-12 — Phase 10 fully complete: SQL migrations deployed and verified in production; normalize utility built and tested"
+stopped_at: "Completed 11-01-PLAN.md — venue fuzzy search integration complete"
+last_updated: "2026-03-12T11:11:00Z"
+last_activity: "2026-03-12 — Phase 11 plan 01 complete: two-pass fuzzy venue search wired into searchVenues() with shouldAttemptFuzzy guard, search_venues_fuzzy RPC integration, and VIP hours synthesis"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 33
+  total_plans: 3
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-12)
 
 **Core value:** AI agents find the right venue/event/performer regardless of accent, spacing, or spelling variations in their query.
-**Current focus:** v3.0 Fuzzy Search — Phase 10: DB Infrastructure and Normalization Utility
+**Current focus:** v3.0 Fuzzy Search — Phase 11: Venue Fuzzy Search Integration (complete), next: Phase 12 Event/Performer Normalization
 
 ## Current Position
 
-Phase: 10 of 12 (DB Infrastructure and Normalization Utility) — COMPLETE
-Plan: Ready to begin Phase 11 (Venue Fuzzy Search Integration)
-Status: In progress — Phase 10 done, Phase 11 not yet started
-Last activity: 2026-03-12 — Phase 10 fully complete: SQL migrations deployed and verified in production; normalize utility built and tested
+Phase: 11 of 12 (Venue Fuzzy Search Integration) — Plan 01 of 01 COMPLETE
+Plan: Ready to begin Phase 12 (Event/Performer Fuzzy Normalization)
+Status: In progress — Phase 11 done, Phase 12 not yet started
+Last activity: 2026-03-12 — Phase 11-01 complete: two-pass fuzzy venue search with shouldAttemptFuzzy guard, RPC integration, VIP hours synthesis, 91 tests passing
 
-Progress: [███░░░░░░░] 33%
+Progress: [█████░░░░░] 50%
 
 ## Accumulated Context
 
@@ -42,10 +42,13 @@ Progress: [███░░░░░░░] 33%
 - Pitfall to avoid: `unaccent()` is `STABLE`, not `IMMUTABLE`. Must create `f_unaccent()` wrapper before any index definition or the index creation will fail.
 - [Phase 10-02]: No npm packages for normalization — String.prototype.normalize('NFD') + regex is zero-dependency canonical solution
 - [Phase 10-02]: stripAccents exported separately from normalizeQuery so venues service can use accent-only normalization without collapsing spaces
+- [Phase 11-01]: Fuzzy path uses early return to preserve RPC word_similarity ordering — rankVenueSummaries() would re-rank by event activity and destroy similarity ranking
+- [Phase 11-01]: shouldAttemptFuzzy uses queryNeedle.trim().length (not queryNeedle.length) to correctly block whitespace-only queries
+- [Phase 11-01]: normalizeQuery (not sanitizeIlike) used for RPC argument — strips accents + collapses spaces + lowercases for consistent trigram matching
 
 ### Pending Todos
 
-- Begin Phase 11 (Venue Fuzzy Search Integration) — DB layer is ready
+- Begin Phase 12 (Event/Performer Fuzzy Normalization) — venues service fuzzy search complete
 
 ### Blockers/Concerns
 
@@ -53,6 +56,6 @@ Progress: [███░░░░░░░] 33%
 
 ## Session Continuity
 
-Last session: 2026-03-12T10:13:53.312Z
-Stopped at: Phase 10 complete — all DB migrations deployed and verified in production
+Last session: 2026-03-12T11:11:00Z
+Stopped at: Completed 11-01-PLAN.md — venue fuzzy search integration complete
 Resume file: None
