@@ -80,7 +80,10 @@ Plans:
   1. `search_events city=tokyo query="dua lipa"` finds events with performers named "Dua Lipa" or similar accent variants (event search normalized)
   2. `search_performers city=tokyo query="shinjuku"` finds performers whose names contain "Shinjuku" or similar macron variants (performer search normalized)
   3. No `pg_trgm` similarity operators or RPC calls appear in the events or performers code paths (normalization stays TypeScript-only)
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 12-01-PLAN.md — Wire normalizeQuery + stripAccents into events and performers services with TDD
 
 ## Progress
 
@@ -96,8 +99,8 @@ Plans:
 | 8. Status + Stripe/Resend | v2.0 | 2/2 | Complete | 2026-03-11 |
 | 9. Cleanup | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 10. DB Infrastructure and Normalization Utility | v3.0 | 2/2 | Complete | 2026-03-12 |
-| 11. Venue Fuzzy Search Integration | v3.0 | Complete    | 2026-03-12 | 2026-03-12 |
-| 12. Events and Performers Normalization | v3.0 | 0/? | Not started | - |
+| 11. Venue Fuzzy Search Integration | v3.0 | 1/1 | Complete | 2026-03-12 |
+| 12. Events and Performers Normalization | v3.0 | 0/1 | Not started | - |
 
 ---
 *For full phase details (v1.0, v2.0), see milestone archives in `.planning/milestones/`*
