@@ -751,8 +751,17 @@ function rankVenueSummaries(venues: VenueSummary[]): VenueSummary[] {
   });
 }
 
+function shouldAttemptFuzzy(
+  resultCount: number,
+  queryNeedle: string,
+  genreEventIds: Set<string> | null,
+): boolean {
+  return resultCount === 0 && queryNeedle.trim().length > 0 && genreEventIds === null;
+}
+
 export const __testOnly_rankVenueSummaries = rankVenueSummaries;
 export const __testOnly_buildVipHoursSyntheticOccurrences = buildVipHoursSyntheticOccurrences;
+export const __testOnly_shouldAttemptFuzzy = shouldAttemptFuzzy;
 
 export async function searchVenues(
   supabase: SupabaseClient,

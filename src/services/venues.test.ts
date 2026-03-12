@@ -4,6 +4,7 @@ import { NightlifeError } from "../errors.js";
 import {
   __testOnly_buildVipHoursSyntheticOccurrences,
   __testOnly_rankVenueSummaries,
+  __testOnly_shouldAttemptFuzzy,
   getVenueInfo,
 } from "./venues.js";
 
@@ -171,6 +172,26 @@ test("VIP hours synthesis handles overnight windows even when close_day equals o
   const end = new Date(String(synthetic[0]?.occurrence_days?.[0]?.end_at || "")).getTime();
   assert.ok(Number.isFinite(start) && Number.isFinite(end));
   assert.ok(end > start);
+});
+
+test("shouldAttemptFuzzy returns true when zero results + query + no genre filter", () => {
+  assert.equal(__testOnly_shouldAttemptFuzzy(0, "celavi", null), true);
+});
+
+test("shouldAttemptFuzzy returns false when results are non-zero", () => {
+  assert.equal(__testOnly_shouldAttemptFuzzy(3, "celavi", null), false);
+});
+
+test("shouldAttemptFuzzy returns false when query is empty string", () => {
+  assert.equal(__testOnly_shouldAttemptFuzzy(0, "", null), false);
+});
+
+test("shouldAttemptFuzzy returns false when genre filter is active", () => {
+  assert.equal(__testOnly_shouldAttemptFuzzy(0, "celavi", new Set<string>(["techno-id"])), false);
+});
+
+test("shouldAttemptFuzzy returns false when query is whitespace-only", () => {
+  assert.equal(__testOnly_shouldAttemptFuzzy(0, "  ", null), false);
 });
 
 test("VIP hours synthesis skips non-VIP venues", () => {
