@@ -67,7 +67,10 @@ Plans:
   3. `search_venues city=tokyo query=zeuk` returns Zouk (1-2 character typo resolved)
   4. Fuzzy results are ordered with highest-similarity venue first (ranking by match quality)
   5. `search_venues city=tokyo` with no query returns the same venue set as before this change (no-query path unchanged)
-**Plans**: TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 11-01-PLAN.md — Two-pass fuzzy fallback: guard logic + RPC wiring + aggregation in searchVenues()
 
 ### Phase 12: Events and Performers Normalization
 **Goal**: The `search_events` and `search_performers` MCP tools and their REST counterparts return correct results for accent-variant queries by normalizing the search needle in TypeScript before matching — no DB changes, no RPC calls, no changes to tool interfaces.
@@ -92,8 +95,8 @@ Plans:
 | 7. Create Booking | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 8. Status + Stripe/Resend | v2.0 | 2/2 | Complete | 2026-03-11 |
 | 9. Cleanup | v2.0 | 1/1 | Complete | 2026-03-11 |
-| 10. DB Infrastructure and Normalization Utility | 2/2 | Complete    | 2026-03-12 | - |
-| 11. Venue Fuzzy Search Integration | v3.0 | 0/? | Not started | - |
+| 10. DB Infrastructure and Normalization Utility | v3.0 | 2/2 | Complete | 2026-03-12 |
+| 11. Venue Fuzzy Search Integration | v3.0 | 0/1 | Not started | - |
 | 12. Events and Performers Normalization | v3.0 | 0/? | Not started | - |
 
 ---
