@@ -195,6 +195,51 @@ export function parseDateFilter(
   );
 }
 
+// ── Nightlife date display ──────────────────────────────────
+
+const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const DAY_FULL = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
+function parseHour(arrivalTime: string): number {
+  return Number(arrivalTime.split(":")[0]);
+}
+
+function formatTime12h(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+/**
+ * Format a nightlife booking date + arrival time for email display.
+ *
+ * When arrival is after midnight (00:00–05:59):
+ *   "Friday Night (Mar 13, 2026) — arriving Sat 2:00 AM"
+ *
+ * When arrival is before midnight:
+ *   "Mar 13, 2026 · 10:00 PM"
+ */
+export function formatNightlifeDateEmail(
+  bookingDate: string,
+  arrivalTime: string,
+): string {
+  const d = new Date(`${bookingDate}T00:00:00Z`);
+  const hour = parseHour(arrivalTime);
+  const dateStr = `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
+
+  if (hour < 6) {
+    const nextDay = new Date(d);
+    nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+    const nightDay = DAY_FULL[d.getUTCDay()];
+    const arrivalDay = DAY_ABBR[nextDay.getUTCDay()];
+    return `${nightDay} Night (${dateStr}) — arriving ${arrivalDay} ${formatTime12h(arrivalTime)}`;
+  }
+
+  return `${dateStr} · ${formatTime12h(arrivalTime)}`;
+}
+
 export function isCutoffPassedForServiceDate(
   now: Date,
   serviceDate: string,

@@ -1,3 +1,5 @@
+import { formatNightlifeDateEmail } from "../utils/time.js";
+
 export type BookingEmailData = {
   bookingRequestId: string;
   customerName: string;
@@ -27,10 +29,10 @@ function ctaButton(url: string, label: string): string {
 }
 
 function detailsTable(data: BookingEmailData): string {
+  const dateDisplay = formatNightlifeDateEmail(data.bookingDate, data.arrivalTime);
   return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:16px 0">
     <tr><td style="padding:8px 0;color:#9da7b3;font-size:13px">Venue</td><td style="padding:8px 0;color:#e6edf3;font-size:14px;text-align:right">${escapeHtml(data.venueName)}</td></tr>
-    <tr><td style="padding:8px 0;color:#9da7b3;font-size:13px;border-top:1px solid #30363d">Date</td><td style="padding:8px 0;color:#e6edf3;font-size:14px;text-align:right;border-top:1px solid #30363d">${escapeHtml(data.bookingDate)}</td></tr>
-    <tr><td style="padding:8px 0;color:#9da7b3;font-size:13px;border-top:1px solid #30363d">Arrival Time</td><td style="padding:8px 0;color:#e6edf3;font-size:14px;text-align:right;border-top:1px solid #30363d">${escapeHtml(data.arrivalTime)}</td></tr>
+    <tr><td style="padding:8px 0;color:#9da7b3;font-size:13px;border-top:1px solid #30363d">Date &amp; Arrival</td><td style="padding:8px 0;color:#e6edf3;font-size:14px;text-align:right;border-top:1px solid #30363d">${escapeHtml(dateDisplay)}</td></tr>
     <tr><td style="padding:8px 0;color:#9da7b3;font-size:13px;border-top:1px solid #30363d">Party Size</td><td style="padding:8px 0;color:#e6edf3;font-size:14px;text-align:right;border-top:1px solid #30363d">${data.partySize}</td></tr>
     <tr><td style="padding:8px 0;color:#9da7b3;font-size:13px;border-top:1px solid #30363d">Booking ID</td><td style="padding:8px 0;color:#9da7b3;font-size:12px;text-align:right;border-top:1px solid #30363d;font-family:monospace">${escapeHtml(data.bookingRequestId)}</td></tr>
   </table>`;
