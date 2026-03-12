@@ -54,8 +54,8 @@
 **Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 10-01-PLAN.md — DB migrations: extensions, f_unaccent wrapper, fuzzy RPC, GIN index
-- [ ] 10-02-PLAN.md — TDD: normalizeQuery() and stripAccents() TypeScript utility
+- [x] 10-01-PLAN.md — DB migrations: extensions, f_unaccent wrapper, fuzzy RPC, GIN index (code complete, awaiting production deployment)
+- [x] 10-02-PLAN.md — TDD: normalizeQuery() and stripAccents() TypeScript utility
 
 ### Phase 11: Venue Fuzzy Search Integration
 **Goal**: The `search_venues` MCP tool and `GET /api/v1/venues` REST endpoint return correct results for accent-variant, spacing-variant, and typo-variant venue name queries, using the two-pass strategy — exact/normalized match first, fuzzy RPC fallback on zero results — without affecting any existing filter behavior.

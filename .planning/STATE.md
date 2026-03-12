@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Fuzzy Search
-status: planning
-stopped_at: Completed 10-02-PLAN.md — normalization utility built, all NORM requirements met
-last_updated: "2026-03-12T07:05:47.177Z"
-last_activity: 2026-03-12 — Roadmap created, phases 10-12 defined
+status: awaiting_human_action
+stopped_at: "10-01-PLAN.md Task 2 — Apply SQL migrations to Supabase production"
+last_updated: "2026-03-12T07:22:00Z"
+last_activity: "2026-03-12 — 10-01 SUMMARY.md created; SQL migrations and normalize utility committed; awaiting production deployment"
 progress:
   total_phases: 3
-  completed_phases: 1
-  total_plans: 2
+  completed_phases: 0
+  total_plans: 4
   completed_plans: 2
-  percent: 0
+  percent: 10
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-12)
 ## Current Position
 
 Phase: 10 of 12 (DB Infrastructure and Normalization Utility)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-03-12 — Roadmap created, phases 10-12 defined
+Plan: 10-01 — paused at Task 2 (checkpoint:human-action — apply migrations to Supabase production)
+Status: Awaiting human action
+Last activity: 2026-03-12 — Plans 10-01 and 10-02 code complete and committed; 10-01 SUMMARY created; awaiting DB migration deployment
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Accumulated Context
 
@@ -45,16 +45,21 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Pending Todos
 
-None.
+- Apply `supabase/migrations/20260312_fuzzy_search.sql` to production Supabase (project nqwyhdfwcaedtycojslb) via SQL editor
+- Test macron handling after migration: `SELECT f_unaccent('ō'), f_unaccent('ū');`
+- Apply `supabase/migrations/20260312_fuzzy_search_index.sql` via SQL editor during off-peak hours (not Fri/Sat evening JST)
+- Run 4 DB verification checks (DB-01 through DB-04) — see 10-01-PLAN.md Task 2 for exact queries
+- Report results to resume Plan 10-01 Task 2 continuation
 
 ### Blockers/Concerns
 
-- Verify `unaccent` handles macrons (ō, ū, ā) in Phase 10 before proceeding — Japanese romanization depends on this. May need custom `unaccent.rules` addition (20-minute fix if needed).
-- W∆RP edge case: delta character (∆) may not normalize to "A" — "warp" may not find "W∆RP". Acceptable gap for v3.0; document and defer to v3.x name_aliases.
-- Schedule GIN index creation during off-peak hours (not Friday/Saturday evening JST) due to CONCURRENTLY requirement.
+- ACTIVE BLOCKER: SQL migrations not yet applied to production — required before Phase 11 can start
+- Verify `unaccent` handles macrons (ō, ū, ā) after migration — if unchanged, add custom unaccent rules (~20 min fix)
+- Schedule GIN index creation during off-peak hours (not Friday/Saturday evening JST) — CONCURRENTLY builds without lock but still uses DB resources
+- W∆RP edge case: delta character (∆) may not normalize to "A" — acceptable gap for v3.0; defer to v3.x name_aliases
 
 ## Session Continuity
 
-Last session: 2026-03-12T07:05:47.174Z
-Stopped at: Completed 10-02-PLAN.md — normalization utility built, all NORM requirements met
+Last session: 2026-03-12T07:22:00Z
+Stopped at: 10-01-PLAN.md Task 2 — Apply SQL migrations to Supabase production (checkpoint:human-action)
 Resume file: None
