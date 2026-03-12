@@ -1,8 +1,8 @@
 # Architecture Research
 
-**Domain:** Admin dashboard migration — Express SSR to Next.js 15 App Router
-**Researched:** 2026-03-11
-**Confidence:** HIGH — based on direct source inspection of both codebases
+**Domain:** Fuzzy/accent-insensitive search integration — nightlife-mcp v3.0
+**Researched:** 2026-03-12
+**Confidence:** HIGH — based on direct source inspection + verified PostgreSQL official docs + Supabase extension docs
 
 ## Standard Architecture
 
@@ -10,40 +10,29 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      nlt-admin (Next.js 15)                      │
+│                     Incoming query (MCP tool / REST API)         │
+│  search_venues / search_events / search_performers               │
+│  query="CeLaVi"  query="1oak"  query="Dua Lipa"                  │
 ├─────────────────────────────────────────────────────────────────┤
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │  (admin) route group — ProtectedRoute + AdminShell         │  │
-│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │  │
-│  │  │ /vip         │  │ /vip/[id]    │  │ /vip/new         │  │  │
-│  │  │ list page    │  │ detail page  │  │ create page      │  │  │
-│  │  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘  │  │
-│  └─────────┼─────────────────┼──────────────────┼─────────────┘  │
-│            │ client fetch    │                  │                  │
-│  ┌─────────▼─────────────────▼──────────────────▼─────────────┐  │
-│  │  API Routes  /api/vip/*  (server-only, service-role client) │  │
-│  │  ┌──────────────────────┐  ┌──────────────────────────────┐ │  │
-│  │  │ GET/POST             │  │ GET/PATCH                    │ │  │
-│  │  │ /api/vip/bookings    │  │ /api/vip/bookings/[id]       │ │  │
-│  │  └──────────────────────┘  │ → RPC + Stripe + Resend      │ │  │
-│  │  ┌──────────────────────┐  └──────────────────────────────┘ │  │
-│  │  │ GET /api/vip/venues  │                                   │  │
-│  │  └──────────────────────┘                                   │  │
-│  └─────────────────────────────────────────────────────────────┘  │
-├─────────────────────────────────────────────────────────────────┤
-│                  Supabase (shared DB)                             │
-│  vip_booking_requests  vip_booking_status_events                  │
-│  vip_booking_edit_audits  vip_agent_tasks                         │
-│  venues  admin_update_vip_booking_request RPC                     │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│                  External Services (server-only)                  │
-│  ┌──────────────────┐       ┌────────────────────────────────┐   │
-│  │  Stripe (deposit │       │  Resend (transactional email)  │   │
-│  │  checkout)       │       │  via RESEND_API_KEY            │   │
-│  │  STRIPE_SECRET   │       │                                │   │
-│  └──────────────────┘       └────────────────────────────────┘   │
+│                     src/utils/normalize.ts  (NEW)                │
+│  normalizeQuery(raw) → { normalized, stripped }                  │
+│  - NFD + strip diacritics   ("CÉ LA VI" → "ce la vi")           │
+│  - strip spaces              ("1 oak" → "1oak")                  │
+│  - lowercase                                                     │
+├───────────────────────┬─────────────────────────────────────────┤
+│  Venue search path    │  Events / Performers search path         │
+│  (aggressive)         │  (basic normalization only)              │
+├───────────────────────┤─────────────────────────────────────────┤
+│  DB RPC               │  Existing service logic                  │
+│  search_venues_fuzzy  │  Modified hasNeedle() / matchQuery()    │
+│  (pg_trgm +           │  now receives normalizedNeedle           │
+│   unaccent + GIN)     │  from normalizeQuery()                  │
+├───────────────────────┴─────────────────────────────────────────┤
+│                  Supabase (shared DB nqwyhdfwcaedtycojslb)       │
+│  Extensions: unaccent  pg_trgm                                   │
+│  Function:   f_unaccent(text) IMMUTABLE  (wrapper)               │
+│  Function:   search_venues_fuzzy(city_id, query, threshold, ...)  │
+│  Index:      venues_name_en_fuzzy  GIN (f_unaccent(lower(name_en)) gin_trgm_ops)│
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -51,366 +40,367 @@
 
 | Component | Responsibility | Implementation |
 |-----------|----------------|----------------|
-| `(admin)/vip/page.tsx` | List page shell | Thin wrapper, renders `VipBookingsPage` view |
-| `(admin)/vip/[id]/page.tsx` | Detail page shell | Thin wrapper, renders `VipBookingDetailPage` view |
-| `(admin)/vip/new/page.tsx` | Create page shell | Thin wrapper, renders `VipBookingCreatePage` view |
-| `views/vip/VipBookingsPage.tsx` | List UI — filters, table, pagination | Client component, fetches `/api/vip/bookings` |
-| `views/vip/VipBookingDetailPage.tsx` | Detail UI — status history, edit audits, actions | Client component, fetches `/api/vip/bookings/[id]` |
-| `views/vip/VipBookingCreatePage.tsx` | Create booking form | Client component, POSTs to `/api/vip/bookings` |
-| `api/vip/bookings/route.ts` | List + create | Service-role Supabase; ported query logic |
-| `api/vip/bookings/[id]/route.ts` | Detail + update | Service-role Supabase + Stripe + Resend on status change |
-| `api/vip/venues/route.ts` | VIP-enabled venue list for dropdowns | Service-role Supabase read |
-| `services/vipAdminService.ts` | Query functions (ported from nightlife-mcp) | Pure functions accepting `SupabaseClient` |
-| `components/layout/AdminNavConfig.ts` | Navigation | MODIFIED — add VIP nav section |
+| `src/utils/normalize.ts` | Shared query normalization — accent stripping, space collapse, lowercase | NEW — pure TypeScript, no DB deps |
+| `src/services/venues.ts` | Venue search via DB RPC for fuzzy; existing logic for no-query path | MODIFIED — `searchVenues()` calls RPC when `input.query` is set |
+| `src/services/events.ts` | Event search with normalized needle in `matchQuery()` | MODIFIED — pass normalizedNeedle into hasNeedle calls |
+| `src/services/performers.ts` | Performer search with normalized needle in name filter | MODIFIED — normalize before `.filter()` in `searchPerformers()` |
+| `supabase/migrations/...fuzzy_search.sql` | DB migration: extensions + immutable wrapper + RPC + indexes | NEW |
+| DB function `f_unaccent(text)` | IMMUTABLE wrapper around `unaccent()` enabling expression indexes | NEW via migration |
+| DB function `search_venues_fuzzy(...)` | Returns venue rows matching fuzzy query, scoped by city | NEW via migration |
+| GIN index on venues | Fast trigram scan on `f_unaccent(lower(name_en))` | NEW via migration |
 
 ## Recommended Project Structure
 
 ```
 src/
-├── app/
-│   ├── (admin)/
-│   │   └── vip/                      # NEW — VIP booking section
-│   │       ├── page.tsx              # NEW — list page shell
-│   │       ├── new/
-│   │       │   └── page.tsx          # NEW — create booking shell
-│   │       └── [id]/
-│   │           └── page.tsx          # NEW — detail/edit shell
-│   └── api/
-│       └── vip/                      # NEW — server-side API routes
-│           ├── bookings/
-│           │   ├── route.ts          # NEW — GET (list) + POST (create)
-│           │   └── [id]/
-│           │       └── route.ts      # NEW — GET (detail) + PATCH (update)
-│           └── venues/
-│               └── route.ts          # NEW — GET (vip-enabled venue list)
+├── utils/
+│   ├── time.ts               # UNCHANGED — service-day logic
+│   └── normalize.ts          # NEW — normalizeQuery(), stripAccents(), collapseSpaces()
 ├── services/
-│   └── vipAdminService.ts            # NEW — query layer ported from nightlife-mcp
-├── views/
-│   └── vip/                          # NEW — all VIP view components
-│       ├── VipBookingsPage.tsx       # NEW — list view
-│       ├── VipBookingDetailPage.tsx  # NEW — detail/edit view
-│       └── VipBookingCreatePage.tsx  # NEW — create form
-├── components/
-│   └── vip/                          # NEW — shared VIP UI components
-│       ├── VipStatusBadge.tsx        # NEW — status color-coded badge
-│       ├── VipBookingCard.tsx        # NEW — booking summary card
-│       └── VipBookingFilters.tsx     # NEW — status/date/search filters
-├── types/
-│   └── vip.ts                        # NEW — TypeScript types ported from nightlife-mcp
-└── components/layout/
-    └── AdminNavConfig.ts             # MODIFIED — add VIP nav section
+│   ├── venues.ts             # MODIFIED — use RPC when query present
+│   ├── events.ts             # MODIFIED — normalize needle before hasNeedle calls
+│   └── performers.ts         # MODIFIED — normalize needle before name filter
+supabase/
+└── migrations/
+    └── 20260312_fuzzy_search.sql   # NEW — extensions, wrapper fn, RPC, indexes
 ```
 
 ### Structure Rationale
 
-- **`app/(admin)/vip/`**: The `(admin)` route group automatically applies `ProtectedRoute` and `AdminShell` via its `layout.tsx`. All pages inside automatically require auth. The thin-shell pattern matches every existing admin section (`venues/page.tsx`, `finance/clients/page.tsx`).
-- **`app/api/vip/`**: Stripe and Resend are server-only concerns. Routing all mutations through API routes ensures side effects never run client-side and the `STRIPE_SECRET_KEY` never reaches the browser.
-- **`services/vipAdminService.ts`**: Direct port of nightlife-mcp's `vipAdmin.ts` query functions. Accepts a `SupabaseClient` parameter — same contract, no rewrite needed beyond removing Express-specific imports.
-- **`types/vip.ts`**: Copy the six VIP types from nightlife-mcp's `types.ts`. These are stable DB-level interfaces, not likely to diverge.
+- **`src/utils/normalize.ts`**: Centralizing normalization in one file means all three services share identical logic. It is pure TypeScript with no DB calls, so it runs synchronously — no latency cost on the hot path.
+- **Venues only use the DB RPC**: The RPC is the only way to get `pg_trgm` similarity scoring without fetching all 450 venues. Events and performers already fetch a bounded set per city/date before filtering, so app-level normalization there costs nothing.
+- **Migration file**: Keeps all DB changes version-controlled alongside the TypeScript. The shared Supabase project means the migration must be applied once and affects both nightlife-mcp and the consumer site (read-only DDL additions are safe — no table changes).
 
 ## Architectural Patterns
 
-### Pattern 1: Thin Page Shell + View Component
+### Pattern 1: Hybrid — DB RPC for Venues, App-Level Normalize for Events/Performers
 
-**What:** Page files under `app/(admin)/` are minimal `'use client'` wrappers that render one view component. All UI state, data fetching, and interaction logic lives in `views/vip/`.
+**What:** Two different strategies for two different data profiles. Venues are searched by name directly (450 rows, city-scoped to ~200), so a DB RPC with `pg_trgm` similarity handles the hard fuzzy-matching problem. Events and performers are already fetched into memory before the query needle is applied — just normalize the needle in TypeScript and let the existing `hasNeedle()` substring check handle the rest.
 
-**When to use:** All VIP pages. This matches every existing admin section in nlt-admin.
+**When to use:** Use the DB RPC strategy whenever you need true fuzzy matching (tolerance for typos) against a named entity table with no pre-filtering. Use app-level normalization whenever the candidate set is already in memory from a prior DB fetch.
 
-**Trade-offs:** One extra file per route, but enables view component testing in isolation and keeps routing concerns separate from display logic.
+**Trade-offs:** The DB RPC adds one migration + one Supabase function to maintain. App-level normalization is invisible to the DB and requires no infrastructure. Mixing the two is pragmatic, not inconsistent — venues have a qualitatively different matching problem (the triggering bug was "CeLaVi" → 0 results from a direct name lookup, not from an event text search).
 
-**Example:**
+**Example — DB RPC call from venues.ts:**
 ```typescript
-// app/(admin)/vip/page.tsx
-'use client';
-import VipBookingsPage from '@/views/vip/VipBookingsPage';
-export default function VipPage() {
-  return <VipBookingsPage />;
+// src/services/venues.ts — searchVenues()
+if (queryNeedle) {
+  const { data, error } = await supabase.rpc('search_venues_fuzzy', {
+    p_city_id: city.id,
+    p_query: queryNeedle,        // already normalized by normalizeQuery()
+    p_threshold: 0.15,           // trigram similarity threshold
+    p_limit: 200,
+  });
+  // merge with occurrences filter chain below
 }
 ```
 
-### Pattern 2: Client Component Fetches from Own API Route
-
-**What:** View components (`'use client'`) call `fetch('/api/vip/...')` using React state and `useEffect`. No direct Supabase client calls from VIP view components.
-
-**When to use:** All VIP data operations — reads and writes. Even list fetches go through API routes for consistency.
-
-**Trade-offs:** One extra HTTP hop vs direct Supabase from browser. Justified because: (1) status updates need server-side Stripe/Resend; (2) consistent auth pattern across all operations; (3) service-role key never exposed to browser.
-
-**Example:**
+**Example — app-level normalize in events.ts:**
 ```typescript
-// views/vip/VipBookingsPage.tsx
-'use client';
-const [bookings, setBookings] = useState(null);
-useEffect(() => {
-  fetch('/api/vip/bookings?statuses=submitted,in_review')
-    .then(r => r.json())
-    .then(setBookings);
-}, []);
-```
-
-### Pattern 3: API Route Auth — Server Client + Role Check
-
-**What:** Every `/api/vip/*` route authenticates via `createSupabaseServerClient()` (reads the session cookie), checks `user_roles` for `admin` or `super_admin`, then switches to `createServiceRoleClient()` for the actual query. This is the exact pattern used by `app/api/admin/users/route.ts`.
-
-**When to use:** All VIP API routes without exception.
-
-**Trade-offs:** Two Supabase round-trips per request (auth check + operation). Acceptable for an internal ops tool.
-
-**Example:**
-```typescript
-export async function GET(request: Request) {
-  // 1. Auth check (session cookie via SSR client)
-  const supabase = await createSupabaseServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  // 2. Role check
-  const { data: roles } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
-  const isAdmin = roles?.some(r => ['admin', 'super_admin'].includes(r.role));
-  if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
-  // 3. Service-role client for the actual query
-  const serviceClient = createServiceRoleClient();
-  const result = await listVipAdminBookings(serviceClient, parseParams(request));
-  return NextResponse.json(result);
+// src/utils/normalize.ts
+export function normalizeQuery(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')  // strip diacriticals
+    .replace(/\s+/g, '')              // collapse spaces (for "1 oak" → "1oak")
+    .toLowerCase()
+    .replace(/[,()]/g, '')            // existing sanitize logic
+    .trim();
 }
 ```
 
-### Pattern 4: Status Update with Non-Blocking Side Effects
+```typescript
+// In matchQuery() / hasNeedle() callers — events.ts, performers.ts
+const normalizedNeedle = normalizeQuery(input.query || '');
+// hasNeedle now normalizes each haystack value before comparing
+```
 
-**What:** PATCH `/api/vip/bookings/[id]` calls the `admin_update_vip_booking_request` RPC (atomic: booking update + status_event + edit_audit in one transaction), then conditionally triggers Stripe and Resend in `try/catch` blocks that do not affect the HTTP response.
+### Pattern 2: DB Migration — Extensions + Immutable Wrapper + RPC + Index
 
-**When to use:** Only the PATCH route on bookings. Side effects are fire-and-forget.
+**What:** A single migration file installs everything the DB-level fuzzy path needs. This is the correct Supabase workflow: apply once to the shared project, committing the SQL to version control.
 
-**Trade-offs:** Side effects can silently fail. This is the same design as the existing nightlife-mcp implementation — deliberate, because an admin should never be blocked from changing booking status due to a transient Stripe or Resend error.
+**When to use:** Any time DB behavior changes — new function, new index, new extension. Not application code.
+
+**Trade-offs:** Requires running the migration against the production Supabase project via `psql` or the Supabase dashboard. One-time cost, no ongoing maintenance unless the RPC signature changes.
+
+**Example — full migration:**
+```sql
+-- 20260312_fuzzy_search.sql
+
+-- 1. Enable extensions (idempotent)
+CREATE EXTENSION IF NOT EXISTS unaccent;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- 2. Immutable wrapper so unaccent() can be used in index expressions
+--    (built-in unaccent is STABLE, not IMMUTABLE — cannot index STABLE functions)
+CREATE OR REPLACE FUNCTION f_unaccent(text)
+  RETURNS text
+  LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT AS
+$$
+  SELECT public.unaccent('public.unaccent', $1)
+$$;
+
+-- 3. GIN trigram index on normalized venue name_en
+--    Covers: "CeLaVi" → "celavi" % f_unaccent(lower("CÉ LA VI")) = "ce la vi"
+--    Also covers pure ILIKE '%celavi%' patterns via gin_trgm_ops
+CREATE INDEX IF NOT EXISTS venues_name_en_fuzzy
+  ON venues USING GIN (f_unaccent(lower(name_en)) gin_trgm_ops);
+
+-- Optional: index name (non-English fallback) if needed in later phase
+-- CREATE INDEX IF NOT EXISTS venues_name_fuzzy
+--   ON venues USING GIN (f_unaccent(lower(name)) gin_trgm_ops);
+
+-- 4. RPC: fuzzy venue search scoped by city
+CREATE OR REPLACE FUNCTION search_venues_fuzzy(
+  p_city_id   uuid,
+  p_query     text,    -- already normalized (lowercased, diacritics stripped, spaces removed)
+  p_threshold float    DEFAULT 0.15,
+  p_limit     int      DEFAULT 200
+)
+RETURNS SETOF venues
+LANGUAGE sql STABLE AS
+$$
+  SELECT v.*
+  FROM venues v
+  WHERE v.city_id = p_city_id
+    AND (
+      -- Trigram similarity match (typo tolerance)
+      similarity(f_unaccent(lower(v.name_en)), p_query) > p_threshold
+      -- Substring / prefix containment (catches "celavi" inside "ce la vi" even if trigram score is low)
+      OR f_unaccent(lower(v.name_en)) ILIKE '%' || p_query || '%'
+      -- Fallback: space-stripped version ("1oak" matches "1 oak")
+      OR replace(f_unaccent(lower(v.name_en)), ' ', '') ILIKE '%' || p_query || '%'
+    )
+  ORDER BY similarity(f_unaccent(lower(v.name_en)), p_query) DESC
+  LIMIT p_limit;
+$$;
+```
+
+### Pattern 3: Normalize-Then-Compare in hasNeedle()
+
+**What:** The existing `hasNeedle(needle, ...values)` helper checks if any value contains the needle as a plain lowercase substring. For events and performers, extending it to also normalize the haystack values (strip accents, collapse spaces) makes all in-memory text matching accent-insensitive without any DB changes.
+
+**When to use:** Events and performers — anywhere a `query` needle is compared to in-memory text fields (event names, venue names embedded in events, performer names).
+
+**Trade-offs:** Slightly more CPU per comparison (NFD + regex replace), negligible at the scale of 200 event rows already in memory. Zero DB round-trips, zero migrations, zero index maintenance.
+
+**Example:**
+```typescript
+// src/utils/normalize.ts
+export function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+// Modified hasNeedle — normalize both sides
+function hasNeedle(needle: string, ...values: Array<string | null | undefined>): boolean {
+  const n = stripAccents(needle.toLowerCase());
+  return values.some((value) => stripAccents(String(value || '').toLowerCase()).includes(n));
+}
+```
 
 ## Data Flow
 
-### Booking List Flow
+### Venue Search with Fuzzy Query
 
 ```
-User opens /vip
+searchVenues(input: { city, query: "CeLaVi", ... })
     |
-VipBookingsPage mounts (client component)
+normalizeQuery("CeLaVi") → "celavi"
     |
-fetch('/api/vip/bookings?statuses=submitted,in_review&limit=50')
+IF queryNeedle present:
+  supabase.rpc('search_venues_fuzzy', { p_city_id, p_query: "celavi", p_threshold: 0.15 })
     |
-API route: auth check → role check → createServiceRoleClient()
+  DB: similarity(f_unaccent(lower("CÉ LA VI")), "celavi")
+      = similarity("ce la vi", "celavi") → ~0.44  (above 0.15 threshold ✓)
     |
-listVipAdminBookings(serviceClient, filters)
-    → SELECT vip_booking_requests WHERE status IN (...)
-    → load venue names for unique venue_ids
-    → load latest vip_booking_status_events per booking
-    → load latest vip_agent_tasks per booking
+  Returns VenueRow[] matching: { id, name_en: "CÉ LA VI", ... }
     |
-JSON → VipBookingsPage renders table with status badges and filters
+  Intersect with occurrences already fetched (city + date + genre filter)
+  → Venues that appear in both sets pass through
+    |
+ELSE (no query):
+  Existing occurrence-based aggregation unchanged
+    |
+rankVenueSummaries() → paginate → return
 ```
 
-### Status Update Flow (with side effects)
+### Event/Performer Search with Normalized Query
 
 ```
-Admin clicks "Mark Deposit Required"
+searchEvents(input: { city, query: "Dua Lipa" }) OR
+searchPerformers(input: { city, query: "Dua lipa" })
     |
-PATCH /api/vip/bookings/{id}
-  body: { patch: { status: "deposit_required" }, note: "Sent deposit link." }
+normalizeQuery(input.query) → "dua lipa"  (same as before — no accents here)
     |
-API route: auth check → role check
+Existing DB fetch (occurrences by city + date range) — UNCHANGED
     |
-admin_update_vip_booking_request RPC
-  (atomic: updates booking row + inserts status_event + inserts edit_audit)
+matchQuery(row, "dua lipa", performers, genres)
+  hasNeedle("dua lipa", ...) — but now normalizes both sides
+  stripAccents(performer.name.toLowerCase()) → can match "Duá Lipa" → "dua lipa" ✓
     |
-rpcRow.changed_fields includes "status"?
-  YES → newStatus === "deposit_required"?
-    YES →
-      try { createDepositForBooking() → Stripe checkout → insert vip_booking_deposits }
-      catch { log, continue }
-      try { sendDepositRequiredEmail() → Resend }
-      catch { log, continue }
-    |
-getVipAdminBookingDetail() → fresh detail with updated history + audits
-    |
-JSON response (200) → VipBookingDetailPage refreshes
+Filter → paginate → return
 ```
 
-### Manual Booking Create Flow
+### Space-Normalized Venue Search ("1oak" → "1 OAK")
 
 ```
-Admin fills create form → POST /api/vip/bookings
-  body: CreateVipAdminBookingInput
+input.query = "1oak"
     |
-API route: auth check → role check
+normalizeQuery("1oak") → "1oak"  (no spaces to collapse; lowercase)
     |
-createVipAdminBooking() → createVipBookingRequest()
-  (same path as MCP tool create_vip_booking_request)
-  → INSERT vip_booking_requests
-  → 4-level pricing fallback populates min_spend
-  → sendBookingSubmittedEmail() (Resend)
+RPC search_venues_fuzzy p_query = "1oak"
     |
-JSON 201 → redirect to detail page
+DB: replace(f_unaccent(lower("1 OAK")), ' ', '') = "1oak"
+    ILIKE '%1oak%' → TRUE ✓
 ```
 
 ### Key Data Flows
 
-1. **Venue dropdown for create form:** GET `/api/vip/venues` → `listVipAdminVenues()` → `venues WHERE vip_booking_enabled = true`. Used to populate the venue selector in the create booking form.
-2. **Detail view:** GET `/api/vip/bookings/[id]` → `getVipAdminBookingDetail()` → booking summary + full `vip_booking_status_events` history + `vip_booking_edit_audits`.
-3. **Deposit link regeneration (future):** PATCH with a `regenerate_deposit` flag → calls `regenerateDepositCheckout()` from nightlife-mcp's `deposits.ts`. Port this function alongside `createDepositForBooking`.
+1. **Venue fuzzy match:** `normalizeQuery()` in TypeScript → RPC in DB → DB returns venue rows → intersect with occurrence-filtered venue set → rank and paginate.
+2. **Event/performer accent match:** `normalizeQuery()` in TypeScript → existing in-memory filter → `hasNeedle()` now normalizes both sides.
+3. **No-query path:** All three services take the existing code path unchanged. No regressions possible on the happy path.
 
 ## Integration Points
 
-### New vs Modified
+### New vs Modified Components
 
-| Item | Status | Notes |
-|------|--------|-------|
-| `app/(admin)/vip/page.tsx` | NEW | Thin shell |
-| `app/(admin)/vip/new/page.tsx` | NEW | Thin shell |
-| `app/(admin)/vip/[id]/page.tsx` | NEW | Thin shell |
-| `app/api/vip/bookings/route.ts` | NEW | GET list + POST create |
-| `app/api/vip/bookings/[id]/route.ts` | NEW | GET detail + PATCH update |
-| `app/api/vip/venues/route.ts` | NEW | GET vip-enabled venues |
-| `services/vipAdminService.ts` | NEW | Ported from nightlife-mcp `vipAdmin.ts` |
-| `views/vip/VipBookingsPage.tsx` | NEW | List UI |
-| `views/vip/VipBookingDetailPage.tsx` | NEW | Detail/edit UI |
-| `views/vip/VipBookingCreatePage.tsx` | NEW | Create form UI |
-| `components/vip/VipStatusBadge.tsx` | NEW | Shared status display |
-| `types/vip.ts` | NEW | Ported types from nightlife-mcp |
-| `components/layout/AdminNavConfig.ts` | MODIFIED | Add VIP nav section under a new "VIP" or "Bookings" section |
-| `lib/supabase/service-client.ts` | UNCHANGED | Already exists — `createServiceRoleClient()` |
-| `lib/supabase/server.ts` | UNCHANGED | Already exists — `createSupabaseServerClient()` |
-| `nightlife-mcp/src/admin/` | DELETED (later) | Remove after nlt-admin is verified in production |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| `src/utils/normalize.ts` | NEW | `normalizeQuery()`, `stripAccents()` — pure TypeScript, no deps |
+| `supabase/migrations/20260312_fuzzy_search.sql` | NEW | Extensions + f_unaccent wrapper + RPC + GIN index |
+| DB function `f_unaccent(text)` | NEW (via migration) | Immutable wrapper — required for indexed expression |
+| DB function `search_venues_fuzzy(...)` | NEW (via migration) | Fuzzy venue lookup scoped by city |
+| GIN index `venues_name_en_fuzzy` | NEW (via migration) | Speeds up pg_trgm similarity + ILIKE on name_en |
+| `src/services/venues.ts` — `searchVenues()` | MODIFIED | Calls RPC when query present; normalizes needle |
+| `src/services/events.ts` — `hasNeedle()` / `matchQuery()` | MODIFIED | Normalize both sides in accent comparison |
+| `src/services/performers.ts` — query filter in `searchPerformers()` | MODIFIED | Normalize before `.filter()` on performer name |
+| All MCP tool files (`src/tools/*.ts`) | UNCHANGED | No interface changes |
+| REST router (`src/rest.ts`) | UNCHANGED | No interface changes |
+| Auth, config, types, errors | UNCHANGED | No changes needed |
+
+### Build Order (Dependency-Aware)
+
+Build this bottom-up so each layer can be tested before the next is added.
+
+**Step 1 — DB migration (no code deps)**
+Apply `20260312_fuzzy_search.sql` to the shared Supabase project. Use `psql` with the service role key (same process as previous migrations). Verify:
+- `SELECT f_unaccent('CÉ LA VI');` → `CE LA VI`
+- `SELECT similarity('celavi', 'ce la vi');` → non-zero float
+- `SELECT * FROM search_venues_fuzzy('<tokyo_city_id>', 'celavi');` → returns CÉ LA VI row
+
+**Step 2 — normalize.ts (no deps)**
+Create `src/utils/normalize.ts` with `normalizeQuery()` and `stripAccents()`. Unit test with the concrete cases from the trigger bug: `"CeLaVi"` → `"celavi"`, `"1oak"` → `"1oak"`, `"é"` → `"e"`.
+
+**Step 3 — venues.ts (deps: migration + normalize.ts)**
+Modify `searchVenues()` to normalize the query needle and call the RPC when a query is present. The RPC returns `VenueRow[]` — intersect that ID set with the occurrence-based venue set already built. This keeps the date/genre/area filter chain intact.
+
+**Step 4 — events.ts (deps: normalize.ts only)**
+Modify `hasNeedle()` (or its caller) to normalize both needle and haystack. No DB changes. Test with: `input.query = "Café Mambo"` matches event named `"CAFÉ MAMBO"`.
+
+**Step 5 — performers.ts (deps: normalize.ts only)**
+Modify the query filter in `searchPerformers()` (the `.filter()` on `summary.name.toLowerCase().includes(queryNeedle)`). Same normalize-both-sides pattern. Test with: `query = "dua lipa"` matches `"Duá Lipa"`.
+
+**Step 6 — integration test all three tools**
+- `search_venues city=tokyo query=celavi` → returns CÉ LA VI
+- `search_venues city=tokyo query=1oak` → returns 1 OAK
+- `search_events city=tokyo query="dua lipa"` → returns any Dua Lipa events
+- `search_performers city=tokyo query="dua lipa"` → returns Dua Lipa if active
 
 ### External Services
 
 | Service | Integration Pattern | Notes |
 |---------|---------------------|-------|
-| Stripe | Server-only. `STRIPE_SECRET_KEY` env var. Called from PATCH route. | `stripe` package must be added to nlt-admin. Port `stripe.ts` + `createDepositForBooking()` from nightlife-mcp. |
-| Resend | Server-only. `RESEND_API_KEY` env var. Called from multiple routes. | `resend` package must be added to nlt-admin. Port `email.ts` + `templates.ts` from nightlife-mcp, or import as shared module. |
-| Supabase | `createServiceRoleClient()` for queries; `createSupabaseServerClient()` for auth | Both already exist in nlt-admin. `SUPABASE_SERVICE_ROLE_KEY` must be set on Railway (verify it is). |
-
-### Env Vars Required on nlt-admin Railway
-
-| Var | Purpose | Status |
-|-----|---------|--------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase connection | Present |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Browser auth client | Present |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service-role API routes | Present (verify) |
-| `STRIPE_SECRET_KEY` | Deposit checkout creation | MISSING — must add |
-| `RESEND_API_KEY` | Transactional emails | MISSING — must add |
-| `NIGHTLIFE_BASE_URL` | Stripe success/cancel redirect URLs | MISSING — must add (`https://nightlifetokyo.com`) |
+| Supabase | `supabase.rpc('search_venues_fuzzy', params)` | New RPC; same client pattern as existing queries |
+| PostgreSQL extensions | Applied via migration SQL | `unaccent` and `pg_trgm` both available on Supabase (confirmed in extension catalog) |
 
 ### Internal Boundaries
 
 | Boundary | Communication | Notes |
 |----------|---------------|-------|
-| View components → API routes | HTTP fetch (JSON) | Client components never call Supabase directly for VIP data |
-| API routes → vipAdminService | Direct function call | Service functions accept `SupabaseClient` — same signature as nightlife-mcp |
-| API routes → Stripe | Direct SDK call (`stripe` package) | Non-blocking in PATCH route |
-| API routes → Resend | Direct SDK call (`resend` package) | Non-blocking in PATCH and POST routes |
-| nlt-admin → nightlife-mcp | None at runtime | nightlife-mcp plays no role in the new dashboard |
+| `searchVenues()` → DB RPC | `supabase.rpc()` call | Returns `VenueRow[]`; integrate with existing occurrence-set intersection |
+| All services → `normalize.ts` | Direct import | Synchronous, no I/O |
+| Venues RPC result → occurrence intersection | In-memory Set lookup | Build `Set<venueId>` from RPC results; keep only occurrences matching a venueId in set |
 
-## Build Order (Dependency-Aware)
+## Supabase PostgREST Constraints Addressed
 
-Build bottom-up. Each layer can be tested before the next layer is added.
+**Why the fuzzy venue search must be an RPC, not a PostgREST filter:**
 
-**Step 1 — Types (no deps)**
-- Create `types/vip.ts` — copy `VipAdminBookingSummary`, `VipAdminBookingListResult`, `VipAdminBookingDetailResult`, `VipAdminBookingUpdateResult`, `VipAdminBookingHistoryEntry`, `VipBookingEditAuditEntry`, `VipBookingStatus` from nightlife-mcp `types.ts`.
+PostgREST exposes table filters via `.filter()`, `.ilike()`, `.textSearch()`, and the `%` trigram operator is not natively exposed through PostgREST's filter syntax. The `similarity()` function and the `%` operator require calling a PostgreSQL function that executes the query server-side. The `supabase.rpc()` call wraps a `SELECT * FROM search_venues_fuzzy(...)` PostgreSQL set-returning function, which PostgREST supports natively.
 
-**Step 2 — Service layer (deps: types, Supabase)**
-- Create `services/vipAdminService.ts` — port `listVipAdminBookings`, `listVipAdminVenues`, `getVipAdminBookingDetail`, `updateVipAdminBooking`, `createVipAdminBooking` from nightlife-mcp `vipAdmin.ts`. Remove Express-specific imports. Accept `SupabaseClient` parameter.
+**Why the existing `.ilike()` on venues cannot be extended for this:**
 
-**Step 3 — Read-only API routes (deps: service layer)**
-- `app/api/vip/venues/route.ts` — GET only. Needed by create form.
-- `app/api/vip/bookings/route.ts` — GET only first.
-- `app/api/vip/bookings/[id]/route.ts` — GET only first.
-- All three use the auth pattern from `api/admin/users/route.ts`.
+The current venue search does not query the `venues` table directly — it queries `event_occurrences` (with joined venue data) and aggregates per venue. Bolting `.ilike()` onto that query would require filtering at the occurrence level, not the venue level, and would miss venues whose name is `"CÉ LA VI"` when the user types `"celavi"` (no shared substring after case-folding). The RPC pattern queries `venues` directly with `pg_trgm` similarity, then intersects with the occurrence-based set.
 
-**Step 4 — List and detail UI (deps: read routes)**
-- `components/vip/VipStatusBadge.tsx` — status colors, used everywhere.
-- `views/vip/VipBookingsPage.tsx` — list with status filter, date filter, search, pagination.
-- `views/vip/VipBookingDetailPage.tsx` — detail with history timeline and audit log (read-only first).
-- Page shells for `/vip` and `/vip/[id]`.
-- Add VIP entry to `AdminNavConfig.ts`.
+**Why pg_trgm threshold 0.15 (not the default 0.3):**
 
-**Step 5 — Mutation: create (deps: venues route, Resend)**
-- Add `resend` package. Port `email.ts` and `templates.ts`.
-- Add POST to `app/api/vip/bookings/route.ts`.
-- `views/vip/VipBookingCreatePage.tsx` — create form.
-- Page shell for `/vip/new`.
-- Add `RESEND_API_KEY` to Railway.
-
-**Step 6 — Mutation: update with side effects (deps: Stripe, Resend)**
-- Add `stripe` package. Port `stripe.ts` and `createDepositForBooking()` from `deposits.ts`.
-- Add PATCH to `app/api/vip/bookings/[id]/route.ts` with Stripe + Resend side effects.
-- Enable edit actions in `VipBookingDetailPage.tsx`.
-- Add `STRIPE_SECRET_KEY` and `NIGHTLIFE_BASE_URL` to Railway.
-
-**Step 7 — Verification and cleanup**
-- Smoke test all status transitions in production (submitted → in_review → deposit_required → confirmed → rejected).
-- Confirm deposit email sends and Stripe checkout URL is valid.
-- Remove `src/admin/` from nightlife-mcp after verified.
+Venue names like "CÉ LA VI" (normalized to "ce la vi") vs. query "celavi" produce a trigram similarity of ~0.44 with `word_similarity()` and ~0.28 with `similarity()` (because short queries have fewer trigrams). The ILIKE containment fallback in the RPC covers the low-similarity case. Threshold 0.15 lets `similarity()` handle approximate whole-name matches; the ILIKE arm handles exact substring matches for "1oak" → "1 oak" style queries. If threshold produces false positives in testing, raise it — 0.2–0.25 is a reasonable adjustment range.
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Direct Supabase from Client Components for VIP Data
+### Anti-Pattern 1: Fetching All Venues Then Filtering in TypeScript
 
-**What people do:** Import the `supabase` browser client in view components and query `vip_booking_requests` directly, as other admin views do for non-sensitive reads.
+**What people do:** `SELECT * FROM venues WHERE city_id = ?` (returning all 450 venues), then running `similarity()` logic in TypeScript.
 
-**Why it's wrong:** Status updates must trigger Stripe and Resend on the server. If reads are client-direct but writes go through API routes, the auth and data-fetch patterns are split. The service-role key (needed for full read access) must never reach the browser.
+**Why it's wrong:** Fetching all venues for every search query adds ~200 extra rows over the wire on every call. It also means implementing trigram logic in TypeScript (no standard library) instead of using PostgreSQL's native and indexed `pg_trgm`. The point of the DB RPC is to let Postgres do what it does well.
 
-**Do this instead:** All VIP data operations go through `/api/vip/*` routes — both reads and writes.
+**Do this instead:** Use the `search_venues_fuzzy` RPC to let Postgres filter before anything crosses the wire.
 
-### Anti-Pattern 2: Bypassing the admin_update_vip_booking_request RPC
+### Anti-Pattern 2: Applying pg_trgm to Events or Performers
 
-**What people do:** Direct `UPDATE vip_booking_requests SET status = ...` instead of calling the RPC.
+**What people do:** Add trigram similarity RPC calls for event name search and performer name search.
 
-**Why it's wrong:** The RPC is a single atomic transaction: it updates the booking, inserts a `vip_booking_status_events` row, and inserts a `vip_booking_edit_audits` row. Bypassing it means the audit trail can silently fall out of sync on any partial failure.
+**Why it's wrong:** Events and performers are already fetched into memory scoped by city + date window (up to 2000 rows, chunked). The cost of fetching them is already paid. Adding DB round-trips for trigram scoring before that fetch would serialize what is currently a single efficient query. App-level accent normalization on already-fetched rows costs microseconds.
 
-**Do this instead:** Always route status changes through the `admin_update_vip_booking_request` RPC. Direct table writes are only acceptable for fields outside the RPC's scope (none identified yet).
+**Do this instead:** Apply `normalizeQuery()` + the modified `hasNeedle()` to in-memory rows only. DB fuzzy matching is reserved for venues, where the name is the primary search axis and the entity set is not pre-filtered by date.
 
-### Anti-Pattern 3: Blocking HTTP Response on Side-Effect Failures
+### Anti-Pattern 3: Using `unaccent()` Directly in Index Expressions
 
-**What people do:** Await Stripe/Resend without try/catch, letting a transient Stripe rate-limit return a 500 to the admin.
+**What people do:** `CREATE INDEX ... USING GIN (unaccent(name_en) gin_trgm_ops)` — using the built-in `unaccent()` function.
 
-**Why it's wrong:** The booking state has already been durably updated in Supabase via the RPC. A failed side effect does not un-do that. Returning 500 confuses the admin about whether the booking was actually updated.
+**Why it's wrong:** The built-in `unaccent()` is declared `STABLE`, not `IMMUTABLE`. PostgreSQL requires all functions in index expressions to be `IMMUTABLE`. Creating this index will fail with "ERROR: functions in index expression must be marked IMMUTABLE."
 
-**Do this instead:** Wrap every side effect in `try/catch`. Log the failure. Return 200 with the booking's current state. The deposit link can be regenerated manually; emails can be retried.
+**Do this instead:** Create the `f_unaccent(text)` immutable wrapper function first, then build the index using `f_unaccent()`.
 
-### Anti-Pattern 4: Removing nightlife-mcp Admin Code Before Production Verification
+### Anti-Pattern 4: Normalizing in the DB RPC Instead of Before the Call
 
-**What people do:** Delete `src/admin/` from nightlife-mcp at the same time as deploying nlt-admin.
+**What people do:** Pass the raw user input (`"CeLaVi"`) to the RPC and let the RPC normalize it via `f_unaccent(lower(?))`.
 
-**Why it's wrong:** If nlt-admin has an undetected bug (side effects not firing, auth edge case), there is no fallback. The Express dashboard, while ugly, is functional and handles real bookings.
+**Why it's wrong:** Not wrong for correctness, but creates duplication. The TypeScript services already need to normalize needles for the app-level event/performer filtering. Centralizing normalization in `normalize.ts` means one place to update the logic, and the RPC receives an already-normalized query, making the RPC simpler and its behavior easier to test independently.
 
-**Do this instead:** Keep nightlife-mcp admin code intact until nlt-admin has been verified in production — specifically: at least one successful status change with Stripe deposit creation and confirmation email.
+**Do this instead:** Normalize in `normalize.ts` before any call — whether to the RPC or to in-memory filter functions.
+
+### Anti-Pattern 5: Changing the Venue Search Query Path for All Cases
+
+**What people do:** Route all `searchVenues()` calls through the RPC, even when no query is provided.
+
+**Why it's wrong:** When no query is present, `searchVenues()` already returns the right set via the occurrence-based aggregation (city + date + genre filters). Adding a no-op RPC call adds latency and complexity.
+
+**Do this instead:** Only call the RPC when `queryNeedle` is non-empty. The condition is: `if (queryNeedle) { ... use RPC ... }`.
 
 ## Scaling Considerations
 
-This is an internal ops tool used by 1-3 admins. Scaling is not a design constraint.
+The current scale is ~450 venues (Tokyo), with multi-city expansion planned. The GIN index on `venues.name_en` handles this efficiently.
 
 | Scale | Architecture Adjustments |
 |-------|--------------------------|
-| 1-5 admins | Current design is sufficient. |
-| 5-50 admins | Same design. Next.js + Supabase handles this trivially. |
-| 50+ admins | Not a realistic scenario for this tool. |
+| 450 venues (Tokyo only) | GIN index handles easily — pg_trgm GIN index makes similarity lookups sub-millisecond |
+| 5 cities (~2,000 venues) | Same architecture. RPC is already scoped by `p_city_id`, so each query only scans that city's venues |
+| 20+ cities (~10,000 venues) | Same architecture. The `city_id` scoping in the RPC + index means the scanner never touches other cities' rows |
+| name_ja / name fields | If non-English venue names need fuzzy search, add a second GIN index on `f_unaccent(lower(name))`. Low priority for Tokyo — `name_en` is the canonical search field |
 
 ## Sources
 
-- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/admin/vipAdminRouter.ts`
-- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/admin/dashboardAuth.ts`
-- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/vipAdmin.ts`
-- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/deposits.ts`
-- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/email.ts`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/app/(admin)/layout.tsx`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/components/auth/ProtectedRoute.tsx`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/hooks/useAdminAuth.ts`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/lib/supabase/service-client.ts`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/lib/supabase/server.ts`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/app/api/admin/users/route.ts`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/components/layout/AdminNavConfig.ts`
-- Direct source read: `/Users/alcylu/Apps/nlt-admin/src/components/layout/AdminShell.tsx`
-- `.planning/PROJECT.md` (v2.0 milestone context)
-- `CLAUDE.md` (nightlife-mcp technical spec)
-- `CLAUDE.md` (nlt-admin project spec)
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/venues.ts` (full file — searchVenues, hasNeedle, query path)
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/events.ts` (full file — searchEvents, matchQuery, hasNeedle)
+- Direct source read: `/Users/alcylu/Apps/nightlife-mcp/src/services/performers.ts` (full file — searchPerformers, query filter)
+- [PostgreSQL pg_trgm documentation](https://www.postgresql.org/docs/current/pgtrgm.html) — similarity(), operators, GIN index support (HIGH confidence)
+- [PostgreSQL unaccent documentation](https://www.postgresql.org/docs/current/unaccent.html) — dictionary behavior, STABLE vs IMMUTABLE (HIGH confidence)
+- [Neon unaccent extension docs](https://neon.com/docs/extensions/unaccent) — immutable wrapper pattern, expression index example (HIGH confidence)
+- [Unaccented Name Search with Postgres and Ecto](https://peterullrich.com/unaccented-name-search-with-postgres-and-ecto) — concrete example of f_unaccent + GIN(gin_trgm_ops) combined (MEDIUM confidence — community source, verified against official docs)
+- [Supabase Extensions Overview](https://supabase.com/docs/guides/database/extensions) — confirmed unaccent and pg_trgm are available on Supabase (HIGH confidence)
+- [MDN String.prototype.normalize()](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/normalize) — NFD normalization for diacritics stripping in JavaScript (HIGH confidence)
+- `.planning/PROJECT.md` — v3.0 milestone target features and constraints
 
 ---
-*Architecture research for: VIP Dashboard Migration — nightlife-mcp to nlt-admin*
-*Researched: 2026-03-11*
+*Architecture research for: Fuzzy/accent-insensitive search — nightlife-mcp v3.0*
+*Researched: 2026-03-12*

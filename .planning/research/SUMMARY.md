@@ -1,206 +1,182 @@
 # Project Research Summary
 
-**Project:** VIP Booking Dashboard Migration — nightlife-mcp to nlt-admin
-**Domain:** Internal ops admin dashboard migration (Express SSR to Next.js 15 App Router)
-**Researched:** 2026-03-11
+**Project:** nightlife-mcp v3.0 — Fuzzy/Accent-Insensitive Search
+**Domain:** Search normalization — PostgreSQL extension-backed fuzzy matching + TypeScript accent stripping for venue, event, and performer discovery
+**Researched:** 2026-03-12
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This milestone migrates the existing VIP booking admin dashboard from a server-rendered Express app inside nightlife-mcp (`src/admin/`) into nlt-admin (Next.js 15, React 19, Supabase auth, shadcn-ui). The existing Express dashboard is fully functional — the goal is a code migration with full feature parity, not a greenfield build. All business logic (service functions, RPC contracts, email templates, Stripe deposit flow) already exists and is tested in production inside nightlife-mcp. The primary engineering challenge is adapting this logic to the Next.js App Router patterns already established in nlt-admin, while adding only two new npm packages (`stripe`, `resend`) and three Railway env vars.
+The trigger for this milestone is concrete and well-understood: Gemini called `search_venues` with "CeLaVi" and got zero results because the DB stores "CÉ LA VI". The fix does not require a new search infrastructure. The existing Supabase/PostgreSQL instance already ships with `pg_trgm` and `unaccent` — two built-in extensions that, combined with a new `src/utils/normalize.ts` utility and a single migration file, resolve the entire feature set. The approach is a two-tier strategy: aggressive fuzzy matching (DB RPC with trigram similarity) for venue names only, and lightweight accent stripping (TypeScript-only, in-memory) for events and performers. No new npm packages are required on the primary path.
 
-The recommended approach is a bottom-up build order: types, then service layer, then read-only API routes, then read-only UI, then create mutation, then update mutation with side effects, then production verification, then cleanup. This order ensures each layer can be tested in isolation before the next is added, and that the Express dashboard remains live as a fallback throughout. The most dangerous phase is the final cleanup (removing Express code from nightlife-mcp) — this must be gated behind at least 48 hours of confirmed production operation in nlt-admin, including at least one verified full status-transition cycle (deposit creation, email dispatch, confirmation).
+The recommended implementation order is bottom-up: DB migration first (extensions + immutable wrapper function + GIN index + fuzzy RPC), then the shared TypeScript `normalizeQuery()` utility, then the venues service (calls the new RPC), then events and performers (normalize the in-memory needle). Each step is independently testable and has zero risk of regressing the no-query code path. The total surface area is: one new SQL migration file, one new TypeScript utility file, and modifications to three existing service files. All MCP tool interfaces, the REST router, auth, and config remain unchanged.
 
-The key risks are operational rather than architectural: missing Railway env vars for Stripe and Resend, using the wrong Supabase client (session vs. service role) for admin mutations, and cleaning up the Express dashboard before nlt-admin is verified. All three are fully avoidable with explicit checklists and disciplined phase gates. The architecture pattern is already established in nlt-admin — VIP dashboard pages follow the same thin-shell + view-component + API-route structure used by the existing invoicing and users sections.
+The most significant risk is a well-known PostgreSQL constraint: `unaccent()` is declared `STABLE`, not `IMMUTABLE`, meaning it cannot be used directly in index definitions. Every pitfall in the research traces back to one of two root causes — either skipping the `IMMUTABLE` wrapper around `unaccent()`, or applying the aggressive fuzzy-match pattern to events and performers where it would produce noisy, over-broad results. Both are prevented by following the architecture exactly as specified. The shared Supabase DB constraint (the consumer site nightlife-tokyo-next reads and writes the same tables) means all index creation must use `CREATE INDEX CONCURRENTLY` and be run during off-peak hours.
 
 ## Key Findings
 
 ### Recommended Stack
 
-nlt-admin already provides the complete stack for this feature. Only two new npm packages are needed: `stripe@^20.4.1` (server-side Stripe API for deposit checkout creation) and `resend@^6.9.3` (transactional email via Resend). Both are already used and tested in nightlife-mcp, so the API shape and integration patterns are known quantities. Three new Railway env vars are required on the nlt-admin service: `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, and `NIGHTLIFE_BASE_URL` (consumer site URL for Stripe redirect URLs, should be renamed `NIGHTLIFE_CONSUMER_URL` to avoid confusion). The Stripe webhook endpoint must be registered separately in the Stripe dashboard for nlt-admin's Railway URL.
+No new npm packages are needed for the primary approach. Both `pg_trgm` and `unaccent` are pre-installed on the Supabase-managed PostgreSQL instance — they only need to be enabled via `CREATE EXTENSION IF NOT EXISTS`. A single migration file handles everything: enable extensions, create the `IMMUTABLE` wrapper function `f_unaccent(text)`, create the GIN trigram index on `f_unaccent(lower(name_en))`, and create the `search_venues_fuzzy` RPC. The RPC is required because PostgREST cannot express the `pg_trgm` similarity operator as a filter — only a server-side PostgreSQL function can use it. The `supabase.rpc()` call pattern is already used in this codebase (`cities.ts`, `authorize.ts`), so no new integration pattern is introduced.
+
+`fuse.js@7.1.0` is identified as a valid fallback if the DB-level path encounters a blocker (e.g., RPC typing issues). It ships its own TypeScript types, has zero dependencies, and 450 venues fits comfortably in memory. It should not be reached unless the primary path fails.
 
 **Core technologies:**
-- `stripe@^20.4.1`: Server-side deposit checkout creation — same version as nightlife-mcp, same API shape, ports without modification
-- `resend@^6.9.3`: Transactional email (deposit required, confirmed, rejected) — same package; port HTML template functions from nightlife-mcp directly, no `react-email` dependency needed
-- `@supabase/ssr` (existing): Two-client pattern — session client for auth verification, service role client for admin mutations
-- `@tanstack/react-query` (existing): `useQuery` for list and detail, `useMutation` for status update and create
-- Radix UI / shadcn (existing): `Table`, `Badge`, `Select`, `Dialog`, `Skeleton` — all installed, no new UI dependencies
-
-**What NOT to add:** `@stripe/stripe-js` (client-side payment UI, not needed here), `react-email` (port existing HTML string templates directly), `@tanstack/react-table` (bounded dataset, Radix Table is sufficient).
-
-See `.planning/research/STACK.md` for full details including version compatibility matrix.
+- `pg_trgm` (PostgreSQL built-in): Trigram-based similarity matching for venue names — the only correct way to do typo-tolerant search inside the DB; GIN index makes it sub-millisecond on 450 venues.
+- `unaccent` (PostgreSQL built-in): Strips diacritics (é→e, ō→o) — required so "CeLaVi" finds "CÉ LA VI"; must be wrapped in an `IMMUTABLE` function before it can appear in an index expression.
+- `src/utils/normalize.ts` (new TypeScript utility): NFD Unicode decomposition + diacritic strip + space collapsing + lowercase; shared by all three services; runs synchronously with zero I/O cost.
+- `fuse.js@7.1.0` (fallback only, not installed by default): App-level fuzzy matching if the DB RPC path is blocked.
 
 ### Expected Features
 
-This is a migration milestone — MVP means full feature parity with the Express dashboard. Features are already defined by the existing implementation. Research validated the complete feature set against hospitality SaaS patterns (TablelistPro, Resy for Operators, Discotech Ops).
+**Must have (table stakes — v3.0):**
+- Accent stripping on venue, event, and performer name queries — resolves the Gemini "CeLaVi" trigger bug and all related cases (ō→o, ü→u, â→a).
+- Space/punctuation normalization on venue names — "1oak" must find "1 OAK".
+- Typo-tolerant venue search via `pg_trgm` RPC — "Zeuk" must find "Zouk"; 1-2 character typos caught.
+- Basic accent normalization for event and performer queries — same `normalizeQuery()` utility applied to in-memory `hasNeedle()` calls.
 
-**Must have (table stakes — migration incomplete without these):**
-- Booking list with status, date range, and search filters, plus pagination — primary ops view
-- Booking detail with status history timeline and edit audit log — action context before taking any status change
-- Status update (PATCH) with atomic RPC, Stripe deposit creation, and Resend email side effects — core ops workflow
-- Manual booking creation form with venue selector (for phone and LINE customers) — ops creates on behalf of customers
-- Role guard: super_admin and admin only — replaces cookie-based Express auth
-- Nav entry point in nlt-admin admin navigation
+**Should have (ship with v3.0 or immediately after):**
+- Result ranking by `pg_trgm` similarity score — most relevant venue ranks first; exact name matches always outrank fuzzy matches.
+- GIN index on `venues.name_en` — created as part of the same migration with no extra effort; makes fuzzy search sub-millisecond.
 
-**Should have (low-effort differentiators, add alongside v1 or immediately after):**
-- Agent task status badge on list rows — surfaces failed email or deposit sends before the customer complains
-- Venue filter on booking list — useful when working with a specific venue partner
-- 1-minute background refetch via React Query `refetchInterval`
-- Empty state with clear-filters call to action
-
-**Defer (v2+):**
-- CSV export — not in the Express dashboard; defer until ops explicitly requests
-- Bulk status update — risky with per-booking side effects (Stripe, email); defer until volume justifies it
-- Stripe dashboard link on booking detail — low priority; ops can open Stripe directly
-
-See `.planning/research/FEATURES.md` for full feature dependency graph and prioritization matrix.
+**Defer (v3.x and beyond):**
+- `name_aliases text[]` column on venues for stylized names like W∆RP — only needed if space/punctuation stripping proves insufficient; low priority pending post-launch testing.
+- PGroonga for Japanese-character queries — AI agents always query in Latin script; not worth the complexity.
+- External search engine (Algolia, Typesense, Meilisearch) — appropriate only after dataset exceeds approximately 5,000 venues.
+- Phonetic matching (Soundex/Metaphone) — too many false positives for short nightclub names.
 
 ### Architecture Approach
 
-The VIP dashboard follows the exact architectural pattern established in nlt-admin for all admin sections: thin page shell (`app/(admin)/vip/page.tsx`) renders a view component (`views/vip/VipBookingsPage.tsx`) which fetches from Next.js API routes (`app/api/vip/bookings/route.ts`) which call service functions (`services/vipAdminService.ts`) which query Supabase. All VIP data operations — reads and writes — go through API routes, not direct Supabase from client components. This is mandatory because mutations must trigger server-side Stripe and Resend and the service role key must never reach the browser. VIP pages live under `app/(admin)/vip/` to inherit the `ProtectedRoute` + `AdminShell` layout automatically, with a stricter page-level role gate (super_admin and admin only, excluding event and venue organizers who can reach other `(admin)` sections).
+The implementation follows a hybrid pattern: DB-level fuzzy matching for venues (where the name is the primary search axis and the entity set is not pre-filtered by date), and TypeScript-layer accent normalization for events and performers (where rows are already fetched into memory by city+date and only the needle needs normalizing). This avoids unnecessary DB round-trips for events and performers while delivering true typo tolerance where it matters most. The `normalizeQuery()` utility in `src/utils/normalize.ts` is the shared foundation — all three services import it; the venues service additionally calls the Supabase RPC when a non-empty query is present. When no query is present, all three services take the existing code path entirely unchanged.
 
 **Major components:**
-1. **Page shells** (`app/(admin)/vip/`) — thin `'use client'` wrappers under the `(admin)` route group; inherit auth layout automatically
-2. **View components** (`views/vip/`) — all UI state, data fetching via `fetch('/api/vip/...')`, interaction logic; client components, not server components
-3. **API routes** (`app/api/vip/`) — auth check via session client, role check, then service-role client for queries; Stripe and Resend side effects in PATCH route wrapped in non-blocking `try/catch`
-4. **Service layer** (`services/vipAdminService.ts`) — direct port of nightlife-mcp `vipAdmin.ts`; accepts `SupabaseClient` parameter; remove Express-specific imports only
-5. **Shared VIP UI components** (`components/vip/`) — `VipStatusBadge`, `VipBookingFilters` reused across list and detail views
-
-See `.planning/research/ARCHITECTURE.md` for full component diagram, data flow sequences, and build order with sub-steps.
+1. `src/utils/normalize.ts` (NEW) — `normalizeQuery()` and `stripAccents()`; pure TypeScript; no DB deps; synchronous on the hot path.
+2. `supabase/migrations/20260312_fuzzy_search.sql` (NEW) — enables `unaccent` and `pg_trgm`, creates `f_unaccent()` IMMUTABLE wrapper, creates `search_venues_fuzzy` RPC, creates GIN index on `venues.name_en`.
+3. `src/services/venues.ts` (MODIFIED) — calls `search_venues_fuzzy` RPC when `queryNeedle` is non-empty; intersects RPC result IDs with the occurrence-based venue set; no-query path unchanged.
+4. `src/services/events.ts` (MODIFIED) — passes normalized needle into `hasNeedle()` / `matchQuery()`; DB queries unchanged.
+5. `src/services/performers.ts` (MODIFIED) — normalizes before the `.filter()` on performer name; DB queries unchanged.
 
 ### Critical Pitfalls
 
-1. **Premature cleanup — deleting Express dashboard before nlt-admin is production-proven** — keep both codebases running in parallel; gate nightlife-mcp `src/admin/` removal behind 48h of confirmed production operation including a full deposit and confirm cycle in nlt-admin. Never merge the cleanup PR the same day as the nlt-admin launch.
+1. **`unaccent()` is `STABLE`, not `IMMUTABLE` — cannot be used directly in index definitions.** Create the `f_unaccent(text)` immutable wrapper before creating any index. All index expressions and query `WHERE` clauses must reference `f_unaccent()`, never raw `unaccent()`. Verify with `EXPLAIN ANALYZE` that searches use an Index Scan, not a Seq Scan.
 
-2. **API routes not protected server-side (only UI-gated)** — the `(admin)` layout applies `ProtectedRoute` to pages but does not apply to API route handlers. Every `/api/vip/*` handler must call `createSupabaseServerClient()`, verify the user, check `user_roles` for admin or super_admin, and return 403 before executing any business logic. Define a `requireAdminRole(request)` helper from day one and use it in every route.
+2. **Index expression and query expression must be identical.** The GIN index on `f_unaccent(lower(name_en))` is only useful if the RPC `WHERE` clause also uses `f_unaccent(lower(name_en))`. A mismatch causes the planner to ignore the index silently. Define normalization once in the DB function and use it everywhere — no parallel normalization logic in TypeScript that might diverge.
 
-3. **Wrong Supabase client for mutations (session client instead of service role)** — `admin_update_vip_booking_request` RPC and write operations require service role. Using the session client causes silent RLS failures. Pattern: `createSupabaseServerClient()` for auth verification only; `createServiceRoleClient()` for all VIP business logic queries.
+3. **`pg_trgm` silently ignores non-ASCII characters.** Trigrams are only extracted from ASCII characters; Japanese kanji, hiragana, and katakana produce zero trigrams. Venue fuzzy search must be scoped to `name_en` only. Any Japanese-character query path must use `ILIKE` with wildcard patterns, not similarity operators.
 
-4. **Stripe and Resend env vars missing from nlt-admin Railway** — `STRIPE_SECRET_KEY`, `RESEND_API_KEY`, and `NIGHTLIFE_BASE_URL` exist in nightlife-mcp's Railway service, not nlt-admin's. Verify and add them to nlt-admin Railway before writing any integration code. Add explicit env var validation in route handlers so failures surface as clear errors rather than silent no-ops.
+4. **`CREATE INDEX` without `CONCURRENTLY` locks the shared table and blocks the consumer site.** The nightlife-mcp Supabase project is shared with nightlife-tokyo-next. Every `CREATE INDEX` in this milestone must use `CONCURRENTLY` and cannot run inside a migration transaction block. Schedule during off-peak hours — not Friday or Saturday evening JST.
 
-5. **Stripe checkout success/cancel URLs pointing to wrong domain** — use a dedicated `NIGHTLIFE_CONSUMER_URL` env var pointing to `nightlifetokyo.com`; never set it to the nlt-admin or nightlife-mcp Railway URL. Validate end-to-end in staging: complete a test payment and confirm the redirect lands on `nightlifetokyo.com`.
-
-See `.planning/research/PITFALLS.md` for the full pitfall list with recovery strategies and the "Looks Done But Isn't" verification checklist.
+5. **Fuzzy match pattern must not be applied to events or performers.** Events and performers are already city+date scoped in memory before filtering. Applying `pg_trgm` similarity to those tables would add DB round-trips, increase latency, and return hundreds of low-relevance matches. Events and performers use accent normalization only — no similarity operators, no RPC.
 
 ## Implications for Roadmap
 
-The build order is a hard dependency chain. Each phase requires the previous to be complete and testable before proceeding. The parallel-systems window (both Express and nlt-admin live simultaneously) must be maintained throughout Phases 1 through 3.
+The work splits naturally into three sequential phases ordered by hard dependency: DB infrastructure must exist before the venues service can call it, and the shared normalization utility must exist before any service can use it. Events and performers have no DB dependency, so their normalization trails the venues work and is the simplest phase.
 
-### Phase 1: Foundation and Read-Only Dashboard
+### Phase 1: DB Infrastructure + Core Normalization Utility
 
-**Rationale:** Types and service layer must exist before API routes can be written. Read-only routes and UI must be validated before adding mutations with side effects. Starting with reads de-risks the most complex parts (Stripe, Resend). Installing packages and setting Railway env vars happens at the very start — even before writing any code that uses them — to eliminate the "packages not installed" and "env vars missing" pitfalls before they can manifest.
+**Rationale:** Everything else depends on this phase. The `f_unaccent()` wrapper, the GIN index, and the `search_venues_fuzzy` RPC must be in the DB before the venues service can call them. The `normalize.ts` utility must exist before any service can import it. This phase produces zero application-visible behavior changes — it only lays the foundation.
 
-**Delivers:** Fully browsable VIP booking list and detail pages in nlt-admin, accessible to super_admin and admin users, with status, date range, and search filters, status history timeline, and edit audit log. No mutation UI yet — read-only throughout this phase.
+**Delivers:** Migration applied to Supabase production (extensions enabled, `f_unaccent()` wrapper, GIN index on `venues.name_en`, `search_venues_fuzzy` RPC). `src/utils/normalize.ts` with `normalizeQuery()` and `stripAccents()` unit-tested against concrete failing cases.
 
-**Addresses:** Booking list, booking detail, status history timeline, edit audit log, role guard, nav entry point (all table-stakes features except status update and manual create)
+**Addresses:** Table-stakes features — accent normalization foundation, space/punctuation normalization foundation, pg_trgm infrastructure for typo tolerance.
 
-**Avoids:** Client-side-only RBAC (define `requireAdminRole` helper first); wrong Supabase client (establish two-client pattern in first route handler and document it); npm packages missing (`npm install stripe resend` at step 0 even though they are not used until Phase 3)
+**Avoids:** Pitfall 1 (STABLE/IMMUTABLE — wrapper is created first), Pitfall 2 (index-query mismatch — single normalization function used in both), Pitfall 4 (CONCURRENTLY — enforced in migration file), Pitfall 7 (normalization asymmetry between TypeScript and DB).
 
-**Build sub-order:**
-1. `npm install stripe resend` in nlt-admin; verify in `package.json`; add Railway env vars (`STRIPE_SECRET_KEY`, `RESEND_API_KEY`, `NIGHTLIFE_CONSUMER_URL`) to nlt-admin service
-2. `types/vip.ts` — port VIP types from nightlife-mcp `types.ts`
-3. `services/vipAdminService.ts` — port list, detail, venues, and create functions from nightlife-mcp `vipAdmin.ts`; remove Express-specific imports; accept `SupabaseClient` parameter
-4. `requireAdminRole` helper — shared auth guard reused across all API routes
-5. `app/api/vip/venues/route.ts` — GET only (needed later by create form)
-6. `app/api/vip/bookings/route.ts` — GET only (list)
-7. `app/api/vip/bookings/[id]/route.ts` — GET only (detail)
-8. `components/vip/VipStatusBadge.tsx` and `VipBookingFilters.tsx`
-9. `views/vip/VipBookingsPage.tsx` and `VipBookingDetailPage.tsx` (read-only, no edit actions)
-10. Page shells under `app/(admin)/vip/`, `app/(admin)/vip/[id]/`
-11. Add VIP section to `AdminNavConfig.ts`
+**Verification gate before proceeding to Phase 2:**
+- `SELECT f_unaccent('CÉ LA VI')` returns `ce la vi`
+- `SELECT * FROM search_venues_fuzzy('<tokyo_city_id>', 'celavi', 0.15, 10)` returns the CÉ LA VI row
+- Unit tests: `normalizeQuery('CeLaVi')` → `'celavi'`; `normalizeQuery('1oak')` → `'1oak'`; `normalizeQuery('é')` → `'e'`
+- `EXPLAIN ANALYZE` on venue query shows Index Scan, not Seq Scan
 
-### Phase 2: Create Booking Mutation
+### Phase 2: Venue Search Integration
 
-**Rationale:** Creating a booking has fewer side effects than status update — one Resend email, no Stripe. Building it before the more complex PATCH route validates Resend integration in isolation and exercises the POST route pattern cleanly.
+**Rationale:** Venues are the highest-priority search surface (triggered the milestone) and require the DB RPC from Phase 1. The venues service modification is the most architecturally complex change — it introduces the two-pass search strategy (exact/ilike first → fuzzy RPC fallback on zero results) and must intersect RPC results with the occurrence-based venue set without disrupting the date/genre/area filter chain.
 
-**Delivers:** Ops can create bookings on behalf of customers who call in via phone or LINE, directly from nlt-admin. Resend email templates ported and working in the new environment.
+**Delivers:** `search_venues` MCP tool and `GET /api/v1/venues` REST endpoint correctly return results for "CeLaVi", "1oak", "Zeuk", and similar queries. No regressions on the no-query path or any existing filter behavior.
 
-**Uses:** `resend@^6.9.3` (already installed in Phase 1); `RESEND_API_KEY` Railway env var; ported `email.ts` and `templates.ts` from nightlife-mcp
+**Uses:** `search_venues_fuzzy` RPC (Phase 1), `normalizeQuery()` utility (Phase 1), existing `.rpc()` call pattern from `cities.ts` and `authorize.ts`.
 
-**Implements:** POST handler in `app/api/vip/bookings/route.ts`; `createVipAdminBooking()` service function; `views/vip/VipBookingCreatePage.tsx` with venue selector; page shell under `app/(admin)/vip/new/`
+**Implements:** Two-pass search strategy — if `queryNeedle` is non-empty: call RPC, build `Set<venueId>` from results, intersect with occurrence-based venue set; if RPC returns zero results, return empty with no further fallback.
 
-**Avoids:** Stripe URL confusion (create flow does not use Stripe, keeping concerns separate for this phase)
+**Avoids:** Pitfall 5 (no `.ilike()` column expression — RPC is the only path for normalized search), Pitfall 4 (over-fuzzy matching — threshold 0.15 + ILIKE arm in RPC, results ordered by similarity DESC), Anti-Pattern 1 from ARCHITECTURE.md (no full-venue-table fetch in TypeScript).
 
-### Phase 3: Status Update with Stripe and Resend Side Effects
+**Verification gate before proceeding to Phase 3:**
+- `search_venues city=tokyo query=celavi` returns CÉ LA VI
+- `search_venues city=tokyo query=1oak` returns 1 OAK
+- `search_venues city=tokyo query=zeuk` returns Zouk
+- `search_venues city=tokyo` (no query) returns same results as before the change
+- W∆RP edge case tested and documented: if "warp" does not find "W∆RP", note it as a known gap for v3.x `name_aliases`
 
-**Rationale:** The most complex route (PATCH with atomic RPC plus conditional Stripe plus conditional Resend in sequence) is built last, after all dependencies are installed and validated. By this point Resend is tested (Phase 2), Stripe keys are already in Railway (Phase 1 prep), and the service layer is established. The non-blocking `try/catch` pattern for side effects matches the existing Express implementation — deliberate, because an admin must never be blocked from changing booking status due to a transient Stripe or Resend error.
+### Phase 3: Events and Performers Normalization
 
-**Delivers:** Full ops workflow — admins can move bookings through the complete status pipeline (submitted → in_review → deposit_required → confirmed or rejected or cancelled) with automatic Stripe deposit session creation and Resend email dispatch on the appropriate transitions.
+**Rationale:** Simpler than venues — no DB changes, no RPC calls, no intersection logic. Apply `normalizeQuery()` to the in-memory needle before `hasNeedle()` calls in events and performers services. Trailing Phase 2 ensures the normalization utility is already stable and battle-tested before being applied more broadly.
 
-**Uses:** `stripe@^20.4.1` (already installed); `STRIPE_SECRET_KEY`, `NIGHTLIFE_CONSUMER_URL` Railway env vars; `admin_update_vip_booking_request` RPC for atomic DB update plus audit trail; non-blocking `try/catch` wrapping all side effects
+**Delivers:** `search_events` and `search_performers` tools return results for accent-variant queries (e.g., "dua lipa" finds "Duá Lipa", "shinjuku" finds "Shinjukū"). Zero DB changes. Zero changes to MCP tool interfaces or REST endpoints.
 
-**Avoids:** Blocking HTTP response on side-effect failures; editor_username hardcoded or empty (extract from `user.email` via `supabase.auth.getUser()` before every RPC call); Stripe success URL pointing to wrong domain (use `NIGHTLIFE_CONSUMER_URL` explicitly)
+**Uses:** `normalizeQuery()` utility (Phase 1 only).
 
-### Phase 4: Production Verification and Express Cleanup
+**Avoids:** Pitfall 8 (no `pg_trgm` similarity applied to events/performers — accent-stripped ILIKE only), Anti-Pattern 2 from ARCHITECTURE.md (no DB RPC for event/performer search).
 
-**Rationale:** Cleanup is the last and most irreversible step. The Express dashboard in nightlife-mcp has been running live bookings. Removing it before nlt-admin is proven creates a zero-fallback scenario. Running both systems in parallel through Phases 1 to 3 is the only safe approach.
-
-**Delivers:** nightlife-mcp codebase free of admin/ops code (`src/admin/` deleted, Express admin routes removed from `http.ts`). Clean separation of concerns: all VIP booking management lives in nlt-admin.
-
-**Gate criteria (all must be met before this phase begins):**
-- nlt-admin VIP dashboard has been in production for at least 48 hours
-- Ops team has confirmed at least one full deposit creation and Stripe session verified in Stripe dashboard
-- Ops team has confirmed at least one confirmation email received at the customer test address
-- All items in the "Looks Done But Isn't" checklist from PITFALLS.md are checked off
-- nightlife-mcp Express admin routes confirmed still responding before the cleanup PR is merged
+**Verification gate:**
+- `search_events city=tokyo query="dua lipa"` finds Dua Lipa events if any exist
+- Existing event search test cases pass without regression
+- No similarity operators or RPC calls appear in the events or performers code paths
 
 ### Phase Ordering Rationale
 
-- **Reads before writes:** Read-only routes can be validated quickly without any external service dependencies. Mutations require Stripe and Resend to be live, which adds deployment risk.
-- **Simple mutations before complex mutations:** Create (Phase 2) has one side effect. Update (Phase 3) has two conditional side effects in sequence. Building in order validates each integration independently so failures are easier to diagnose.
-- **Parallel systems throughout Phases 1 to 3:** The Express dashboard remains live the entire time nlt-admin is being built. The cleanup PR is a distinct, gated milestone — never appended as a last step to Phase 3.
-- **Package and env var setup at step 0:** Installing packages and setting Railway env vars happens at the very start of Phase 1 before writing any code. This eliminates two of the eight documented pitfalls before they can occur.
+- Phase 1 must precede Phase 2 because the venues service depends on both the DB RPC and the normalize utility.
+- Phase 1 must precede Phase 3 because the events/performers services depend on the normalize utility.
+- Phase 2 and Phase 3 are independent once Phase 1 is complete — they could be parallelized, but Phase 2 is higher priority and more complex, so sequential ordering reduces diagnostic surface area.
+- The two-pass search strategy (try exact/ilike first → fall back to fuzzy RPC only on zero results) isolates the fuzzy overhead to the minority case and keeps the happy path fast.
+- No phase changes MCP tool interfaces, the REST router, auth, or config — this limits regression risk to the three modified service files.
 
 ### Research Flags
 
-Phases with well-documented patterns — skip additional `/gsd:research-phase`:
+No phases require `/gsd:research-phase` during planning. All patterns are fully specified in the research files.
 
-- **Phase 1 (Foundation):** All patterns are established in nlt-admin's existing admin sections (`/api/admin/users`, invoicing hooks, `useClientFinancials` hook). Auth, service layer, and read-only route patterns are directly observable in live code. No additional research needed.
-- **Phase 2 (Create Mutation):** Resend HTML template approach is fully documented and already in use in nightlife-mcp. POST route pattern follows Phase 1 API route structure exactly.
-- **Phase 4 (Cleanup):** Straightforward deletion of `src/admin/` from nightlife-mcp. No research needed — verification checklists drive this phase.
-
-Phases that may need targeted research during planning:
-
-- **Phase 3 (Status Update with Stripe):** The Stripe webhook route (`app/api/webhooks/stripe/route.ts`) uses `request.text()` for raw body — confirmed by community sources (MEDIUM confidence) but worth validating with a test webhook in nlt-admin staging before production. The non-blocking side-effect pattern is a deliberate design decision that should be explicitly re-confirmed with the team — a queue-based retry approach is the alternative if deposit email failures become a support issue at higher booking volumes.
+Phases with well-documented patterns:
+- **Phase 1 (DB migration):** PostgreSQL official docs, Supabase extension catalog, and the immutable wrapper pattern are all documented with HIGH-confidence sources. The full migration SQL is specified in both STACK.md and ARCHITECTURE.md and can be copied directly into the migration file.
+- **Phase 2 (venues service):** The `supabase.rpc()` call pattern is already used in the codebase (`cities.ts`, `authorize.ts`). The ID set intersection is standard TypeScript. No new patterns introduced.
+- **Phase 3 (events/performers):** Modifying `hasNeedle()` to normalize both sides is a trivial change. No new patterns, no DB involvement.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Two new packages (`stripe`, `resend`) are already in nightlife-mcp; versions confirmed via npm registry 2026-03-11. All other stack is unchanged in nlt-admin. No unknowns. |
-| Features | HIGH | Feature set is defined by the existing Express dashboard read directly from source. Full parity is the explicit goal — no guessing required. |
-| Architecture | HIGH | Both codebases read directly. nlt-admin's existing admin section patterns (invoicing, users) are the blueprint. Component structure fully specified in ARCHITECTURE.md. |
-| Pitfalls | HIGH | All 8 pitfalls grounded in direct code inspection of both repos. Most have recovery strategies already documented. Next.js 15 App Router specifics confirmed via Vercel official docs and community sources. |
+| Stack | HIGH | PostgreSQL official docs for both extensions; Supabase extension catalog confirmed availability; existing codebase confirms `supabase.rpc()` call pattern works in production |
+| Features | HIGH | Verified against existing `hasNeedle()` source code in all three service files; PGroonga docs confirm pg_trgm + Japanese limitation; all feature decisions grounded in concrete observed code behavior |
+| Architecture | HIGH | Based on direct source reads of venues.ts, events.ts, and performers.ts; build order is dependency-derived; component responsibilities confirmed against live code |
+| Pitfalls | HIGH | `unaccent()` STABLE/IMMUTABLE from official PostgreSQL docs; katakana failure from official PostgreSQL BUG report; `CONCURRENTLY` constraint from official docs; consumer-site table lock from direct project knowledge of shared Supabase setup |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **`NIGHTLIFE_BASE_URL` vs `NIGHTLIFE_CONSUMER_URL` naming:** PITFALLS.md recommends creating a new env var name (`NIGHTLIFE_CONSUMER_URL`) distinct from any admin or API server URL to avoid Stripe redirect URL misconfiguration. This naming should be resolved before writing the deposit creation route in Phase 3.
-- **RLS policy on `admin_update_vip_booking_request` RPC:** Research notes the RPC requires service role, but whether it is declared `SECURITY DEFINER` (executes as owner, bypasses RLS automatically) or requires the caller to present the service role key is not confirmed. Verify this against the Supabase migration file before implementing the PATCH route.
-- **Resend singleton lifecycle in nlt-admin:** The singleton pattern (`let resendInstance: Resend | null = null`) works in Express long-lived process and in Next.js standalone server. PITFALLS.md flags MEDIUM confidence on this — if Railway restarts cause issues, the fix is instantiate per-request (one line change). Worth watching on first deploy.
+- **W∆RP edge case:** The delta character (∆) is non-ASCII and non-alphabetic. After NFD normalization and non-alphanumeric stripping, "W∆RP" becomes "WRP" (not "WARP"), so `query=warp` may not find it. This is an acceptable gap for v3.0 — if confirmed during Phase 2 verification, document it as a known gap and add `name_aliases: ['WARP']` to the venue record in a v3.x follow-up. Do not block v3.0 launch on this edge case.
+
+- **`pg_trgm` threshold calibration:** The research recommends 0.15 as the initial RPC threshold (lower than the pg_trgm default of 0.3) because the RPC uses an ILIKE containment arm as a second condition. If over-matching appears in production testing (too many irrelevant venues returned for short queries), raise to 0.2–0.25. This requires one or two test cycles against real Tokyo venue data to calibrate — not a blocker for launch.
+
+- **`unaccent` macron coverage:** Research flags that `unaccent()` may not handle `ō`, `ū`, `ā` (Japanese romanization macrons) correctly out of the box. Must verify in Phase 1 before any search logic is tested: `SELECT f_unaccent('ō')` should return `'o'`. If it returns `'ō'` unchanged, add custom rules to the `unaccent.rules` file. This is a 20-minute fix and must not be skipped — it affects the most common Japanese romanization patterns (Ōsaka, Tōkyō, Shinjukū).
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Live codebase: `/Users/alcylu/Apps/nightlife-mcp/src/admin/vipAdminRouter.ts`, `src/services/vipAdmin.ts`, `src/services/deposits.ts`, `src/services/email.ts` — exact logic to port
-- Live codebase: `/Users/alcylu/Apps/nlt-admin/src/app/api/admin/users/route.ts`, `src/lib/supabase/service-client.ts`, `src/lib/supabase/server.ts`, `src/hooks/useClientFinancials.ts` — established patterns to follow
-- npm registry (2026-03-11): `stripe@20.4.1`, `resend@6.9.3` — version confirmation
-- Stripe Node SDK changelog: API version `2026-02-25.clover` confirmed for v20.4.x
-- Resend official docs (Send with Next.js): `html` prop for HTML string emails confirmed
-- CLAUDE.md (both nightlife-mcp and nlt-admin projects): env vars, Railway setup, role system, RPC signatures
+- [PostgreSQL pg_trgm documentation (v18)](https://www.postgresql.org/docs/current/pgtrgm.html) — similarity operators, GIN index support, threshold GUC parameters
+- [PostgreSQL unaccent documentation (v17)](https://www.postgresql.org/docs/17/unaccent.html) — STABLE vs IMMUTABLE constraint, dictionary behavior
+- [Neon unaccent extension docs](https://neon.com/docs/extensions/unaccent) — immutable wrapper pattern, exact SQL for expression index
+- [Supabase extensions overview](https://supabase.com/docs/guides/database/extensions) — pg_trgm and unaccent confirmed available and pre-installed on Supabase cloud
+- [PGroonga vs pg_trgm comparison](https://pgroonga.github.io/reference/pgroonga-versus-textsearch-and-pg-trgm.html) — pg_trgm non-ASCII limitation confirmed
+- [PostgreSQL BUG #18216](https://www.postgresql.org/message-id/CAFj8pRALjAQmCjQ+NiCPpob+dAprBFPb2XqZPeYDHEjdJmYK9A@mail.gmail.com) — `unaccent()` katakana failure confirmed
+- [How to Use Postgres CREATE INDEX CONCURRENTLY](https://www.bytebase.com/blog/postgres-create-index-concurrently/) — production locking behavior documented
+- Codebase: `src/services/venues.ts`, `src/services/events.ts`, `src/services/performers.ts` — existing `hasNeedle()` and query patterns confirmed via direct source read
 
 ### Secondary (MEDIUM confidence)
-- Medium, Gragson (2025): Stripe Checkout and Webhook in Next.js 15 — `request.text()` for raw body in App Router webhook route
-- Vercel blog: Common mistakes with Next.js App Router — API route auth patterns
-- catjam.fi: Next.js + Supabase in production — service role patterns
-- Pedro Alonso blog: Stripe + Next.js 15 Complete Guide 2025 — Stripe integration patterns
-- adrianmurage.com: How to Use the Supabase Service Role Secret Key in Next.js Routes
-
-### Tertiary (LOW confidence)
-- Medium, Syngenta Digital: Navigating Frontend Migration — parallel deployment strategy (general principle, not Next.js-specific)
-- TablelistPro / Resy for Operators / Discotech Ops — competitor feature analysis (domain patterns only; not inspected directly)
+- [Aapelivuorinen.com — Postgres text search vs trigrams](https://www.aapelivuorinen.com/blog/2021/02/24/postgres-text-search/) — when to use trigrams vs full-text search for short name fields
+- [pganalyze — GIN indexes](https://pganalyze.com/blog/gin-index) — GIN vs GiST tradeoff for trigram use case
+- [Postgres trigram indexes vs Algolia](https://dev.to/saashub/postgres-trigram-indexes-vs-algolia-1oma) — scale thresholds for when external search engines make sense
+- [Supabase fuzzy search community discussion](https://github.com/orgs/supabase/discussions/5435) — community consensus on RPC-based approach
+- [Unaccented Name Search with Postgres and Ecto](https://peterullrich.com/unaccented-name-search-with-postgres-and-ecto) — concrete example combining f_unaccent + GIN(gin_trgm_ops)
 
 ---
-*Research completed: 2026-03-11*
+*Research completed: 2026-03-12*
 *Ready for roadmap: yes*

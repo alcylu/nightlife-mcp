@@ -1,25 +1,38 @@
 # Feature Research
 
-**Domain:** Internal ops booking management dashboard (VIP table booking admin — migration to Next.js)
-**Researched:** 2026-03-11
-**Confidence:** HIGH (existing dashboard read directly from source; nlt-admin codebase inspected; domain patterns from hospitality/nightlife SaaS)
+**Domain:** Fuzzy/accent-insensitive search for venue, event, and performer discovery (MCP + REST API)
+**Researched:** 2026-03-12
+**Confidence:** HIGH (verified against PostgreSQL official docs, Supabase docs, and direct inspection of existing service code)
 
 ---
 
 ## Context
 
-This research covers **what features matter** when moving the VIP booking dashboard from a server-rendered Express app (`nightlife-mcp/src/admin/`) into **nlt-admin** (Next.js 15, React 19, Supabase auth, shadcn-ui). The audience is 2 internal ops team members. Volume is low (few dozen bookings, not hundreds). The goal is ops efficiency, not scale.
+This research covers the feature landscape for **v3.0 Fuzzy Search** — making the existing `search_venues`, `search_events`, and `search_performers` tools resilient to:
 
-**Existing features (already built — must migrate with full parity):**
+- Accent variations: `celavi` → finds `CÉ LA VI`, `shin` → finds `Shīn`
+- Space/punctuation differences: `1oak` → finds `1 OAK`, `warp` → finds `W∆RP`
+- Typo tolerance: `Zoook` → finds `Zouk`
+- Japanese long-vowel romanization: `osaka` → finds `Ōsaka`
 
-- Booking list with status/date/search filters, pagination
-- Booking detail with status history timeline + edit audit log
-- Status update workflow: submitted → in_review → deposit_required → confirmed/rejected/cancelled
-- Side effects on status change: Stripe deposit session creation (deposit_required), Resend emails (deposit_required, confirmed, rejected)
-- Manual booking creation (admin on behalf of customer)
-- Cookie-based auth (to be replaced by nlt-admin's Supabase role-based auth)
+**Existing search baseline** (read from `src/services/venues.ts`):
 
-**What this research answers:** For an internal nightlife VIP ops dashboard, which features are table stakes vs. differentiators vs. anti-features, with complexity annotations and dependency links to existing code.
+The current implementation uses in-memory `hasNeedle()`:
+```
+String(value || "").toLowerCase().includes(needle)
+```
+This is pure substring matching — no accent stripping, no normalization, no typo tolerance. The query does not touch the database for text matching (venues are fetched by city+date, then filtered in-memory using `hasNeedle()`).
+
+**PostgreSQL extensions available on Supabase** (confirmed via Supabase docs):
+- `unaccent` — removes diacritics from text (é→e, ō→o, etc.)
+- `pg_trgm` — trigram similarity matching (fuzzy/typo tolerance)
+- `fuzzystrmatch` — Levenshtein distance, Soundex, Metaphone
+- `PGroonga` — multilingual full-text search (supports Japanese natively)
+
+**Critical constraint on pg_trgm + Japanese text** (verified via PGroonga docs):
+> "pg_trgm disables non-ASCII character support. It means that pg_trgm doesn't support many Asian languages such as Japanese and Chinese by default."
+
+This means pg_trgm trigram similarity works correctly on Latin characters (venue names like "CÉ LA VI", "1 OAK", "Zouk") but will silently ignore Japanese katakana/hiragana/kanji. For this project, venue/performer/event names stored in `name_en` are already in Latin script. Japanese names are stored in `name_ja`. The search `query` parameter from AI agents like Gemini will almost always be in Latin script. So pg_trgm is appropriate.
 
 ---
 
@@ -27,137 +40,105 @@ This research covers **what features matter** when moving the VIP booking dashbo
 
 ### Table Stakes (Users Expect These)
 
-Features ops will immediately notice missing. Not having them makes the dashboard feel broken.
+Features that AI agents and developers expect to work. Missing these means the API returns zero results for reasonable queries — the triggering bug is Gemini calling `search_venues` with `"CeLaVi"` and getting nothing.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| Booking list with status badges | First screen. Ops needs a scannable queue at a glance. Without it, there's no dashboard. | LOW | Already: `listVipAdminBookings()` in `vipAdmin.ts`. Re-implement with React Query fetch from a Next.js API route or direct Supabase client call. |
-| Status filter (multi-select) | Ops works queues by status (e.g., "show me all submitted"). Filtering by status is the primary navigation pattern. | LOW | Already: `statuses` param in list query. Render as checkbox group or multi-select combobox using shadcn. |
-| Date range filter | Ops needs to find bookings "for this Saturday" or "last two weeks". Without dates, the list is noise. | LOW | Already: `booking_date_from` / `booking_date_to` in list query. Use a date range picker or two date inputs. |
-| Customer search | When a customer calls in, ops searches by name/email/phone. Missing search = ops manually scans a list. | LOW | Already: `search` param queries `customer_name`, `customer_email`, `customer_phone` via Supabase `.or()`. |
-| Booking detail view | Ops needs to see the full record — customer info, venue, table code, min spend, special requests — before taking action. | LOW | Already: `getVipAdminBookingDetail()`. Re-implement as a detail page with the same fields. |
-| Status history timeline | Ops needs to see what happened: who changed the status, when, and what note they left. Without it, there's no accountability. | LOW | Already: `vip_booking_status_events` table, populated via `admin_update_vip_booking_request` RPC. Render as a vertical timeline. |
-| Status update action | Core ops workflow. Moving a booking from submitted → in_review → confirmed is the primary job to be done. | MEDIUM | Already: `updateVipAdminBooking()` which calls `admin_update_vip_booking_request` RPC. nlt-admin must use the same RPC for atomic updates + audit trail. |
-| Deposit trigger on status change | When moving to deposit_required, a Stripe checkout session must be created automatically. Ops won't manually create deposits. | MEDIUM | Already: `createDepositForBooking()` called inside `updateVipAdminBooking()`. Must be replicated in a Next.js API route (needs `STRIPE_SECRET_KEY`). |
-| Email dispatch on key transitions | Ops expects the customer to receive an email when status changes to deposit_required, confirmed, or rejected. No manual emailing. | MEDIUM | Already: `sendDepositRequiredEmail()`, `sendBookingConfirmedEmail()`, `sendBookingRejectedEmail()` via Resend. Must run in nlt-admin API route (needs `RESEND_API_KEY`). |
-| Pagination | Without pagination, a long list becomes unscrollable. Not glamorous, but mandatory. | LOW | Already: `limit`/`offset` in list query, `total_count` in response. Standard shadcn pagination or "load more" pattern. |
-| Edit audit log on booking detail | When multiple ops members work a booking, they need to see who edited what fields, when, and what they changed. Without this, debugging disputes is impossible. | LOW | Already: `vip_booking_edit_audits` table populated by RPC. Render on detail page below status history. |
-| Role-based access guard | Only super_admin and admin should reach this dashboard. Without the guard, any authenticated user can access customer PII and take ops actions. | LOW | nlt-admin already has `ProtectedRoute` + role checks. Wrap VIP pages in a role guard that checks for super_admin or admin. Replaces the old cookie-based auth. |
-| Manual booking creation | Ops creates bookings for customers who call in directly (phone, LINE). Without this, ops has no way to enter a booking without going through the MCP/API. | MEDIUM | Already: `createVipAdminBooking()` which delegates to `createVipBookingRequest()`. Re-implement as a form in nlt-admin with venue selector (VIP-enabled venues only). |
+| Accent stripping on venue name query | Any AI agent searching for "CÉ LA VI" using "celavi" or "CeLaVi" expects a result. This is the specific bug that triggered v3.0. | LOW | Apply `String.prototype.normalize("NFD")` + strip combining diacritics in TypeScript before calling `hasNeedle()`. No DB change required. Works on Latin accents (é→e, ō→o, â→a, ü→u) and is sufficient for the known failing cases. |
+| Case-insensitive matching | Already implemented via `.toLowerCase()`. Expected by every caller. | NONE | Already done in `hasNeedle()`. |
+| Space/punctuation normalization on venue names | "1oak" should find "1 OAK". "warp" should find "W∆RP". Agents may drop spaces and punctuation when typing venue names. | LOW | Strip non-alphanumerics from both needle and haystack during comparison. Pure TypeScript, no DB change. Implement as a second pass after the primary accent-stripped comparison. |
+| Accent stripping on event and performer name query | An agent searching for "shinjuku" may see "Shinjukū" in results. Basic normalization keeps results consistent. | LOW | Same NFD normalization + diacritic strip applied to event name and performer name fields. Same function, different call sites. |
 
 ### Differentiators (Competitive Advantage)
 
-Features not found in a generic ops dashboard but valuable for this specific domain and team size.
+Features that go beyond "fixing the bug" into genuinely better search quality. Valuable but not critical for v3.0.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Agent task status indicator on list | `vip_agent_tasks` tracks async ops tasks (email sends, deposit creation). Showing task status on the booking row catches failures before the customer complains. | LOW | Already fetched in `buildBookingSummaries()`. Surface as a small badge (pending/claimed/done/failed) on the list row. Especially useful for catching failed deposit or email sends. |
-| Status-message field with customer-visible text | The `status_message` field is shown to customers. Ops can write a custom note (e.g., "Your table is confirmed at 23:00, mention this booking ID at the door.") that goes out with emails. | LOW | Already: `status_message` in the patch schema. Expose as a textarea in the status update form with a label indicating it's customer-facing. |
-| Internal note field (not customer-visible) | Ops often needs to record internal context ("venue said they have a VIP event, double-check table assignment") that shouldn't appear in customer emails. | LOW | Already: `agent_internal_note` in patch schema. Expose as a separate textarea in the detail edit form with a clear "internal only" label. |
-| Change note on each edit | Forcing ops to write a brief note when changing booking fields ("corrected party size per customer callback") creates a searchable audit trail without overhead. | LOW | Already: `p_note` param in `admin_update_vip_booking_request` RPC. Expose as an optional "reason for change" field on the edit form. |
-| Preferred table code + min spend display | Shows which table the customer requested and the system-computed min spend. Ops can see immediately if the table code is valid or if it triggered a `table_warning`. | LOW | Already in booking row: `preferred_table_code`, `min_spend`, `min_spend_currency`, `table_warning`. Display on both list (abbreviated) and detail view. |
-| Venue-scoped list filter | When ops works with a specific venue partner (e.g., 1 Oak's contact called about a booking), filtering the list by venue speeds triage. | LOW | Not currently implemented in the Express dashboard. Add `venue_id` as an optional filter on `listVipAdminBookings()`. Render as a dropdown of VIP-enabled venues (already have `listVipAdminVenues()`). |
-| Empty state with clear call to action | Internal dashboards often show blank screens when filters return no results. An explicit "No bookings match these filters. Clear filters to see all bookings." avoids confusion. | LOW | Standard UX pattern. Implement as a shadcn `Card` with icon and reset-filters button. |
+| Typo-tolerant venue search (pg_trgm) | An agent typing "Zoook" instead of "Zouk" still finds the venue. This handles 1-2 character typos that accent normalization alone cannot catch. | MEDIUM | Requires: (1) `CREATE EXTENSION pg_trgm` in Supabase, (2) a Supabase RPC (`search_venues_fuzzy`) that uses `similarity(name_en, $query) > 0.3`, (3) a new code path in `searchVenues()` that falls back to the RPC when the in-memory filter returns zero results. Scope: venue names only (450 records, city-scoped, manageable). |
+| Ranked results by match quality | When multiple venues match a fuzzy query, the most similar name ranks first. Currently ranking is by event count, not match similarity. | MEDIUM | Requires pg_trgm `similarity()` score returned from the RPC and used for ordering. Adds a `match_score` field internally (not exposed in API response unless needed). For venue search this matters — if "Zouk" and "1 OAK" both fuzzy-match "Zo1k", Zouk should rank higher. |
+| Alternate name / slug indexing | Venues like "W∆RP" have a common alternate name "WARP". Storing and searching alternate names catches stylized spellings that normalization alone can't handle. | HIGH | Requires a DB schema change: `venue_search_aliases` table or `name_aliases text[]` column on `venues`. Out of scope for v3.0. Worth tracking as a future improvement for venues with non-standard characters in official names. |
+| Phonetic matching (Soundex / Metaphone) | "Seak" sounds like "Zeek" — phonetic matching catches pronunciation-based typos that trigram matching misses. | HIGH | PostgreSQL `fuzzystrmatch` extension provides `soundex()` and `metaphone()`. For nightclub names (short, often stylized, often proper nouns), phonetic matching generates too many false positives. Not recommended for this domain. |
+| Japanese character search (PGroonga) | An agent could search for a venue using actual Japanese kanji/katakana. PGroonga supports this natively; pg_trgm does not. | HIGH | PGroonga is a separate extension with a different index type. It is available on Supabase but requires significant index setup and query pattern changes. The actual user demand for Japanese-script queries from AI agents is very low — agents are prompted in English. This is not worth the complexity for v3.0. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Real-time auto-refresh / websocket push | "I want to see new bookings appear without refreshing the page" | At 2 ops users and low booking volume, the complexity of websocket infra (or Supabase Realtime subscriptions) far outweighs the benefit. Polling or manual refresh is entirely sufficient. | React Query `refetchInterval: 60000` (1-minute background refetch) + a "Refresh" button on the list page. |
-| Bulk status update | "Select multiple bookings and approve them all at once" | Each status change has side effects (Stripe, email). Bulk actions risk partial failures with no clear rollback. For 2 ops users and low volume, one-at-a-time is safe and auditable. | Single-booking workflow with fast navigation (list → detail → back to list). If volume grows, add bulk later. |
-| CSV / data export | "Export all bookings for monthly reporting" | Scope creep for a migration milestone. Not used in the Express dashboard. Adds complexity (streaming, file generation) that should only be built when explicitly needed. | Ops can query Supabase Studio directly for bulk data. Add export as a future P3 feature if ops requests it. |
-| Email template editing UI | "I want to edit the confirmation email from the dashboard" | Template editing introduces a WYSIWYG editor, versioning, and preview complexity. Email templates are stable and rarely change — this is a solution looking for a problem. | Keep Resend templates in code (`src/emails/templates.ts`). Change via deploy. |
-| In-app Stripe dashboard / payment management | "Show payment status and refund from the dashboard" | Stripe has a full-featured dashboard. Duplicating payment management creates a maintenance burden and security surface. Ops can open Stripe directly for payment details. | Link to Stripe dashboard from the booking detail page when a deposit session exists. |
-| Rich text / markdown in status message | "Let me format the confirmation message with bold and line breaks" | Customer emails are sent as HTML via Resend templates. The `status_message` is injected as-is. Markdown would appear as raw syntax in emails unless parsed, which adds rendering complexity. | Plain text textarea. Ops writes readable prose. Email template wraps it in the correct HTML context. |
-| Notification / alert system | "Send me a Slack/email alert when a new booking arrives" | At 2 ops users, alert fatigue is a real risk. The `vip_agent_tasks` table already handles background alert dispatch. Building a push notification system for the dashboard UI is premature. | Ops checks the dashboard on their normal cadence. Booking volume is low enough that this is sustainable. |
+| External search engine (Algolia, MeiliSearch, Typesense) | "Algolia has great fuzzy search out of the box" | At 450 venues, adding an external search service introduces a sync pipeline (DB → search index), a new dependency, API costs, and data staleness risk. pg_trgm in the existing Supabase DB is sufficient for this dataset size and query pattern. One system, zero sync. | Use pg_trgm RPC for fuzzy matching. Revisit external search only if dataset exceeds 10K records or query complexity demands it. |
+| Fuzzy search on all fields everywhere | "Make the description field fuzzy too" | Event and performer descriptions are long-form prose. Fuzzy matching on descriptions generates irrelevant results and increases DB load. Fuzzy/typo tolerance is valuable for short proper nouns (venue names), not free text. | Apply fuzzy matching to name fields only. Use standard substring (`ilike`) for description search, which is already sufficient for prose. |
+| Real-time search-as-you-type | "Show results as the agent types" | MCP tools are called with a complete query parameter — there is no "typing" event. REST API users could theoretically stream, but the latency of Supabase RPC calls makes sub-100ms interactive search unlikely without caching. | Optimize for single-call latency. A well-tuned RPC with a GIN index on `name_en` will return results in <50ms for 450 records. |
+| Levenshtein distance cutoff per word length | "1-typo tolerance for short names, 2-typo for long names" | Dynamic thresholds based on word length require custom application logic and are hard to tune consistently. The pg_trgm similarity threshold (0.3 default) naturally handles this — short strings need more similar trigrams to pass the threshold. | Use pg_trgm's similarity threshold as-is. Tune the threshold constant (e.g., 0.25 for more recall, 0.4 for more precision) based on real query failures. |
+| Synonym mapping ("WOMB" = "womb tokyo") | "Map common abbreviations and alternate names to canonical names" | A synonym table requires ops maintenance. Venue names change, alternate names proliferate, and stale mappings cause confusion. | Accent normalization + space stripping handles most variants. For venues with truly unusual names (W∆RP), add a `name_aliases` column as a v3.x improvement with a concrete list of known aliases. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-[Booking list page]
-    └──requires──> [Supabase client in nlt-admin]         (already exists — same project)
-    └──requires──> [Role guard: super_admin or admin]     (nlt-admin ProtectedRoute pattern)
-    └──requires──> [Next.js API route: GET /api/vip/bookings]  (or direct Supabase query)
-    └──enhances──> [Venue filter dropdown]                (requires listVipAdminVenues())
-    └──enhances──> [Agent task badge]                     (data already in list response)
+[Accent normalization — TypeScript NFD]
+    └──required for──> [Venue search fixes (celavi → CÉ LA VI)]
+    └──required for──> [Event search normalization]
+    └──required for──> [Performer search normalization]
+    └──applies to──> [hasNeedle() — all three services share this function pattern]
 
-[Booking detail page]
-    └──requires──> [Booking list page]                    (navigation entry point)
-    └──requires──> [Next.js API route: GET /api/vip/bookings/[id]]
-    └──enhances──> [Status history timeline]              (vip_booking_status_events)
-    └──enhances──> [Edit audit log]                       (vip_booking_edit_audits)
+[Space/punctuation normalization — TypeScript]
+    └──enhances──> [Accent normalization]
+    └──required for──> [1oak → 1 OAK style matches]
+    └──applies to──> [venue name search only (most important for venue names)]
 
-[Status update action]
-    └──requires──> [Booking detail page]                  (context for what's being updated)
-    └──requires──> [Next.js API route: PATCH /api/vip/bookings/[id]]
-    └──requires──> [admin_update_vip_booking_request RPC] (atomic update + audit trail)
-    └──triggers──> [Stripe deposit creation]              (when → deposit_required)
-    └──triggers──> [Resend email dispatch]                (when → deposit_required, confirmed, rejected)
+[pg_trgm RPC (fuzzy typo tolerance)]
+    └──requires──> [pg_trgm extension enabled in Supabase]
+    └──requires──> [GIN index on venues.name_en (optional but recommended for performance)]
+    └──requires──> [Supabase RPC: search_venues_fuzzy(city_id, query_normalized, threshold)]
+    └──requires──> [Fallback code path in searchVenues(): try exact → try fuzzy]
+    └──enhances──> [Accent normalization] (normalize query before passing to RPC)
 
-[Stripe deposit creation]
-    └──requires──> [Status update action with deposit_required]
-    └──requires──> [STRIPE_SECRET_KEY env var on Railway]
-    └──requires──> [deposits.ts service logic ported or imported]
+[pg_trgm RPC]
+    └──conflicts-with──> [Japanese text in name_ja] (pg_trgm drops non-ASCII silently)
+    └──scoped-to──> [name_en field only]
 
-[Resend email dispatch]
-    └──requires──> [Status update action]
-    └──requires──> [RESEND_API_KEY env var on Railway]
-    └──requires──> [email.ts service logic ported or imported]
-    └──requires──> [Stripe deposit creation]              (for deposit_required email — needs checkout URL)
-
-[Manual booking creation form]
-    └──requires──> [Venue selector]                       (listVipAdminVenues() data)
-    └──requires──> [Next.js API route: POST /api/vip/bookings]
-    └──requires──> [createVipBookingRequest() logic]      (ported or imported from nightlife-mcp)
-    └──triggers──> [Resend acknowledgment email]          (same as MCP flow)
-
-[Admin code removal from nightlife-mcp]
-    └──requires──> [Booking list page]                    (full parity before removal)
-    └──requires──> [Booking detail page]                  (full parity before removal)
-    └──requires──> [Status update action]                 (full parity before removal)
-    └──requires──> [Manual booking creation form]         (full parity before removal)
-    └──requires──> [Role guard]                           (auth replaced before removal)
+[Result ranking by match score]
+    └──requires──> [pg_trgm RPC] (similarity() score needed)
+    └──enhances──> [Typo-tolerant venue search]
 ```
 
 ### Dependency Notes
 
-- **Stripe and Resend are hard dependencies for status update:** The PATCH route cannot be a thin proxy — it must run the side-effect logic itself. `STRIPE_SECRET_KEY` and `RESEND_API_KEY` must be added to nlt-admin Railway env vars before this route can go live.
-- **Email for deposit_required requires deposit URL:** `sendDepositRequiredEmail()` needs the Stripe checkout URL from `createDepositForBooking()`. The two side effects must run in sequence, not in parallel.
-- **RPC is non-negotiable:** `admin_update_vip_booking_request` provides atomicity + audit trail. nlt-admin must call the same RPC. Do not reimplement the update logic with raw `.update()` calls.
-- **nlt-admin removal is the last step:** The Express dashboard must remain live until every feature is validated in nlt-admin. Two codebases run simultaneously during the migration window.
+- **Accent normalization has no DB dependency.** It is a TypeScript change in `hasNeedle()` (or a new `normalizeForSearch()` utility). This is the fastest win and must ship first.
+- **Space/punctuation normalization is also zero-DB.** Strip non-alphanumerics from both needle and haystack during comparison. This is a second normalization pass.
+- **Fuzzy typo tolerance requires DB work.** Enabling pg_trgm, writing an RPC, and adding a code path in `searchVenues()` is a self-contained medium effort. It only applies to venues (not events/performers) in v3.0.
+- **Events and performers only need accent normalization in v3.0.** The project spec says "basic normalization for events/performers." Fuzzy/typo tolerance is venue-specific.
+- **pg_trgm and Japanese text do not conflict if scoped to `name_en`.** The `name_ja` field is never passed to the pg_trgm RPC. Agents search in Latin script; the RPC only touches the English name field.
 
 ---
 
 ## MVP Definition
 
-This is a migration milestone — MVP means **full feature parity with the Express dashboard** before removing the old code.
+This milestone has two tiers: the fast fix (TypeScript only) and the full feature (TypeScript + Supabase RPC).
 
-### Launch With (v1 — migration complete)
+### Launch With (v3.0 — the fix)
 
-- [ ] Booking list page with status/date/search filters and pagination — ops primary view
-- [ ] Booking detail page with status history timeline and edit audit log — ops action context
-- [ ] Status update (PATCH) API route with Stripe deposit creation and Resend email side effects — core workflow
-- [ ] Manual booking creation (POST) API route with venue selector — ops creates on behalf of customers
-- [ ] Role guard: super_admin and admin only — replaces cookie-based auth
-- [ ] Nav entry point added to nlt-admin admin navigation — ops can navigate to VIP section
+These are the minimum changes to resolve the triggering bug and the project spec:
 
-### Add After Validation (v1.x)
+- [ ] `normalizeForSearch(s: string): string` utility — NFD Unicode normalization + diacritic strip + lowercase. Used in place of raw `.toLowerCase()` in `hasNeedle()`. — **Zero DB dependency, pure TypeScript.**
+- [ ] Space/punctuation stripping in venue name comparison — strip `[^a-z0-9]` from both needle and `name_en`/`name` before substring match. — **Zero DB dependency.**
+- [ ] Apply `normalizeForSearch()` to event name and performer name fields — "basic normalization" as specified in PROJECT.md. — **Zero DB dependency.**
+- [ ] `pg_trgm` enabled in Supabase + `search_venues_fuzzy` RPC — fallback path in `searchVenues()` when accent+space normalization returns zero results. — **Medium effort, resolves typo tolerance for venues.**
 
-Features not in the Express dashboard but low-effort improvements worth adding once parity is confirmed:
+### Add After Validation (v3.x)
 
-- [ ] Venue filter on booking list — trigger: ops asks for it, or booking volume grows beyond one venue
-- [ ] Agent task status badge on list rows — trigger: a failed email/deposit goes unnoticed for the first time
-- [ ] 1-minute background refetch on list page — trigger: ops misses a new booking because they didn't refresh
+- [ ] GIN trigram index on `venues.name_en` — trigger: query latency exceeds 100ms on the fuzzy RPC. At 450 records, likely unnecessary, but easy to add.
+- [ ] Tune `pg_trgm.similarity_threshold` — trigger: false positives (too many wrong venues returned) or false negatives (known venues not returned). Start at 0.25 and adjust.
+- [ ] `name_aliases text[]` column on `venues` for W∆RP/WARP style variants — trigger: specific venue name fails both normalization and trigram matching.
 
-### Future Consideration (v2+)
+### Future Consideration (v4+)
 
-Defer until there is explicit demand:
+Defer until concrete demand:
 
-- [ ] CSV export — defer until ops needs monthly reporting
-- [ ] Bulk status update — defer until booking volume justifies it
-- [ ] Stripe deposit link on detail page — defer until ops asks for quick payment lookup
+- [ ] PGroonga for Japanese-script search — defer until an AI agent actually sends Japanese-character venue queries (currently all agents prompt in English).
+- [ ] External search engine (Algolia/Typesense) — defer until dataset exceeds ~5,000 venues and query patterns demand it.
+- [ ] Synonym table for alternate venue names — defer until v3.x `name_aliases` column proves insufficient.
 
 ---
 
@@ -165,55 +146,64 @@ Defer until there is explicit demand:
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| Booking list with filters + pagination | HIGH | LOW | P1 |
-| Role guard (super_admin + admin) | HIGH | LOW | P1 |
-| Booking detail view | HIGH | LOW | P1 |
-| Status history timeline | HIGH | LOW | P1 |
-| Edit audit log | HIGH | LOW | P1 |
-| Status update with Stripe + email side effects | HIGH | MEDIUM | P1 |
-| Manual booking creation form | HIGH | MEDIUM | P1 |
-| Nav entry point in nlt-admin | HIGH | LOW | P1 |
-| Admin code removal from nightlife-mcp | HIGH | LOW | P1 (last step) |
-| Agent task badge on list rows | MEDIUM | LOW | P2 |
-| Venue filter on list | MEDIUM | LOW | P2 |
-| Background refetch (React Query interval) | MEDIUM | LOW | P2 |
-| Empty state + clear-filters button | MEDIUM | LOW | P2 |
-| CSV export | LOW | MEDIUM | P3 |
-| Stripe dashboard link on detail | LOW | LOW | P3 |
-| Bulk status update | LOW | HIGH | P3 |
+| Accent normalization (TypeScript, all services) | HIGH | LOW | P1 |
+| Space/punctuation stripping (TypeScript, venue search) | HIGH | LOW | P1 |
+| pg_trgm RPC for venue typo tolerance | HIGH | MEDIUM | P1 |
+| Apply normalization to events + performer search | MEDIUM | LOW | P1 |
+| Result ranking by match score | MEDIUM | LOW | P2 (comes with pg_trgm RPC) |
+| GIN index on `venues.name_en` | LOW | LOW | P2 |
+| Threshold tuning for pg_trgm | LOW | LOW | P2 |
+| `name_aliases` for stylized venue names | LOW | MEDIUM | P3 |
+| PGroonga for Japanese text | LOW | HIGH | P3 |
+| External search engine | LOW | HIGH | P3 |
 
 **Priority key:**
-- P1: Must have — migration is incomplete without these
-- P2: Should have — add alongside P1 or immediately after
-- P3: Nice to have — only if ops requests it
+- P1: Must ship in v3.0
+- P2: Add once P1 is validated
+- P3: Future milestone only
+
+---
+
+## Special Considerations: Japanese + Latin Mixed Content
+
+This domain (Tokyo nightlife) has a unique challenge: venues, events, and performers have both Japanese names (`name_ja`) and English names (`name_en`), and AI agents always query in Latin script.
+
+**Findings:**
+
+1. **Accent normalization handles romaji variants.** Long vowels (ō→o, ū→u) are represented by diacritics, which NFD normalization strips. So `osaka` finds `Ōsaka` and `shinjuku` finds `Shinjukū`. This is the most common mixed-content case.
+
+2. **pg_trgm drops non-ASCII characters.** If a query or name contains Japanese katakana, pg_trgm silently ignores those characters. This is acceptable because: (a) the RPC is scoped to `name_en` only, (b) agents query in Latin script, (c) the Japanese name field `name_ja` is never passed to the trigram RPC.
+
+3. **No Japanese-to-romaji transliteration needed.** The DB already stores `name_en` (Latin) alongside `name_ja` (Japanese). The search function searches both fields for substring matches, but only passes `name_en` to the pg_trgm RPC.
+
+4. **W∆RP and similar stylized names are a harder problem.** The delta character (∆) is non-ASCII and will be stripped by NFD normalization, which means `warp` searching against `W∆RP` would match after normalization strips `∆` and `W`, leaving `RP`. The space/punctuation stripper handles this: strip non-alphanumeric from both sides → `warp` vs `wrp` → close but not identical. This edge case may require a `name_aliases` field. Flag for post-v3.0 testing.
+
+5. **`unaccent` extension is not required.** The TypeScript NFD approach achieves the same accent stripping without a DB dependency. `unaccent` would be needed if we were doing DB-side filtering (e.g., a tsvector or ilike on normalized columns), but since matching is in-memory, TypeScript normalization is cleaner and sufficient.
 
 ---
 
 ## Competitor Feature Analysis
 
-Context: Internal ops dashboards from analogous booking management SaaS tools.
-
-| Feature | TablelistPro / Resy for Nightlife | Generic reservation tools (OpenTable admin) | Our Approach |
-|---------|----------------------------------|----------------------------------------------|--------------|
-| Booking queue with status filters | Yes — primary view | Yes — reservation status pipeline | Same: status tabs/filters on list page |
-| Status workflow with ops actions | Yes — move between stages manually | Limited — mostly auto-status from customer actions | Same: explicit manual status transitions with required status_message |
-| Side-effect automation (deposits, emails) | Partial — some tools automate deposit links | No — manual email workflow | Same as Express: fully automated via Stripe + Resend on status change |
-| Audit trail per booking | Minimal — notes only | None in most | Stronger: full field-level diff in `vip_booking_edit_audits` |
-| Internal notes vs customer-visible messages | Rare — most tools have one notes field | No | Explicit separation: `agent_internal_note` vs `status_message` |
-| Manual booking creation by ops | Yes — standard | Yes | Same: form with venue selector, reuses existing `createVipBookingRequest()` |
-| Role-based access | Yes — manager/staff roles | Yes | Same: super_admin + admin only via nlt-admin Supabase auth |
-| Multi-venue support | Yes — core feature | Yes | Partial: venue filter on list, all venues in same Supabase project |
+| Feature | Eventbrite (event discovery) | Resident Advisor (electronic music) | Our Approach |
+|---------|------------------------------|--------------------------------------|--------------|
+| Accent-insensitive search | Yes — "celavi" finds "CÉ LA VI" | Yes — handles European DJ names with accents | TypeScript NFD normalization on all name fields |
+| Space/punctuation normalization | Partial — "1oak" may or may not work | Minimal — relies on users using correct spacing | Explicit strip-non-alphanumeric comparison pass |
+| Typo tolerance | Yes — Levenshtein-based, 1-2 char typos | Limited — mostly exact match with suggestions | pg_trgm similarity with threshold ~0.25-0.3 |
+| Ranked by relevance | Yes — complex scoring with facets | Yes — editorial ranking + text relevance | pg_trgm similarity score as secondary sort key |
+| Japanese + Latin mixed | N/A | N/A | Scoped: `name_en` only for fuzzy; `name_ja` substring only |
 
 ---
 
 ## Sources
 
-- Existing codebase read directly: `/Users/alcylu/Apps/nightlife-mcp/src/admin/vipAdminRouter.ts`, `src/admin/vipDashboardPage.ts`, `src/services/vipAdmin.ts`
-- nlt-admin codebase inspected: `/Users/alcylu/Apps/nlt-admin/CLAUDE.md`, app structure and existing patterns
+- PostgreSQL official docs: [pg_trgm](https://www.postgresql.org/docs/current/pgtrgm.html), [unaccent](https://www.postgresql.org/docs/current/unaccent.html)
+- Supabase extensions list: [supabase.com/docs/guides/database/extensions](https://supabase.com/docs/guides/database/extensions)
+- PGroonga vs pg_trgm comparison: [pgroonga.github.io/reference/pgroonga-versus-textsearch-and-pg-trgm](https://pgroonga.github.io/reference/pgroonga-versus-textsearch-and-pg-trgm.html)
+- Accent-insensitive collation patterns: [oneuptime.com/blog 2026-01-25](https://oneuptime.com/blog/post/2026-01-25-postgresql-accent-insensitive-collation/view)
+- Postgres trigram vs Algolia tradeoffs: [dev.to/saashub](https://dev.to/saashub/postgres-trigram-indexes-vs-algolia-1oma)
+- Existing codebase: `/Users/alcylu/Apps/nightlife-mcp/src/services/venues.ts` (lines 401-403, 829-930) — confirmed `hasNeedle()` implementation and in-memory filter pattern
 - Project context: `/Users/alcylu/Apps/nightlife-mcp/.planning/PROJECT.md`
-- Domain reference: TablelistPro (nightclub SaaS), Resy for Operators (restaurant/bar reservation management), Discotech Ops (nightlife booking platform)
-- Pattern reference: nlt-admin invoicing system (similar admin CRUD + status workflow pattern at `/invoices`)
 
 ---
-*Feature research for: VIP booking admin dashboard migration (nightlife-mcp → nlt-admin)*
-*Researched: 2026-03-11*
+*Feature research for: fuzzy/accent-insensitive search — nightlife-mcp v3.0*
+*Researched: 2026-03-12*
