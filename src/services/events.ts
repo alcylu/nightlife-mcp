@@ -13,6 +13,7 @@ import {
   parseDateFilter,
   serviceDateWindowToUtc,
 } from "../utils/time.js";
+import { normalizeQuery, stripAccents } from "../utils/normalize.js";
 
 type SearchEventsInput = {
   city?: string;
@@ -642,15 +643,17 @@ function matchQuery(
   performers: string[],
   genres: string[],
 ): boolean {
-  const needle = query.trim().toLowerCase();
+  const needle = query; // already normalizeQuery output — accent-stripped, space-collapsed, lowercased
   if (!needle) {
     return true;
   }
 
+  const norm = (s: string | null | undefined) =>
+    stripAccents(String(s || "")).toLowerCase().replace(/\s+/g, "");
+
   const venue = firstRelation(row.venue);
   if (
-    hasNeedle(
-      needle,
+    [
       row.name_en,
       maybeJa(row.name_i18n),
       row.description_en,
@@ -661,14 +664,14 @@ function matchQuery(
       venue?.city,
       venue?.city_en,
       venue?.city_ja,
-    )
+    ].some((v) => norm(v).includes(needle))
   ) {
     return true;
   }
 
   return (
-    performers.some((name) => name.toLowerCase().includes(needle)) ||
-    genres.some((name) => name.toLowerCase().includes(needle))
+    performers.some((name) => norm(name).includes(needle)) ||
+    genres.some((name) => norm(name).includes(needle))
   );
 }
 
@@ -772,12 +775,13 @@ export async function searchEvents(
     };
   }
 
-  const queryText = input.query ? sanitizeIlike(input.query) : "";
+  const queryText = input.query ? sanitizeIlike(input.query) : "";       // DB ILIKE (unchanged)
+  const queryNeedle = input.query ? normalizeQuery(input.query) : "";   // client-side filter (NEW)
   const limit = coerceLimit(input.limit);
   const offset = coerceOffset(input.offset);
   const needsClientFiltering =
     Boolean(input.area) ||
-    Boolean(queryText) ||
+    Boolean(queryNeedle) ||
     Boolean(genreEventIds && genreEventIds.size > 0);
 
   const baseRange = needsClientFiltering
@@ -798,7 +802,7 @@ export async function searchEvents(
       queryText,
     );
 
-    if (!input.area && !queryText) {
+    if (!input.area && !queryNeedle) {
       occurrences = occurrences.slice(offset, offset + limit);
       clientPagingApplied = true;
     }
@@ -809,7 +813,7 @@ export async function searchEvents(
       .eq("published", true)
       .eq("city_id", city.id);
 
-    if (!input.area && !queryText) {
+    if (!input.area && !queryNeedle) {
       query = query.order("featured", { ascending: false });
     }
     query = query
@@ -864,13 +868,13 @@ export async function searchEvents(
     );
   }
 
-  if (queryText) {
+  if (queryNeedle) {
     summaries = summaries.filter((summary) => {
       const row = occurrences.find((occurrence) => occurrence.id === summary.event_id);
       if (!row) {
         return false;
       }
-      return matchQuery(row, queryText, summary.performers, summary.genres);
+      return matchQuery(row, queryNeedle, summary.performers, summary.genres);
     });
   }
 

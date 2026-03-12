@@ -16,6 +16,7 @@ import {
   parseDateFilter,
   serviceDateWindowToUtc,
 } from "../utils/time.js";
+import { normalizeQuery, stripAccents } from "../utils/normalize.js";
 
 type SearchPerformersInput = {
   city?: string;
@@ -661,8 +662,9 @@ function matchPerformerQuery(
   queryNeedle: string,
 ): boolean {
   if (!queryNeedle) return true;
-  if (name.toLowerCase().includes(queryNeedle)) return true;
-  return genres.some((genre) => genre.toLowerCase().includes(queryNeedle));
+  const norm = (s: string) => stripAccents(s).toLowerCase().replace(/\s+/g, "");
+  if (norm(name).includes(queryNeedle)) return true;
+  return genres.some((genre) => norm(genre).includes(queryNeedle));
 }
 
 export const __testOnly_matchPerformerQuery = matchPerformerQuery;
@@ -851,7 +853,7 @@ export async function searchPerformers(
     performerRows.map((row) => row.id),
   );
 
-  const queryNeedle = input.query ? sanitizeIlike(input.query).toLowerCase() : "";
+  const queryNeedle = input.query ? normalizeQuery(input.query) : "";
 
   const summaries: PerformerSummary[] = performerRows
     .map((row) => {
