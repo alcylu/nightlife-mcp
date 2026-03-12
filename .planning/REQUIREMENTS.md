@@ -30,8 +30,8 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 
 ### Events/Performers Normalization
 
-- [ ] **EP-01**: Event search uses accent/space/case normalization on text matching
-- [ ] **EP-02**: Performer search uses accent/space/case normalization on text matching
+- [x] **EP-01**: Event search uses accent/space/case normalization on text matching
+- [x] **EP-02**: Performer search uses accent/space/case normalization on text matching
 
 ## Future Requirements
 
@@ -67,8 +67,8 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 | VEN-02 | Phase 11 | Complete |
 | VEN-03 | Phase 11 | Complete |
 | VEN-04 | Phase 11 | Complete |
-| EP-01 | Phase 12 | Pending |
-| EP-02 | Phase 12 | Pending |
+| EP-01 | Phase 12 | Complete |
+| EP-02 | Phase 12 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 14 total

@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Fuzzy Search
 status: executing
-stopped_at: Completed 11-01-PLAN.md — venue fuzzy search integration complete
-last_updated: "2026-03-12T11:16:27.551Z"
+stopped_at: Completed 12-01-PLAN.md — events and performers normalization complete
+last_updated: "2026-03-12T12:01:28.042Z"
 last_activity: "2026-03-12 — Phase 11-01 complete: two-pass fuzzy venue search with shouldAttemptFuzzy guard, RPC integration, VIP hours synthesis, 91 tests passing"
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
   percent: 50
 ---
 
@@ -45,6 +45,8 @@ Progress: [█████░░░░░] 50%
 - [Phase 11-01]: Fuzzy path uses early return to preserve RPC word_similarity ordering — rankVenueSummaries() would re-rank by event activity and destroy similarity ranking
 - [Phase 11-01]: shouldAttemptFuzzy uses queryNeedle.trim().length (not queryNeedle.length) to correctly block whitespace-only queries
 - [Phase 11-01]: normalizeQuery (not sanitizeIlike) used for RPC argument — strips accents + collapses spaces + lowercases for consistent trigram matching
+- [Phase 12-events-and-performers-normalization]: Two-needle pattern: queryText (sanitizeIlike) for DB ILIKE, queryNeedle (normalizeQuery) for client filter — preserves word-boundary matching in DB queries
+- [Phase 12-events-and-performers-normalization]: Haystack normalization must mirror needle normalization: stripAccents + space-collapse + lowercase pipeline applied to both sides of comparison
 
 ### Pending Todos
 
@@ -56,6 +58,6 @@ Progress: [█████░░░░░] 50%
 
 ## Session Continuity
 
-Last session: 2026-03-12T11:11:00Z
-Stopped at: Completed 11-01-PLAN.md — venue fuzzy search integration complete
+Last session: 2026-03-12T12:01:28.039Z
+Stopped at: Completed 12-01-PLAN.md — events and performers normalization complete
 Resume file: None

@@ -37,7 +37,7 @@
 
 - [x] **Phase 10: DB Infrastructure and Normalization Utility** - Enable PostgreSQL extensions, create IMMUTABLE wrapper + GIN index + fuzzy RPC, build shared normalizeQuery() utility (completed 2026-03-12)
 - [x] **Phase 11: Venue Fuzzy Search Integration** - Wire venues service to the fuzzy RPC with two-pass strategy; "CeLaVi", "1oak", "Zeuk" all return correct results (completed 2026-03-12)
-- [ ] **Phase 12: Events and Performers Normalization** - Apply normalizeQuery() to event and performer text matching; accent-variant queries return correct results
+- [x] **Phase 12: Events and Performers Normalization** - Apply normalizeQuery() to event and performer text matching; accent-variant queries return correct results (completed 2026-03-12)
 
 ## Phase Details
 
@@ -80,7 +80,7 @@ Plans:
   1. `search_events city=tokyo query="dua lipa"` finds events with performers named "Dua Lipa" or similar accent variants (event search normalized)
   2. `search_performers city=tokyo query="shinjuku"` finds performers whose names contain "Shinjuku" or similar macron variants (performer search normalized)
   3. No `pg_trgm` similarity operators or RPC calls appear in the events or performers code paths (normalization stays TypeScript-only)
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 12-01-PLAN.md — Wire normalizeQuery + stripAccents into events and performers services with TDD
@@ -100,7 +100,7 @@ Plans:
 | 9. Cleanup | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 10. DB Infrastructure and Normalization Utility | v3.0 | 2/2 | Complete | 2026-03-12 |
 | 11. Venue Fuzzy Search Integration | v3.0 | 1/1 | Complete | 2026-03-12 |
-| 12. Events and Performers Normalization | v3.0 | 0/1 | Not started | - |
+| 12. Events and Performers Normalization | 1/1 | Complete   | 2026-03-12 | - |
 
 ---
 *For full phase details (v1.0, v2.0), see milestone archives in `.planning/milestones/`*
