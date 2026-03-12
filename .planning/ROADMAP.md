@@ -29,7 +29,7 @@
 
 </details>
 
-### 🚧 v3.0 Fuzzy Search (In Progress)
+### v3.0 Fuzzy Search (In Progress)
 
 **Milestone Goal:** Make MCP search tools resilient to accent variations, spacing differences, and fuzzy spelling — venues get aggressive DB-level trigram matching, events and performers get lightweight accent normalization.
 
@@ -51,7 +51,11 @@
   3. `EXPLAIN ANALYZE` on a venue name query shows Index Scan using the GIN index, not a Seq Scan (index is active)
   4. `normalizeQuery('CeLaVi')` returns `'celavi'`, `normalizeQuery('1oak')` returns `'1oak'`, `normalizeQuery('é')` returns `'e'` (TypeScript utility correct)
   5. All existing tool calls return identical results to pre-migration (zero regressions)
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 10-01-PLAN.md — DB migrations: extensions, f_unaccent wrapper, fuzzy RPC, GIN index
+- [ ] 10-02-PLAN.md — TDD: normalizeQuery() and stripAccents() TypeScript utility
 
 ### Phase 11: Venue Fuzzy Search Integration
 **Goal**: The `search_venues` MCP tool and `GET /api/v1/venues` REST endpoint return correct results for accent-variant, spacing-variant, and typo-variant venue name queries, using the two-pass strategy — exact/normalized match first, fuzzy RPC fallback on zero results — without affecting any existing filter behavior.
@@ -70,8 +74,8 @@
 **Depends on**: Phase 10
 **Requirements**: EP-01, EP-02
 **Success Criteria** (what must be TRUE):
-  1. `search_events city=tokyo query="dua lipa"` finds events with performers named "Duá Lipa" or similar accent variants (event search normalized)
-  2. `search_performers city=tokyo query="shinjuku"` finds performers whose names contain "Shinjukū" or similar macron variants (performer search normalized)
+  1. `search_events city=tokyo query="dua lipa"` finds events with performers named "Dua Lipa" or similar accent variants (event search normalized)
+  2. `search_performers city=tokyo query="shinjuku"` finds performers whose names contain "Shinjuku" or similar macron variants (performer search normalized)
   3. No `pg_trgm` similarity operators or RPC calls appear in the events or performers code paths (normalization stays TypeScript-only)
 **Plans**: TBD
 
@@ -88,7 +92,7 @@
 | 7. Create Booking | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 8. Status + Stripe/Resend | v2.0 | 2/2 | Complete | 2026-03-11 |
 | 9. Cleanup | v2.0 | 1/1 | Complete | 2026-03-11 |
-| 10. DB Infrastructure and Normalization Utility | v3.0 | 0/? | Not started | - |
+| 10. DB Infrastructure and Normalization Utility | v3.0 | 0/2 | In progress | - |
 | 11. Venue Fuzzy Search Integration | v3.0 | 0/? | Not started | - |
 | 12. Events and Performers Normalization | v3.0 | 0/? | Not started | - |
 
