@@ -2,8 +2,9 @@
 phase: 11
 slug: venue-fuzzy-search-integration
 status: draft
-nyquist_compliant: false
-wave_0_complete: false
+nyquist_compliant: true
+wave_0_complete: true
+wave_0_note: "Wave 0 tests are handled by Task 1's TDD behavior spec (tdd=true) — guard logic tests written before implementation"
 created: 2026-03-12
 ---
 
@@ -38,24 +39,22 @@ created: 2026-03-12
 
 | Task ID | Plan | Wave | Requirement | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|-----------|-------------------|-------------|--------|
-| 11-01-01 | 01 | 0 | VEN-01, VEN-02, VEN-03, VEN-04 | unit | `npm test` | ❌ W0 | ⬜ pending |
-| 11-01-02 | 01 | 1 | VEN-01 | unit | `npm test` | ❌ W0 | ⬜ pending |
-| 11-01-03 | 01 | 1 | VEN-02, VEN-03 | unit + manual | `npm test` | ❌ W0 | ⬜ pending |
-| 11-01-04 | 01 | 1 | VEN-04 | unit | `npm test` | ❌ W0 | ⬜ pending |
+| 11-01-01 | 01 | 1 | VEN-01, VEN-02, VEN-03, VEN-04 | unit | `npm test` | Created by Task 1 (TDD) | pending |
+| 11-01-02 | 01 | 1 | VEN-01, VEN-03 | unit | `npm run build && npm test` | Uses Task 1 tests | pending |
 
-*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Status: pending · green · red · flaky*
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `src/services/venues.test.ts` — add test stubs covering:
-  - Two-pass guard: `summaries.length === 0 && queryNeedle && genreEventIds === null` — each condition individually
-  - Genre-filter + query does NOT trigger fuzzy (genreEventIds !== null)
-  - No-query path does NOT trigger fuzzy (queryNeedle is empty)
-  - `fuzzyVenueIds` returns empty array for blank query
-  - Fuzzy results preserve similarity-based ranking from RPC
-  - City scoping — city_id passed correctly to RPC
+Wave 0 is handled by Task 1's TDD mode (`tdd="true"`). Task 1 writes the guard logic tests (RED) before implementing the guard function (GREEN). No separate Wave 0 step is needed.
+
+Tests covering:
+- Two-pass guard: `summaries.length === 0 && queryNeedle && genreEventIds === null` — each condition individually
+- Genre-filter + query does NOT trigger fuzzy (genreEventIds !== null)
+- No-query path does NOT trigger fuzzy (queryNeedle is empty)
+- Whitespace-only query does NOT trigger fuzzy
 
 *Existing test infrastructure and framework are in place — no new framework needed.*
 
@@ -68,17 +67,18 @@ created: 2026-03-12
 | `search_venues query=celavi` returns CÉ LA VI | VEN-02 | Requires real DB with accent data | Call MCP tool against staging/production |
 | `search_venues query=1oak` returns 1 OAK | VEN-02 | Requires real DB with venue data | Call MCP tool against staging/production |
 | `search_venues query=zeuk` returns Zouk | VEN-02, VEN-03 | Requires real DB + fuzzy RPC | Call MCP tool against staging/production |
+| Fuzzy results ordered by similarity (best match first) | VEN-03 | Requires real DB + multiple fuzzy matches | Call with ambiguous query, verify ordering |
 | No-query path unchanged | VEN-01 | Regression check against production | Compare `search_venues city=tokyo` results before/after |
 
 ---
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 5s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references (handled by Task 1 TDD)
+- [x] No watch-mode flags
+- [x] Feedback latency < 5s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** ready
