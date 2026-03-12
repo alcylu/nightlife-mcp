@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NightlifeError } from "../errors.js";
 import {
+  __testOnly_matchPerformerQuery,
   __testOnly_sortPerformerSummaries,
   getPerformerInfo,
 } from "./performers.js";
@@ -82,4 +83,47 @@ test("performer sorting supports recent_activity mode", () => {
   );
 
   assert.deepEqual(sorted.map((item) => item.performer_id), ["p2", "p1", "p3"]);
+});
+
+// -----------------------------------------------------------------------
+// matchPerformerQuery — regression tests (must pass GREEN before Task 2)
+// -----------------------------------------------------------------------
+
+test("matchPerformerQuery: empty needle always returns true", () => {
+  assert.equal(__testOnly_matchPerformerQuery("Alpha", ["House"], ""), true);
+});
+
+test("matchPerformerQuery: no match returns false", () => {
+  assert.equal(__testOnly_matchPerformerQuery("Alpha", ["House"], "beta"), false);
+});
+
+test("matchPerformerQuery: exact same-case name match returns true", () => {
+  assert.equal(__testOnly_matchPerformerQuery("Regular DJ", ["House"], "regular"), true);
+});
+
+test("matchPerformerQuery: genre match returns true", () => {
+  assert.equal(__testOnly_matchPerformerQuery("Regular DJ", ["Techno"], "techno"), true);
+});
+
+// -----------------------------------------------------------------------
+// Cross-accent normalization tests (must FAIL RED until Task 2 wires in
+// normalizeQuery + stripAccents on both needle and haystack)
+// -----------------------------------------------------------------------
+
+test("matchPerformerQuery: accent-variant needle matches performer with macron", () => {
+  // "Shinjūku DJ" has ū; needle "shinjuku" (normalizeQuery output, no macron)
+  assert.equal(
+    __testOnly_matchPerformerQuery("Shinjūku DJ", [], "shinjuku"),
+    true,
+    "accent-stripped needle should match macron in performer name",
+  );
+});
+
+test("matchPerformerQuery: accent-variant needle matches performer with accented chars", () => {
+  // "Céline" with accent; normalizeQuery("celine") -> "celine"
+  assert.equal(
+    __testOnly_matchPerformerQuery("Céline Dion", [], "celine"),
+    true,
+    "accent-stripped needle should match accented performer name",
+  );
 });

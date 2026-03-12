@@ -1089,3 +1089,6 @@ export async function getEventDetails(
     nlt_url: buildEventUrl(config.nightlifeBaseUrl, citySlug, occurrence.id),
   };
 }
+
+// Test-only exports (following __testOnly_ convention from venues.ts / performers.ts)
+export const __testOnly_matchQuery = matchQuery;

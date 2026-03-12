@@ -655,6 +655,18 @@ function sortPerformerSummaries(
 
 export const __testOnly_sortPerformerSummaries = sortPerformerSummaries;
 
+function matchPerformerQuery(
+  name: string,
+  genres: string[],
+  queryNeedle: string,
+): boolean {
+  if (!queryNeedle) return true;
+  if (name.toLowerCase().includes(queryNeedle)) return true;
+  return genres.some((genre) => genre.toLowerCase().includes(queryNeedle));
+}
+
+export const __testOnly_matchPerformerQuery = matchPerformerQuery;
+
 export async function searchPerformers(
   supabase: SupabaseClient,
   config: AppConfig,
@@ -862,15 +874,7 @@ export async function searchPerformers(
         ),
       };
     })
-    .filter((summary) => {
-      if (!queryNeedle) {
-        return true;
-      }
-      if (summary.name.toLowerCase().includes(queryNeedle)) {
-        return true;
-      }
-      return summary.genres.some((genre) => genre.toLowerCase().includes(queryNeedle));
-    });
+    .filter((summary) => matchPerformerQuery(summary.name, summary.genres, queryNeedle));
 
   const sorted = sortPerformerSummaries(summaries, normalizeSortBy(input.sort_by));
   const offset = coerceOffset(input.offset);
