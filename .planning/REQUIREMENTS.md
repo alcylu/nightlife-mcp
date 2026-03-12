@@ -55,26 +55,26 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | — | Pending |
-| DB-02 | — | Pending |
-| DB-03 | — | Pending |
-| DB-04 | — | Pending |
-| NORM-01 | — | Pending |
-| NORM-02 | — | Pending |
-| NORM-03 | — | Pending |
-| NORM-04 | — | Pending |
-| VEN-01 | — | Pending |
-| VEN-02 | — | Pending |
-| VEN-03 | — | Pending |
-| VEN-04 | — | Pending |
-| EP-01 | — | Pending |
-| EP-02 | — | Pending |
+| DB-01 | Phase 10 | Pending |
+| DB-02 | Phase 10 | Pending |
+| DB-03 | Phase 10 | Pending |
+| DB-04 | Phase 10 | Pending |
+| NORM-01 | Phase 10 | Pending |
+| NORM-02 | Phase 10 | Pending |
+| NORM-03 | Phase 10 | Pending |
+| NORM-04 | Phase 10 | Pending |
+| VEN-01 | Phase 11 | Pending |
+| VEN-02 | Phase 11 | Pending |
+| VEN-03 | Phase 11 | Pending |
+| VEN-04 | Phase 11 | Pending |
+| EP-01 | Phase 12 | Pending |
+| EP-02 | Phase 12 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14 ⚠️
+- Mapped to phases: 14
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-12*
-*Last updated: 2026-03-12 after initial definition*
+*Last updated: 2026-03-12 — traceability mapped after roadmap creation*
