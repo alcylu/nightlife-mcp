@@ -26,13 +26,14 @@ Users get accurate, trustworthy VIP pricing information and a frictionless path 
 - ✓ Status change side effects (Stripe deposits, Resend emails) in nlt-admin API routes — v2.0
 - ✓ Access restricted to super_admin + admin roles — v2.0
 - ✓ Admin dashboard code removed from nightlife-mcp — v2.0
+- ✓ Accent-insensitive venue search ("celavi" finds "CÉ LA VI") — v3.0
+- ✓ Space/case-normalized venue search ("1oak" finds "1 OAK") — v3.0
+- ✓ Fuzzy/typo-tolerant venue search scoped by city — v3.0
+- ✓ Basic accent/case normalization for event and performer search — v3.0
 
 ### Active
 
-- [ ] Accent-insensitive venue search ("celavi" finds "CÉ LA VI")
-- [ ] Space/case-normalized venue search ("1oak" finds "1 OAK")
-- [ ] Fuzzy/typo-tolerant venue search scoped by city
-- [ ] Basic accent/case normalization for event and performer search
+(None yet — define for next milestone)
 
 ### Out of Scope
 
@@ -44,26 +45,14 @@ Users get accurate, trustworthy VIP pricing information and a frictionless path 
 - Bulk status update — per-booking side effects (Stripe, email) make bulk risky
 - Email template editing UI — templates are stable, change via code deploy
 
-## Current Milestone: v3.0 Fuzzy Search
-
-**Goal:** Make MCP search tools resilient to accent variations, spacing differences, and fuzzy spelling — venues get aggressive matching, events/performers get basic normalization.
-
-**Target features:**
-- Accent-insensitive search across all tools (é→e, ō→o, etc.)
-- Space/case normalization ("celavi" → "CÉ LA VI", "1oak" → "1 OAK")
-- Typo-tolerant venue search (450 venues scoped by city)
-- Basic normalization for events/performers (accent stripping + case insensitive)
-
-**Trigger:** Gemini 2.5 Flash called search_venues with "CeLaVi" but DB stores "CÉ LA VI" — zero results. Fixing at the MCP server level makes all agents and models work correctly.
-
 ## Context
 
-Shipped v2.0 with 18,863 LOC TypeScript.
+Shipped v3.0 with 19,376 LOC TypeScript.
 Tech stack: TypeScript, @modelcontextprotocol/sdk, Express, Supabase.
 nlt-admin (Next.js 15) handles all VIP admin UI at ~/Apps/nlt-admin/.
 nightlife-mcp is a clean MCP server + REST API with zero admin surface.
 450 venues in the system, scoped by city in queries.
-Search is Supabase PostgREST — text matching via `.ilike()` and `.textSearch()`.
+Search: Supabase PostgREST via `.ilike()` + pg_trgm fuzzy RPC for venues + normalizeQuery for events/performers.
 
 ## Key Decisions
 
@@ -78,6 +67,11 @@ Search is Supabase PostgREST — text matching via `.ilike()` and `.textSearch()
 | super_admin + admin only | VIP ops is internal; venue access deferred | ✓ Good |
 | Non-blocking side effects | Stripe/Resend failures don't block status updates | ✓ Good |
 | 4-level pricing fallback | Covers all data availability scenarios without breaking | ✓ Good |
+| Hybrid fuzzy: DB for venues, TS for events/performers | 450 venues benefit from trigram; events/performers scoped by city+date already | ✓ Good |
+| Two-pass venue search (exact first, fuzzy fallback) | Avoids RPC cost when exact match exists | ✓ Good |
+| IMMUTABLE f_unaccent wrapper | Required for GIN index expressions; unaccent() is STABLE | ✓ Good |
+| Zero-dependency normalize (NFD + regex) | No npm packages needed for accent stripping | ✓ Good |
+| NORM-03 narrowed (no digit-to-word mapping) | Over-specified; fuzzy RPC handles edge cases | ✓ Good |
 
 ## Constraints
 
@@ -86,4 +80,4 @@ Search is Supabase PostgREST — text matching via `.ilike()` and `.textSearch()
 - **Stripe/Resend secrets**: nlt-admin needs `STRIPE_SECRET_KEY` and `RESEND_API_KEY` env vars on Railway
 
 ---
-*Last updated: 2026-03-12 after v3.0 milestone started*
+*Last updated: 2026-03-12 after v3.0 milestone*
