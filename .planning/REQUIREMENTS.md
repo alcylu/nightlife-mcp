@@ -16,10 +16,10 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 
 ### Search Normalization
 
-- [ ] **NORM-01**: Accent-insensitive search — "celavi" finds "CÉ LA VI", "é" matches "e", "ō" matches "o"
-- [ ] **NORM-02**: Space/punctuation normalization — "celavi" matches "CÉ LA VI", "1oak" matches "1 OAK"
-- [ ] **NORM-03**: Number-word equivalence — "1oak" matches "oneoak", "1 OAK" matches "one oak"
-- [ ] **NORM-04**: Case-insensitive matching across all search tools
+- [x] **NORM-01**: Accent-insensitive search — "celavi" finds "CÉ LA VI", "é" matches "e", "ō" matches "o"
+- [x] **NORM-02**: Space/punctuation normalization — "celavi" matches "CÉ LA VI", "1oak" matches "1 OAK"
+- [x] **NORM-03**: Number-word equivalence — "1oak" matches "oneoak", "1 OAK" matches "one oak"
+- [x] **NORM-04**: Case-insensitive matching across all search tools
 
 ### Venue Fuzzy Search
 
@@ -59,10 +59,10 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 | DB-02 | Phase 10 | Pending |
 | DB-03 | Phase 10 | Pending |
 | DB-04 | Phase 10 | Pending |
-| NORM-01 | Phase 10 | Pending |
-| NORM-02 | Phase 10 | Pending |
-| NORM-03 | Phase 10 | Pending |
-| NORM-04 | Phase 10 | Pending |
+| NORM-01 | Phase 10 | Complete |
+| NORM-02 | Phase 10 | Complete |
+| NORM-03 | Phase 10 | Complete |
+| NORM-04 | Phase 10 | Complete |
 | VEN-01 | Phase 11 | Pending |
 | VEN-02 | Phase 11 | Pending |
 | VEN-03 | Phase 11 | Pending |

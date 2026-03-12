@@ -35,7 +35,7 @@
 
 #### Phase Checklist
 
-- [ ] **Phase 10: DB Infrastructure and Normalization Utility** - Enable PostgreSQL extensions, create IMMUTABLE wrapper + GIN index + fuzzy RPC, build shared normalizeQuery() utility
+- [x] **Phase 10: DB Infrastructure and Normalization Utility** - Enable PostgreSQL extensions, create IMMUTABLE wrapper + GIN index + fuzzy RPC, build shared normalizeQuery() utility (completed 2026-03-12)
 - [ ] **Phase 11: Venue Fuzzy Search Integration** - Wire venues service to the fuzzy RPC with two-pass strategy; "CeLaVi", "1oak", "Zeuk" all return correct results
 - [ ] **Phase 12: Events and Performers Normalization** - Apply normalizeQuery() to event and performer text matching; accent-variant queries return correct results
 
@@ -51,7 +51,7 @@
   3. `EXPLAIN ANALYZE` on a venue name query shows Index Scan using the GIN index, not a Seq Scan (index is active)
   4. `normalizeQuery('CeLaVi')` returns `'celavi'`, `normalizeQuery('1oak')` returns `'1oak'`, `normalizeQuery('é')` returns `'e'` (TypeScript utility correct)
   5. All existing tool calls return identical results to pre-migration (zero regressions)
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 10-01-PLAN.md — DB migrations: extensions, f_unaccent wrapper, fuzzy RPC, GIN index
@@ -92,7 +92,7 @@ Plans:
 | 7. Create Booking | v2.0 | 1/1 | Complete | 2026-03-11 |
 | 8. Status + Stripe/Resend | v2.0 | 2/2 | Complete | 2026-03-11 |
 | 9. Cleanup | v2.0 | 1/1 | Complete | 2026-03-11 |
-| 10. DB Infrastructure and Normalization Utility | v3.0 | 0/2 | In progress | - |
+| 10. DB Infrastructure and Normalization Utility | 2/2 | Complete   | 2026-03-12 | - |
 | 11. Venue Fuzzy Search Integration | v3.0 | 0/? | Not started | - |
 | 12. Events and Performers Normalization | v3.0 | 0/? | Not started | - |
 

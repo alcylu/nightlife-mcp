@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Fuzzy Search
-status: ready_to_plan
-stopped_at: null
-last_updated: "2026-03-12"
-last_activity: 2026-03-12 — Roadmap created, 3 phases defined (10-12), 14/14 requirements mapped
+status: planning
+stopped_at: Completed 10-02-PLAN.md — normalization utility built, all NORM requirements met
+last_updated: "2026-03-12T07:05:47.177Z"
+last_activity: 2026-03-12 — Roadmap created, phases 10-12 defined
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  completed_phases: 1
+  total_plans: 2
+  completed_plans: 2
   percent: 0
 ---
 
@@ -40,6 +40,8 @@ Progress: [░░░░░░░░░░] 0%
 - Implementation order: DB migration first (Phase 10) because both venues service (Phase 11) and events/performers (Phase 12) depend on it.
 - Critical constraint: All `CREATE INDEX` statements must use `CONCURRENTLY` — shared Supabase DB with nightlife-tokyo-next means table locks block the consumer site.
 - Pitfall to avoid: `unaccent()` is `STABLE`, not `IMMUTABLE`. Must create `f_unaccent()` wrapper before any index definition or the index creation will fail.
+- [Phase 10-02]: No npm packages for normalization — String.prototype.normalize('NFD') + regex is zero-dependency canonical solution
+- [Phase 10-02]: stripAccents exported separately from normalizeQuery so venues service can use accent-only normalization without collapsing spaces
 
 ### Pending Todos
 
@@ -53,6 +55,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-12
-Stopped at: Roadmap created — ready to plan Phase 10
+Last session: 2026-03-12T07:05:47.174Z
+Stopped at: Completed 10-02-PLAN.md — normalization utility built, all NORM requirements met
 Resume file: None
