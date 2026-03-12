@@ -46,26 +46,29 @@ completed: 2026-03-12
 
 # Phase 10 Plan 01: Fuzzy Search DB Infrastructure Summary
 
-**pg_trgm + unaccent extensions, IMMUTABLE f_unaccent() wrapper, GIN trigram index on venues.name_en, and search_venues_fuzzy RPC — all written and committed, awaiting production deployment**
+**pg_trgm + unaccent extensions, IMMUTABLE f_unaccent() wrapper, GIN trigram index on venues.name_en, and search_venues_fuzzy RPC — deployed and verified in Supabase production (all 4 DB checks passed, macrons strip correctly)**
 
 ## Performance
 
-- **Duration:** ~15 min
+- **Duration:** ~15 min (code) + production deployment
 - **Started:** 2026-03-12T07:02:25Z
-- **Completed:** 2026-03-12T07:17:00Z
-- **Tasks:** 1 of 2 complete (Task 2 is a human-action checkpoint — production deployment)
+- **Completed:** 2026-03-12
+- **Tasks:** 2 of 2 complete
 - **Files created:** 2 SQL migration files
 
 ## Accomplishments
 
-- Two SQL migration files written with exact verified patterns from research doc
+- Two SQL migration files written with exact verified patterns from research doc and deployed to production
 - File 1 (transactional): enables `pg_trgm` + `unaccent` extensions, creates `f_unaccent()` IMMUTABLE wrapper using schema-qualified dictionary form, creates `search_venues_fuzzy` RPC with three-arm WHERE clause
 - File 2 (non-transactional): creates `venues_name_en_fuzzy` GIN trigram index using `CONCURRENTLY` — safe on shared DB with nightlife-tokyo-next (no table lock)
 - Expression `f_unaccent(lower(name_en))` is identical in both files — ensures query planner uses the index
+- All 4 DB verification checks passed: extensions enabled, f_unaccent strips accents, GIN index uses Bitmap Index Scan (not Seq Scan, 1.6ms), fuzzy RPC returns correct venue for 'celavi' and '1oak'
+- Macron stripping confirmed: ō→o, ü→u, ā→a all normalize correctly — no custom unaccent rules needed
 
 ## Task Commits
 
 1. **Task 1: Write SQL migration files for fuzzy search infrastructure** - `768eb82` (feat)
+2. **Task 2: Apply migrations to Supabase production and verify** - human-action (no code commit — production DB deployment, all 4 verification queries passed)
 
 Note: Migration files were committed in prior session alongside `normalize.ts` (10-02 work that was pre-staged). Both files match the plan exactly.
 
@@ -92,21 +95,24 @@ Migration files were already committed in a prior session (commit `768eb82`) bun
 
 ## User Setup Required
 
-**Production deployment required.** See Task 2 checkpoint instructions:
-
-1. Open Supabase SQL editor for project `nqwyhdfwcaedtycojslb`
-2. Run `supabase/migrations/20260312_fuzzy_search.sql` (transactional — extensions + f_unaccent + RPC)
-3. Test macron handling: `SELECT f_unaccent('o') as macron_o, f_unaccent('u') as macron_u;` — if returns unchanged, custom unaccent rules needed
-4. Run `supabase/migrations/20260312_fuzzy_search_index.sql` in SQL editor during off-peak hours (not Friday/Saturday evening JST)
-5. Verify with 4 SQL checks (see plan Task 2 for exact queries)
-6. Report results to resume Phase 11
+None — production deployment complete. All migrations applied and verified 2026-03-12.
 
 ## Next Phase Readiness
 
-- Migration files are written and committed — ready for production deployment
-- Once deployed and verified (all 4 DB checks pass), Phase 11 (fuzzy venue search wiring) can begin
-- Phase 12 (events/performers normalization) benefits from extensions being enabled but does not require the RPC or index
-- Blocker: macron handling — if `SELECT f_unaccent('ō')` returns unchanged after migration, need to add custom unaccent rules before Phase 11
+- All 4 DB requirements verified in production — Phase 11 can begin immediately
+- Phase 11 (venue fuzzy search wiring): `search_venues_fuzzy` RPC is live and callable; GIN index active; venues service can use two-pass strategy
+- Phase 12 (events/performers normalization): pg_trgm and unaccent extensions are enabled; TypeScript normalize utility is ready (10-02)
+- No blockers — macron handling confirmed working (ō→o, ü→u, ā→a)
+
+## Production Verification Results (Task 2)
+
+All 4 DB requirements verified 2026-03-12 in Supabase SQL editor (project nqwyhdfwcaedtycojslb):
+
+- **DB-01:** `SELECT extname FROM pg_extension WHERE extname IN ('unaccent', 'pg_trgm')` → 2 rows (both extensions enabled)
+- **DB-02:** `SELECT f_unaccent('CÉ LA VI')` → `CE LA VI` (accent stripping works)
+- **DB-03:** EXPLAIN ANALYZE shows Bitmap Index Scan on venues_name_en_fuzzy (1.6ms — not Seq Scan)
+- **DB-04:** `search_venues_fuzzy(..., 'celavi', 0.15, 10)` → CÉ LA VI row; `search_venues_fuzzy(..., '1oak', 0.15, 10)` → 1 Oak row
+- **Macron test:** ō→o, ü→u, ā→a all strip correctly — no custom unaccent rules needed
 
 ## Self-Check: PASSED
 

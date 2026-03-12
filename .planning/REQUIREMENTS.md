@@ -9,10 +9,10 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 
 ### Database Infrastructure
 
-- [ ] **DB-01**: pg_trgm and unaccent extensions enabled on Supabase
-- [ ] **DB-02**: Immutable `f_unaccent` wrapper function created (required for index expressions)
-- [ ] **DB-03**: GIN trigram index on normalized venue names (created with CONCURRENTLY to avoid blocking shared DB)
-- [ ] **DB-04**: `search_venues_fuzzy` RPC function using `word_similarity` with configurable threshold
+- [x] **DB-01**: pg_trgm and unaccent extensions enabled on Supabase
+- [x] **DB-02**: Immutable `f_unaccent` wrapper function created (required for index expressions)
+- [x] **DB-03**: GIN trigram index on normalized venue names (created with CONCURRENTLY to avoid blocking shared DB)
+- [x] **DB-04**: `search_venues_fuzzy` RPC function using `word_similarity` with configurable threshold
 
 ### Search Normalization
 
@@ -55,10 +55,10 @@ Requirements for fuzzy search milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DB-01 | Phase 10 | Pending |
-| DB-02 | Phase 10 | Pending |
-| DB-03 | Phase 10 | Pending |
-| DB-04 | Phase 10 | Pending |
+| DB-01 | Phase 10 | Complete |
+| DB-02 | Phase 10 | Complete |
+| DB-03 | Phase 10 | Complete |
+| DB-04 | Phase 10 | Complete |
 | NORM-01 | Phase 10 | Complete |
 | NORM-02 | Phase 10 | Complete |
 | NORM-03 | Phase 10 | Complete |
