@@ -108,6 +108,14 @@ Migration files were already committed in a prior session (commit `768eb82`) bun
 - Phase 12 (events/performers normalization) benefits from extensions being enabled but does not require the RPC or index
 - Blocker: macron handling — if `SELECT f_unaccent('ō')` returns unchanged after migration, need to add custom unaccent rules before Phase 11
 
+## Self-Check: PASSED
+
+- supabase/migrations/20260312_fuzzy_search.sql: FOUND
+- supabase/migrations/20260312_fuzzy_search_index.sql: FOUND
+- .planning/phases/10-db-infrastructure-and-normalization-utility/10-01-SUMMARY.md: FOUND
+- Commit 768eb82 (migration files): FOUND
+- Commit b61de30 (docs metadata): FOUND
+
 ---
 *Phase: 10-db-infrastructure-and-normalization-utility*
 *Completed: 2026-03-12*
