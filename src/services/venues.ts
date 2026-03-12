@@ -16,6 +16,7 @@ import {
   parseDateFilter,
   serviceDateWindowToUtc,
 } from "../utils/time.js";
+import { normalizeQuery } from "../utils/normalize.js";
 
 type SearchVenuesInput = {
   city?: string;
@@ -751,6 +752,30 @@ function rankVenueSummaries(venues: VenueSummary[]): VenueSummary[] {
   });
 }
 
+async function fuzzyVenueIds(
+  supabase: SupabaseClient,
+  cityId: string,
+  rawQuery: string,
+): Promise<string[]> {
+  const normalized = normalizeQuery(rawQuery);
+  if (!normalized) return [];
+
+  const { data, error } = await supabase.rpc("search_venues_fuzzy", {
+    p_city_id: cityId,
+    p_query: normalized,
+    p_threshold: 0.15,
+    p_limit: 20,
+  });
+
+  if (error) {
+    throw new NightlifeError("DB_QUERY_FAILED", "Fuzzy venue search failed.", {
+      cause: error.message,
+    });
+  }
+
+  return ((data || []) as Array<{ id: string }>).map((row) => row.id);
+}
+
 function shouldAttemptFuzzy(
   resultCount: number,
   queryNeedle: string,
@@ -988,6 +1013,152 @@ export async function searchVenues(
       nlt_url: buildVenueUrl(config.nightlifeBaseUrl, city.slug, venueId),
     };
   });
+
+  // Pass 2: Fuzzy RPC fallback when pass 1 found nothing and a text query was provided
+  if (shouldAttemptFuzzy(summaries.length, queryNeedle, genreEventIds)) {
+    const fuzzyIds = await fuzzyVenueIds(supabase, city.id, input.query || "");
+    if (fuzzyIds.length > 0) {
+      // Fetch event occurrences for fuzzy-matched venues within the same date window
+      const { data: fuzzyData, error: fuzzyError } = await supabase
+        .from("event_occurrences")
+        .select(OCCURRENCE_SELECT)
+        .eq("published", true)
+        .eq("city_id", city.id)
+        .in("venue_id", fuzzyIds)
+        .gte("start_at", window.startIso)
+        .lt("start_at", window.endIso)
+        .order("start_at", { ascending: true })
+        .range(0, 1999);
+
+      if (fuzzyError) {
+        throw new NightlifeError("DB_QUERY_FAILED", "Failed to fetch fuzzy venue events.", {
+          cause: fuzzyError.message,
+        });
+      }
+
+      // Merge VIP hours synthetic occurrences for fuzzy venues
+      const fuzzyIdSet = new Set(fuzzyIds);
+      const fuzzyVipHours = vipHourOccurrences.filter(
+        (row) => row.venue_id && fuzzyIdSet.has(row.venue_id),
+      );
+      const fuzzyOccurrences = [
+        ...((fuzzyData || []) as unknown as EventOccurrenceRow[]),
+        ...fuzzyVipHours,
+      ];
+
+      if (fuzzyOccurrences.length > 0) {
+        // Fetch genres for fuzzy occurrences (only real UUIDs, not synthetic VIP IDs)
+        const fuzzyGenresByEvent = await fetchGenresByEvent(
+          supabase,
+          fuzzyOccurrences.filter((r) => UUID_RE.test(r.id)).map((r) => r.id),
+        );
+
+        // Aggregate fuzzy occurrences into VenueSummary objects.
+        // Same aggregation loop as pass 1, but WITHOUT the queryNeedle filter
+        // (we already know these venues match the query via the RPC).
+        const fuzzyAggregates = new Map<
+          string,
+          {
+            venue: VenueRow;
+            nextEventDate: string | null;
+            eventCount: number;
+            genreCounts: Map<string, number>;
+            eventNames: string[];
+          }
+        >();
+
+        for (const row of fuzzyOccurrences) {
+          const venue = firstRelation(row.venue);
+          if (!venue) continue;
+          const venueId = venue.id || row.venue_id;
+          if (!venueId) continue;
+          if (vipBookingSupportedOnly && venue.vip_booking_enabled !== true) continue;
+          if (
+            areaNeedle &&
+            !hasNeedle(
+              areaNeedle,
+              venue.city,
+              venue.city_en,
+              venue.city_ja,
+              venue.address,
+              venue.address_en,
+              venue.address_ja,
+            )
+          )
+            continue;
+
+          const genreNames = fuzzyGenresByEvent.get(row.id) || [];
+          const current = fuzzyAggregates.get(venueId) || {
+            venue,
+            nextEventDate: null,
+            eventCount: 0,
+            genreCounts: new Map<string, number>(),
+            eventNames: [],
+          };
+          current.eventCount += 1;
+          const eventDate = primaryDay(row.occurrence_days)?.start_at || row.start_at || null;
+          if (eventDate && (!current.nextEventDate || eventDate < current.nextEventDate)) {
+            current.nextEventDate = eventDate;
+          }
+          for (const genre of genreNames) {
+            current.genreCounts.set(genre, (current.genreCounts.get(genre) || 0) + 1);
+          }
+          current.eventNames.push(eventName(row));
+          fuzzyAggregates.set(venueId, current);
+        }
+
+        // Build fuzzy summaries preserving RPC word_similarity order (VEN-03).
+        // fuzzyIds is ordered by word_similarity DESC from the RPC.
+        // The aggregation Map may have different insertion order (occurrence-based),
+        // so we explicitly sort by the fuzzyIds position to preserve similarity ranking.
+        const fuzzyIdOrder = new Map(fuzzyIds.map((id, idx) => [id, idx]));
+        const fuzzySummaries: VenueSummary[] = Array.from(fuzzyAggregates.entries())
+          .sort(([idA], [idB]) => {
+            const orderA = fuzzyIdOrder.get(idA) ?? Number.MAX_SAFE_INTEGER;
+            const orderB = fuzzyIdOrder.get(idB) ?? Number.MAX_SAFE_INTEGER;
+            return orderA - orderB;
+          })
+          .map(([venueId, value]) => {
+            const sortedGenres = Array.from(value.genreCounts.entries())
+              .sort((a, b) => {
+                if (a[1] !== b[1]) return b[1] - a[1];
+                return a[0].localeCompare(b[0]);
+              })
+              .map(([genre]) => genre)
+              .slice(0, 5);
+
+            return {
+              venue_id: venueId,
+              name: venueName(value.venue),
+              area: venueArea(value.venue),
+              address: venueAddress(value.venue),
+              website: value.venue.website || null,
+              image_url: value.venue.image_url || null,
+              vip_booking_supported: value.venue.vip_booking_enabled === true,
+              upcoming_event_count: value.eventCount,
+              next_event_date: value.nextEventDate,
+              genres: sortedGenres,
+              nlt_url: buildVenueUrl(config.nightlifeBaseUrl, city.slug, venueId),
+            };
+          });
+
+        // IMPORTANT: Return fuzzy results directly, bypassing rankVenueSummaries().
+        // rankVenueSummaries() re-ranks by event activity which would destroy the RPC's
+        // word_similarity ordering. For fuzzy results, similarity-based ranking is correct:
+        // a hotel concierge asking "find me celavi" should see the best fuzzy match first.
+        const offset = coerceOffset(input.offset);
+        const limit = coerceLimit(input.limit);
+        const paged = fuzzySummaries.slice(offset, offset + limit);
+
+        return {
+          city: city.slug,
+          date_filter: parsedDate?.label || null,
+          venues: paged,
+          unavailable_city: null,
+        };
+      }
+    }
+  }
 
   const offset = coerceOffset(input.offset);
   const limit = coerceLimit(input.limit);
