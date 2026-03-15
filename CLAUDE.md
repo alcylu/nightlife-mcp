@@ -278,6 +278,7 @@ Before entering the 4-level pricing fallback, VIP table queries check if the ven
 - ~~REST API endpoints~~ ✓ Shipped v1 at `/api/v1/` (2026-03-01)
 - ~~OpenAPI spec + hosted docs~~ ✓ OpenAPI 3.1 at `/api/v1/openapi.json`, Scalar docs at `/api/v1/docs` (2026-03-02)
 - ~~mcp.so listing prep~~ ✓ LICENSE, package.json metadata ready (2026-03-01). PR filed: punkpeye/awesome-mcp-servers#2615
+- ~~Glama listing~~ ✓ AAA badge live (2026-03-16). Release v1.0.0 on Glama, 17 tools detected, server inspectable. PR #2615 has Glama link, waiting for merge. Author claim button bugged — may need Glama Discord support.
 - Publish on Apaleo Agent Hub — alpha/invite-only. Pitch doc at `docs/apaleo-pitch.md`
 
 ### VIP Booking (shipped)
