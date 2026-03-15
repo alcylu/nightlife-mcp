@@ -1,5 +1,9 @@
 # nightlife-mcp
 
+<a href="https://glama.ai/mcp/servers/alcylu/nightlife-mcp">
+  <img alt="nightlife-mcp MCP server" src="https://glama.ai/mcp/servers/alcylu/nightlife-mcp/badge" />
+</a>
+
 MCP server for nightlife event discovery backed by Supabase.
 
 ## Quick Start
