@@ -374,15 +374,30 @@ export const openApiDocument = {
       Error: errorResponse,
       EventSummary: eventSummary,
       CityUnavailable: cityUnavailable,
+      VipVenueOpenSummary: {
+        type: "object",
+        description: "A VIP venue that is open on the queried date, even without a listed event.",
+        properties: {
+          venue_id: { type: "string" },
+          name: { type: "string" },
+          area: { type: ["string", "null"] },
+          hours: { type: "string", description: "Opening hours, e.g. '22:00 - 05:00'" },
+          min_spend: { type: ["number", "null"], description: "Minimum VIP table spend for the night" },
+          currency: { type: "string" },
+          nlt_url: { type: "string" },
+        },
+        required: ["venue_id", "name", "area", "hours", "min_spend", "currency", "nlt_url"],
+      },
       SearchEventsOutput: {
         type: "object",
         properties: {
           city: { type: "string" },
           date_filter: { type: ["string", "null"] },
           events: { type: "array", items: { $ref: "#/components/schemas/EventSummary" } },
+          vip_venues_open: { type: "array", items: { $ref: "#/components/schemas/VipVenueOpenSummary" }, description: "VIP venues open on the queried date — check before concluding nothing is happening" },
           unavailable_city: { oneOf: [{ $ref: "#/components/schemas/CityUnavailable" }, { type: "null" }] },
         },
-        required: ["city", "date_filter", "events", "unavailable_city"],
+        required: ["city", "date_filter", "events", "vip_venues_open", "unavailable_city"],
       },
       EventDetail: {
         type: "object",

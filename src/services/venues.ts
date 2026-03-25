@@ -128,7 +128,7 @@ const VENUE_SELECT =
 const OCCURRENCE_SELECT =
   `id,venue_id,city_id,name_en,name_i18n,description_en,description_i18n,entrance_costs,start_at,published,occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override),venue:venues(${VENUE_SELECT})`;
 
-type VenueHoursSlot = {
+export type VenueHoursSlot = {
   open_day: number;
   close_day: number;
   open_time: string;
@@ -217,7 +217,7 @@ function normalizeWeekday(value: unknown): number | null {
   return parsed;
 }
 
-function parseVenueHoursSlots(raw: unknown): VenueHoursSlot[] {
+export function parseVenueHoursSlots(raw: unknown): VenueHoursSlot[] {
   if (!Array.isArray(raw)) {
     return [];
   }
@@ -285,7 +285,7 @@ function normalizeHoursTimeZone(
   return "UTC";
 }
 
-function serviceDateDayOfWeek(serviceDate: string): number {
+export function serviceDateDayOfWeek(serviceDate: string): number {
   return new Date(`${serviceDate}T00:00:00Z`).getUTCDay();
 }
 
@@ -379,7 +379,7 @@ function buildVipHoursSyntheticOccurrences(
   return rows.sort((a, b) => String(a.start_at || "").localeCompare(String(b.start_at || "")));
 }
 
-async function fetchVipVenuesWithHours(
+export async function fetchVipVenuesWithHours(
   supabase: SupabaseClient,
   cityId: string,
 ): Promise<VenueRow[]> {
@@ -431,14 +431,14 @@ function eventName(row: EventOccurrenceRow): string {
   );
 }
 
-function venueName(venue: VenueRow | null): string {
+export function venueName(venue: VenueRow | null): string {
   if (!venue) {
     return "Unknown Venue";
   }
   return venue.name_en || venue.name || venue.name_ja || "Unknown Venue";
 }
 
-function venueArea(venue: VenueRow | null): string | null {
+export function venueArea(venue: VenueRow | null): string | null {
   if (!venue) {
     return null;
   }
@@ -452,7 +452,7 @@ function venueAddress(venue: VenueRow | null): string | null {
   return venue.address_en || venue.address || venue.address_ja || null;
 }
 
-function defaultCurrencyForCountry(countryCode?: string | null): string {
+export function defaultCurrencyForCountry(countryCode?: string | null): string {
   const code = String(countryCode || "").trim().toUpperCase();
   if (code === "US") return "USD";
   if (code === "TH") return "THB";
@@ -515,7 +515,7 @@ function buildEventUrl(baseUrl: string, citySlug: string, eventId: string): stri
   return `${baseUrl}/en/${citySlug}/events/${eventId}`;
 }
 
-function buildVenueUrl(baseUrl: string, citySlug: string, venueId: string): string {
+export function buildVenueUrl(baseUrl: string, citySlug: string, venueId: string): string {
   return `${baseUrl}/en/${citySlug}/venues/${venueId}`;
 }
 

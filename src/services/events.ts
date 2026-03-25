@@ -4,16 +4,26 @@ import type {
   CityUnavailable,
   EventDetail,
   EventSummary,
+  VipVenueOpenSummary,
 } from "../types.js";
 import { NightlifeError } from "../errors.js";
 import { getCityContext, listAvailableCities } from "./cities.js";
 import {
+  addDaysToIsoDate,
   getCurrentServiceDate,
   isCutoffPassedForServiceDate,
   parseDateFilter,
   serviceDateWindowToUtc,
 } from "../utils/time.js";
 import { normalizeQuery, stripAccents } from "../utils/normalize.js";
+import {
+  buildVenueUrl,
+  fetchVipVenuesWithHours,
+  parseVenueHoursSlots,
+  serviceDateDayOfWeek,
+  venueArea as getVenueArea,
+  venueName as getVenueName,
+} from "./venues.js";
 
 type SearchEventsInput = {
   city?: string;
@@ -29,6 +39,7 @@ type SearchEventsOutput = {
   city: string;
   date_filter: string | null;
   events: EventSummary[];
+  vip_venues_open: VipVenueOpenSummary[];
   unavailable_city: CityUnavailable | null;
 };
 
@@ -740,6 +751,7 @@ export async function searchEvents(
       city: citySlug,
       date_filter: input.date || null,
       events: [],
+      vip_venues_open: [],
       unavailable_city: await unavailableCityPayload(
         supabase,
         citySlug,
@@ -771,6 +783,7 @@ export async function searchEvents(
       city: city.slug,
       date_filter: parsedDate?.label || null,
       events: [],
+      vip_venues_open: [],
       unavailable_city: null,
     };
   }
@@ -882,10 +895,107 @@ export async function searchEvents(
     summaries = summaries.slice(offset, offset + limit);
   }
 
+  // Build VIP venues open list when a date filter is active
+  const vipVenuesOpen: VipVenueOpenSummary[] = [];
+  if (parsedDate) {
+    const areaNeedle = input.area ? input.area.trim().toLowerCase() : "";
+    const fallbackCcy = defaultCurrencyForCountry(city.countryCode);
+    const vipVenues = await fetchVipVenuesWithHours(supabase, city.id);
+
+    // Collect service dates covered by the date filter
+    const serviceDates: string[] = [];
+    for (
+      let d = parsedDate.startServiceDate;
+      d < parsedDate.endServiceDateExclusive;
+      d = addDaysToIsoDate(d, 1)
+    ) {
+      serviceDates.push(d);
+    }
+
+    // Batch-fetch min_spend from vip_table_day_defaults for all VIP venue IDs
+    const venueIds = vipVenues.map((v) => v.id);
+    const daysOfWeek = [...new Set(serviceDates.map(serviceDateDayOfWeek))];
+    const minSpendByVenue = new Map<string, { min_spend: number; currency: string }>();
+
+    if (venueIds.length > 0 && daysOfWeek.length > 0) {
+      // Query vip_venue_tables to get venue_id mapping, then day_defaults
+      const { data: tableRows } = await supabase
+        .from("vip_venue_tables")
+        .select("id,venue_id")
+        .in("venue_id", venueIds);
+
+      if (tableRows && tableRows.length > 0) {
+        const tableIds = tableRows.map((t: { id: string }) => t.id);
+        const tableVenueMap = new Map<string, string>();
+        for (const t of tableRows as Array<{ id: string; venue_id: string }>) {
+          tableVenueMap.set(t.id, t.venue_id);
+        }
+
+        const { data: dayDefaults } = await supabase
+          .from("vip_table_day_defaults")
+          .select("vip_venue_table_id,day_of_week,min_spend,currency")
+          .in("vip_venue_table_id", tableIds)
+          .in("day_of_week", daysOfWeek);
+
+        if (dayDefaults) {
+          for (const row of dayDefaults as Array<{
+            vip_venue_table_id: string;
+            day_of_week: number;
+            min_spend: number | null;
+            currency: string | null;
+          }>) {
+            const venueId = tableVenueMap.get(row.vip_venue_table_id);
+            if (!venueId || row.min_spend == null) continue;
+            const existing = minSpendByVenue.get(venueId);
+            if (!existing || row.min_spend < existing.min_spend) {
+              minSpendByVenue.set(venueId, {
+                min_spend: row.min_spend,
+                currency: row.currency || fallbackCcy,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    for (const venue of vipVenues) {
+      const slots = parseVenueHoursSlots(venue.hours_weekly_json);
+      // Find a matching slot for any date in the filter range
+      let matchedSlot: { open_time: string; close_time: string } | null = null;
+      for (const d of serviceDates) {
+        const dow = serviceDateDayOfWeek(d);
+        const slot = slots.find((s) => s.open_day === dow);
+        if (slot) {
+          matchedSlot = slot;
+          break;
+        }
+      }
+      if (!matchedSlot) continue;
+
+      // Apply area filter if present
+      const area = getVenueArea(venue);
+      if (areaNeedle && (!area || !area.toLowerCase().includes(areaNeedle))) {
+        continue;
+      }
+
+      const pricing = minSpendByVenue.get(venue.id);
+      vipVenuesOpen.push({
+        venue_id: venue.id,
+        name: getVenueName(venue),
+        area,
+        hours: `${matchedSlot.open_time} - ${matchedSlot.close_time}`,
+        min_spend: pricing?.min_spend ?? null,
+        currency: pricing?.currency ?? fallbackCcy,
+        nlt_url: buildVenueUrl(config.nightlifeBaseUrl, city.slug, venue.id),
+      });
+    }
+  }
+
   return {
     city: city.slug,
     date_filter: parsedDate?.label || null,
     events: summaries,
+    vip_venues_open: vipVenuesOpen,
     unavailable_city: null,
   };
 }

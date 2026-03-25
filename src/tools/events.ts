@@ -36,10 +36,21 @@ const cityUnavailableSchema = z.object({
   request_city_url: z.string(),
 });
 
+const vipVenueOpenSummarySchema = z.object({
+  venue_id: z.string(),
+  name: z.string(),
+  area: z.string().nullable(),
+  hours: z.string(),
+  min_spend: z.number().nullable(),
+  currency: z.string(),
+  nlt_url: z.string(),
+});
+
 const searchEventsOutputSchema = z.object({
   city: z.string(),
   date_filter: z.string().nullable(),
   events: z.array(eventSummarySchema),
+  vip_venues_open: z.array(vipVenueOpenSummarySchema),
   unavailable_city: cityUnavailableSchema.nullable(),
 });
 
@@ -167,7 +178,7 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
     "search_events",
     {
       description:
-        "Search nightlife events. Supports city, date filters (tonight, this_weekend, ISO date, ISO range), genre, and area.",
+        "Search nightlife events. Returns events plus vip_venues_open showing VIP clubs open on the queried date even without listed events. Always check vip_venues_open before concluding nothing is happening.",
       inputSchema: {
         city: z.string().default(deps.config.defaultCity),
         date: z.string().optional(),
@@ -190,7 +201,7 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
     "get_tonight",
     {
       description:
-        "Get tonight's nightlife events using city timezone and service-day cutoff logic.",
+        "Get tonight's nightlife events and open VIP venues. Always check vip_venues_open — VIP clubs are open even without listed events.",
       inputSchema: {
         city: z.string().default(deps.config.defaultCity),
         genre: z.string().optional(),

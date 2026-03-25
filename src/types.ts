@@ -71,6 +71,16 @@ export interface CityUnavailable {
   request_city_url: string;
 }
 
+export interface VipVenueOpenSummary {
+  venue_id: string;
+  name: string;
+  area: string | null;
+  hours: string;
+  min_spend: number | null;
+  currency: string;
+  nlt_url: string;
+}
+
 export type ModalTimeBucket = "early" | "prime" | "late";
 
 export interface Recommendation {
