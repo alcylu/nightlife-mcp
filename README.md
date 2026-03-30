@@ -28,6 +28,10 @@ MCP server for nightlife event discovery backed by Supabase.
 
 For curl, TypeScript SDK, and other clients, see [`CLIENT_SETUP.md`](CLIENT_SETUP.md).
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/alcylu-nightlife-mcp).
+
 ## Implemented (v0.3)
 
 - `search_events`
