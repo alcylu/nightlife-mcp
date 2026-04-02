@@ -6,7 +6,6 @@ type SubmitInput = {
   venue_id?: string;
   service_date?: string;
   customer_name: string;
-  party_size: number;
   customer_email: string;
   customer_phone?: string;
   messaging_channel?: string;
@@ -35,7 +34,6 @@ type StatusOutput = {
   entry_id: string;
   status: "confirmed" | "cancelled";
   customer_name: string;
-  party_size: number;
   event_name: string | null;
   event_date: string | null;
   created_at: string;
@@ -366,7 +364,7 @@ export async function submitToGuestList(
   const insertData: Record<string, unknown> = {
     email: input.customer_email.toLowerCase(),
     name: input.customer_name,
-    group_size: input.party_size,
+    group_size: 1,
     language: input.language,
     source: input.source,
   };
@@ -418,7 +416,7 @@ export async function getGuestListEntryStatus(
   if (input.entry_id) {
     const { data, error } = await supabase
       .from("event_guest_list_entries")
-      .select("id, email, name, group_size, created_at, event_day_id, venue_id, service_date")
+      .select("id, email, name, created_at, event_day_id, venue_id, service_date")
       .eq("id", input.entry_id)
       .maybeSingle();
 
@@ -438,7 +436,7 @@ export async function getGuestListEntryStatus(
     if (dayIds.length > 0) {
       const { data, error } = await supabase
         .from("event_guest_list_entries")
-        .select("id, email, name, group_size, created_at, event_day_id, venue_id, service_date")
+        .select("id, email, name, created_at, event_day_id, venue_id, service_date")
         .eq("email", input.customer_email.toLowerCase())
         .in("event_day_id", dayIds)
         .order("created_at", { ascending: false })
@@ -494,7 +492,6 @@ export async function getGuestListEntryStatus(
     entry_id: entryData.id,
     status: "confirmed",
     customer_name: entryData.name,
-    party_size: entryData.group_size,
     event_name: eventName,
     event_date: eventDate,
     created_at: entryData.created_at,
