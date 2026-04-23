@@ -7,6 +7,13 @@ export interface CityContext {
   countryCode: string;
 }
 
+export interface EventMediaItem {
+  media_url: string;
+  media_type: string;
+  is_primary: boolean;
+  display_order: number;
+}
+
 export interface EventSummary {
   event_id: string;
   name: string;
@@ -21,6 +28,7 @@ export interface EventSummary {
   genres: string[];
   price: string | null;
   flyer_url: string | null;
+  event_media: EventMediaItem[];
   nlt_url: string;
 }
 
@@ -60,6 +68,7 @@ export interface EventDetail {
     }>;
   };
   flyer_url: string | null;
+  event_media: EventMediaItem[];
   guest_list_status: "available" | "full" | "closed";
   nlt_url: string;
 }

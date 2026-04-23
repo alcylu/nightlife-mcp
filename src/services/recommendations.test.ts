@@ -35,6 +35,7 @@ function makeCandidate(input: {
       genres: [input.genre],
       price: "JPY 3000",
       flyer_url: "https://example.com/flyer.jpg",
+      event_media: [],
       nlt_url: "https://example.com/event",
     },
     vector: input.vector,
