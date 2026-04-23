@@ -726,6 +726,12 @@ function toEventSummary(
     genres: metadata.genresByEvent.get(row.id) || [],
     price: summarizeEntranceCosts(row.entrance_costs, fallbackCurrency),
     flyer_url: flyer,
+    event_media: (metadata.mediaByEvent.get(row.id) || []).map((m) => ({
+      media_url: m.media_url,
+      media_type: m.media_type,
+      is_primary: m.is_primary,
+      display_order: m.display_order,
+    })),
     nlt_url: syntheticVipHours
       ? buildVenueUrl(baseUrl, citySlug, venueId)
       : buildEventUrl(baseUrl, citySlug, row.id),

@@ -46,7 +46,7 @@ type SearchEventsOutput = {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OCCURRENCE_SELECT =
-  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
+  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
 
 type EventOccurrenceRow = {
   id: string;
@@ -63,6 +63,7 @@ type EventOccurrenceRow = {
   source: string | null;
   source_url: string | null;
   entrance_costs: unknown;
+  flyer_url: string | null;
   venue:
     | {
         id: string;
@@ -698,7 +699,9 @@ function toEventSummary(
   },
 ): EventSummary {
   const day = primaryDay(row.occurrence_days);
-  const flyer = metadata.mediaByEvent.get(row.id)?.[0]?.media_url || null;
+  const mediaRows = metadata.mediaByEvent.get(row.id) || [];
+  const mediaFlyer = mediaRows[0]?.media_url || null;
+  const flyer = row.flyer_url || mediaFlyer;
   const venue = firstRelation(row.venue);
 
   return {
@@ -715,6 +718,12 @@ function toEventSummary(
     genres: metadata.genresByEvent.get(row.id) || [],
     price: summarizeEntranceCosts(row.entrance_costs, fallbackCurrency),
     flyer_url: flyer,
+    event_media: mediaRows.map((m) => ({
+      media_url: m.media_url,
+      media_type: m.media_type,
+      is_primary: m.is_primary,
+      display_order: m.display_order,
+    })),
     nlt_url: buildEventUrl(baseUrl, citySlug, row.id),
   };
 }
@@ -1038,7 +1047,7 @@ export async function getEventDetails(
   const { data: occurrence, error } = await supabase
     .from("event_occurrences")
     .select(
-      "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)",
+      "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)",
     )
     .eq("id", cleanedId)
     .eq("published", true)
@@ -1170,7 +1179,9 @@ export async function getEventDetails(
     }
   }
 
-  const flyer = metadata.mediaByEvent.get(occurrence.id)?.[0]?.media_url || null;
+  const mediaRows = metadata.mediaByEvent.get(occurrence.id) || [];
+  const mediaFlyer = mediaRows[0]?.media_url || null;
+  const flyer = occurrence.flyer_url || mediaFlyer;
   const lineup = metadata.lineupByEvent.get(occurrence.id) || [];
   const venue = firstRelation(occurrence.venue);
   const address = venue?.address_en || venue?.address || venue?.address_ja || null;
@@ -1199,6 +1210,12 @@ export async function getEventDetails(
       tiers,
     },
     flyer_url: flyer,
+    event_media: mediaRows.map((m) => ({
+      media_url: m.media_url,
+      media_type: m.media_type,
+      is_primary: m.is_primary,
+      display_order: m.display_order,
+    })),
     guest_list_status: guestStatus,
     nlt_url: buildEventUrl(config.nightlifeBaseUrl, citySlug, occurrence.id),
   };

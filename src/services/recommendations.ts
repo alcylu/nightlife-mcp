@@ -391,6 +391,7 @@ function toEventSummary(
     genres: metadata.genresByEvent.get(eventId) || [],
     price: summarizeEntranceCosts(row.entrance_costs, fallbackCurrency),
     flyer_url: metadata.flyerByEvent.get(eventId) || null,
+    event_media: [],
     nlt_url: buildEventUrl(baseUrl, citySlug, eventId),
   };
 }

@@ -21,9 +21,22 @@ const eventSummary = {
     genres: { type: "array", items: { type: "string" } },
     price: { type: ["string", "null"] },
     flyer_url: { type: ["string", "null"] },
+    event_media: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          media_url: { type: "string" },
+          media_type: { type: "string" },
+          is_primary: { type: "boolean" },
+          display_order: { type: "number" },
+        },
+        required: ["media_url", "media_type", "is_primary", "display_order"],
+      },
+    },
     nlt_url: { type: "string" },
   },
-  required: ["event_id", "name", "date", "service_date", "venue", "performers", "genres", "price", "flyer_url", "nlt_url"],
+  required: ["event_id", "name", "date", "service_date", "venue", "performers", "genres", "price", "flyer_url", "event_media", "nlt_url"],
 } as const;
 
 const cityUnavailable = {
@@ -459,10 +472,23 @@ export const openApiDocument = {
             required: ["entrance_summary", "door", "advance", "tiers"],
           },
           flyer_url: { type: ["string", "null"] },
+          event_media: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                media_url: { type: "string" },
+                media_type: { type: "string" },
+                is_primary: { type: "boolean" },
+                display_order: { type: "number" },
+              },
+              required: ["media_url", "media_type", "is_primary", "display_order"],
+            },
+          },
           guest_list_status: { type: "string", enum: ["available", "full", "closed"] },
           nlt_url: { type: "string" },
         },
-        required: ["event_id", "name", "date", "start_time", "end_time", "service_date", "venue", "lineup", "genres", "price", "flyer_url", "guest_list_status", "nlt_url"],
+        required: ["event_id", "name", "date", "start_time", "end_time", "service_date", "venue", "lineup", "genres", "price", "flyer_url", "event_media", "guest_list_status", "nlt_url"],
       },
       VenueSummary: {
         type: "object",
