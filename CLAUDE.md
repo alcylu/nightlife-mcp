@@ -4,7 +4,7 @@
 Open-source MCP server for nightlife event discovery. First nightlife MCP server among 17,744+ on mcp.so.
 
 - **Stack**: TypeScript, `@modelcontextprotocol/sdk`, Express, Supabase (shared DB with nightlife-tokyo-next)
-- **Location**: `~/Apps/nightlife-mcp/`
+- **Location**: `~/Apps/nlt/nightlife-mcp/`
 - **Supabase Project**: `nqwyhdfwcaedtycojslb` (same as consumer site, read-only access)
 - **License**: MIT (open source code, private data)
 
@@ -221,7 +221,7 @@ limit 200;
 ```
 
 ## Related Projects
-- **nightlife-dev** (`~/Apps/nightlife-dev/`): Developer landing page + self-service dashboard at nightlife.dev
+- **nightlife-dev** (`~/Apps/nlt/nightlife-dev/`): Developer landing page + self-service dashboard at nightlife.dev
 - **health-monitor** (`~/Apps/health-monitor/`): Cloudflare Workers health checker, monitors this server + nightlife-dev
 
 ## Hotel Go-to-Market Strategy (2026-02-20 Research)

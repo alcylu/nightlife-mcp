@@ -4,3 +4,5 @@ dist
 npm-debug.log*
 
 .playwright-mcp/
+.gstack/
+supabase/.temp/

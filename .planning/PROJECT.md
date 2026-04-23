@@ -49,7 +49,7 @@ Users get accurate, trustworthy VIP pricing information and a frictionless path 
 
 Shipped v3.0 with 19,376 LOC TypeScript.
 Tech stack: TypeScript, @modelcontextprotocol/sdk, Express, Supabase.
-nlt-admin (Next.js 15) handles all VIP admin UI at ~/Apps/nlt-admin/.
+nlt-admin (Next.js 15) handles all VIP admin UI at ~/Apps/nlt/nlt-admin/.
 nightlife-mcp is a clean MCP server + REST API with zero admin surface.
 450 venues in the system, scoped by city in queries.
 Search: Supabase PostgREST via `.ilike()` + pg_trgm fuzzy RPC for venues + normalizeQuery for events/performers.
