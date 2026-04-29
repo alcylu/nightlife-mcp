@@ -279,3 +279,8 @@ MCP_ENABLE_RECOMMENDATIONS=true npm run dev:http
   - `REQUEST_WRITE_FAILED`
   - `DB_QUERY_FAILED`
   - `INTERNAL_ERROR`
+
+
+## Contributing & CI
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the workflow and rules. AI agents read [`AGENTS.md`](./AGENTS.md). `CLAUDE.md` is the architecture source of truth.

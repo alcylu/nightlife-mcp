@@ -13,6 +13,7 @@
     "start:http": "node dist/http.js",
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/**/*.test.ts",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
     "smoke:prod:auth": "node scripts/prod-auth-smoke.mjs"
   },
   "keywords": [

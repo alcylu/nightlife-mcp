@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Pre-push hook for nightlife-mcp. Runs npm test locally before push.
+# Activated on npm install via the prepare script. Bypass with --no-verify.
+
+set -e
+echo "[pre-push] running npm test…"
+if ! npm test --silent; then
+  echo "[pre-push] tests failed. Fix or bypass with --no-verify."
+  exit 1
+fi
+echo "[pre-push] OK — push proceeding."
