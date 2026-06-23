@@ -105,6 +105,39 @@ function isRpcMissing(errorMessage: string): boolean {
   );
 }
 
+// Supabase rejected the server's own credentials (not the caller's API key).
+// Typically a wrong/expired SUPABASE_SERVICE_ROLE_KEY, or legacy anon/service_role
+// keys disabled by Supabase. The fix is operational (update the server's key),
+// NOT a DB migration.
+function isServerCredentialError(errorMessage: string): boolean {
+  const msg = errorMessage.toLowerCase();
+  return (
+    msg.includes("invalid api key") ||
+    msg.includes("legacy api keys are disabled") ||
+    msg.includes("jwt") ||
+    msg.includes("invalid authentication credentials")
+  );
+}
+
+// Build an accurate "backend unavailable" error from the underlying RPC failure,
+// so operators see the real cause instead of a misleading migration hint.
+function backendUnavailableError(errorMessage: string): ApiAuthError {
+  let detail: string;
+  if (isRpcMissing(errorMessage)) {
+    detail = "Run DB migration for consume_mcp_api_request().";
+  } else if (isServerCredentialError(errorMessage)) {
+    detail =
+      "Supabase rejected the server's credentials — check SUPABASE_SERVICE_ROLE_KEY (it may be expired or a disabled legacy key).";
+  } else {
+    detail = "Could not reach the API key validation backend.";
+  }
+  return {
+    httpStatus: 500,
+    jsonRpcCode: -32603,
+    message: `API key validation backend is unavailable. ${detail}`,
+  };
+}
+
 function buildEnvContext(apiKey: string): ApiKeyContext {
   return {
     keyId: "env",
@@ -195,12 +228,7 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
       if (!allowEnvFallback || !isRpcMissing(errorMessage)) {
         return {
           ok: false,
-          error: {
-            httpStatus: 500,
-            jsonRpcCode: -32603,
-            message:
-              "API key validation backend is unavailable. Run DB migration for consume_mcp_api_request().",
-          },
+          error: backendUnavailableError(errorMessage),
         };
       }
       // RPC function missing + fallback allowed: fall through to env key check
