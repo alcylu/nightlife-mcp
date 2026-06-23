@@ -64,11 +64,17 @@ test("toolErrorResponse supports VIP booking error codes", () => {
 });
 
 test("create_vip_booking_request description enforces dual-date late-night confirmation", () => {
-  assert.match(createVipBookingToolDescription, /dual-date wording/i);
+  // The description must still guide the agent through late-night (after-midnight)
+  // dual-date confirmation. Wording was updated in d0372a3 to the "night + actual
+  // day" format — these assertions track that current phrasing.
+  assert.match(createVipBookingToolDescription, /'night \+ actual day' format/i);
   assert.match(createVipBookingToolDescription, /00:00 to 05:59/i);
-  assert.match(createVipBookingToolDescription, /Just to confirm:/i);
   assert.match(
     createVipBookingToolDescription,
-    /Do you mean 2:00 AM after Thursday night \(Friday morning\), or after Friday night \(Saturday morning\)\?/i,
+    /Friday night, 2am \(Saturday 2am\)/i,
+  );
+  assert.match(
+    createVipBookingToolDescription,
+    /Do you mean Thursday night, 2am \(Friday morning\), or Friday night, 2am \(Saturday morning\)\?/i,
   );
 });
