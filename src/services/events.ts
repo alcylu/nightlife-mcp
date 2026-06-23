@@ -31,6 +31,7 @@ type SearchEventsInput = {
   genre?: string;
   area?: string;
   query?: string;
+  seriesId?: string;
   limit?: number;
   offset?: number;
 };
@@ -583,6 +584,7 @@ async function fetchOccurrencesByIds(
   timeZone: string,
   cutoffTime: string,
   queryText: string,
+  seriesId?: string,
 ): Promise<EventOccurrenceRow[]> {
   const rowsById = new Map<string, EventOccurrenceRow>();
 
@@ -594,6 +596,10 @@ async function fetchOccurrencesByIds(
       .eq("city_id", cityId)
       .in("id", idsChunk)
       .order("start_at", { ascending: true });
+
+    if (seriesId) {
+      query = query.eq("series_id", seriesId);
+    }
 
     if (parsedDate) {
       const window = serviceDateWindowToUtc(
@@ -822,6 +828,7 @@ export async function searchEvents(
       city.timezone,
       city.serviceDayCutoffTime,
       queryText,
+      input.seriesId,
     );
 
     if (!input.area && !queryNeedle) {
@@ -834,6 +841,10 @@ export async function searchEvents(
       .select(OCCURRENCE_SELECT)
       .eq("published", true)
       .eq("city_id", city.id);
+
+    if (input.seriesId) {
+      query = query.eq("series_id", input.seriesId);
+    }
 
     if (!input.area && !queryNeedle) {
       query = query.order("featured", { ascending: false });
