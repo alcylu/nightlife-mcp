@@ -71,6 +71,7 @@ const dateParam = { name: "date", in: "query", schema: { type: "string" }, descr
 const genreParam = { name: "genre", in: "query", schema: { type: "string" }, description: "Filter by genre (e.g. techno, house)", required: false };
 const areaParam = { name: "area", in: "query", schema: { type: "string" }, description: "Filter by area (e.g. shibuya, roppongi)", required: false };
 const queryParam = { name: "query", in: "query", schema: { type: "string" }, description: "Free-text search query", required: false };
+const seriesParam = { name: "series_id", in: "query", schema: { type: "string", format: "uuid" }, description: "Filter to events belonging to a specific event series (UUID)", required: false };
 const limitParam = { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 20, default: 10 }, description: "Max results (default: 10, max: 20)", required: false };
 const offsetParam = { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 }, description: "Pagination offset (default: 0)", required: false };
 const idParam = (resource: string) => ({ name: "id", in: "path", schema: { type: "string", format: "uuid" }, description: `${resource} UUID`, required: true });
@@ -115,7 +116,7 @@ export const openApiDocument = {
         description: "Search nightlife events with filters for city, date, genre, area, and free-text query.",
         operationId: "searchEvents",
         tags: ["Events"],
-        parameters: [cityParam, dateParam, genreParam, areaParam, queryParam, limitParam, offsetParam],
+        parameters: [cityParam, dateParam, genreParam, areaParam, queryParam, seriesParam, limitParam, offsetParam],
         responses: {
           "200": {
             description: "Event search results",
@@ -131,7 +132,7 @@ export const openApiDocument = {
         description: "Get tonight's events using service-day-aware cutoff logic (6am JST rollover). At 2am Saturday, 'tonight' still returns Friday night events.",
         operationId: "getEventsTonight",
         tags: ["Events"],
-        parameters: [cityParam, genreParam, areaParam, limitParam, offsetParam],
+        parameters: [cityParam, genreParam, areaParam, seriesParam, limitParam, offsetParam],
         responses: {
           "200": {
             description: "Tonight's events",

@@ -51,6 +51,7 @@ export function createRestRouter(
         genre: str(req.query.genre),
         area: str(req.query.area),
         query: str(req.query.query),
+        seriesId: str(req.query.series_id),
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
@@ -68,6 +69,7 @@ export function createRestRouter(
         date: "tonight",
         genre: str(req.query.genre),
         area: str(req.query.area),
+        seriesId: str(req.query.series_id),
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
