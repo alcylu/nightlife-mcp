@@ -24,6 +24,7 @@ function makeCandidate(input: {
     event: {
       event_id: input.id,
       name: input.id,
+      heat: null,
       date: "2026-02-20T22:00:00.000Z",
       service_date: "2026-02-20",
       venue: {

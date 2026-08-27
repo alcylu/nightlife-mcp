@@ -1,3 +1,4 @@
+import type { EventHeat } from "./utils/eventHeat.js";
 export interface CityContext {
   id: string;
   slug: string;
@@ -28,6 +29,11 @@ export interface EventSummary {
   genres: string[];
   price: string | null;
   flyer_url: string | null;
+  /**
+   * Demand signal, recomputed nightly. `null` means NOT SCORED (unknown), which
+   * is not the same as cold -- only about a third of upcoming events are scored.
+   */
+  heat: EventHeat | null;
   event_media: EventMediaItem[];
   nlt_url: string;
 }
@@ -68,6 +74,8 @@ export interface EventDetail {
     }>;
   };
   flyer_url: string | null;
+  /** Demand signal; `null` means NOT SCORED (unknown), not cold. */
+  heat: EventHeat | null;
   event_media: EventMediaItem[];
   guest_list_status: "available" | "full" | "closed";
   nlt_url: string;

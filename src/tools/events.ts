@@ -12,6 +12,40 @@ type ToolDeps = {
   config: AppConfig;
 };
 
+const heatSignalSchema = z.enum(["tickets", "gl", "ra", "ig"]);
+
+/**
+ * Demand signal recomputed nightly. Absent (null) means NOT SCORED -- only about
+ * a third of upcoming events carry a score. Unscored is unknown, never cold.
+ */
+const heatSchema = z.object({
+  score: z.number().describe("0-100, higher is hotter"),
+  level: z.enum(["hot", "warm", "quiet"]).describe(">=80 hot, >=50 warm, else quiet"),
+  confidence: z
+    .enum(["high", "medium", "low"])
+    .describe("How many independent signals fed the score: >=3 high, 2 medium, <=1 low"),
+  top_signal: heatSignalSchema.nullable().describe("Signal that contributed most"),
+  // Only signals the scorer had data for are present; a missing key means "no
+  // data", which is materially different from a zero.
+  signals: z
+    .object({
+      tickets: z.number().optional(),
+      gl: z.number().optional(),
+      ra: z.number().optional(),
+      ig: z.number().optional(),
+    })
+    .describe("Per-signal percentiles 0-1"),
+  raw: z
+    .object({
+      tickets: z.number().optional(),
+      gl: z.number().optional(),
+      ra: z.number().optional(),
+      ig: z.number().optional(),
+    })
+    .describe("Raw counts behind the percentiles"),
+  updated_at: z.string().nullable(),
+});
+
 const eventSummarySchema = z.object({
   event_id: z.string(),
   name: z.string(),
@@ -26,6 +60,7 @@ const eventSummarySchema = z.object({
   genres: z.array(z.string()),
   price: z.string().nullable(),
   flyer_url: z.string().nullable(),
+  heat: heatSchema.nullable(),
   nlt_url: z.string(),
 });
 
@@ -94,6 +129,7 @@ const eventDetailSchema = z.object({
     ),
   }),
   flyer_url: z.string().nullable(),
+  heat: heatSchema.nullable(),
   guest_list_status: z.enum(["available", "full", "closed"]),
   nlt_url: z.string(),
 });
@@ -185,6 +221,12 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
         genre: z.string().optional(),
         area: z.string().optional(),
         query: z.string().optional(),
+        sort_by: z
+          .enum(["date", "heat"])
+          .default("date")
+          .describe(
+            "\"date\" = chronological (default). \"heat\" = hottest first by demand signal; unscored events fall to the end.",
+          ),
         limit: z.number().int().min(1).max(20).default(10),
         offset: z.number().int().min(0).default(0),
       },
@@ -206,6 +248,12 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
         city: z.string().default(deps.config.defaultCity),
         genre: z.string().optional(),
         area: z.string().optional(),
+        sort_by: z
+          .enum(["date", "heat"])
+          .default("date")
+          .describe(
+            "\"date\" = chronological (default). \"heat\" = hottest first by demand signal; unscored events fall to the end.",
+          ),
         limit: z.number().int().min(1).max(20).default(10),
         offset: z.number().int().min(0).default(0),
       },
