@@ -6,6 +6,7 @@ import type {
   EventSummary,
   VipVenueOpenSummary,
 } from "../types.js";
+import { toEventHeat, compareByHeat } from "../utils/eventHeat.js";
 import { NightlifeError } from "../errors.js";
 import { getCityContext, listAvailableCities } from "./cities.js";
 import {
@@ -34,6 +35,8 @@ type SearchEventsInput = {
   seriesId?: string;
   limit?: number;
   offset?: number;
+  /** "date" (default) keeps chronological ordering; "heat" ranks hottest first. */
+  sort_by?: "date" | "heat";
 };
 
 type SearchEventsOutput = {
@@ -47,7 +50,7 @@ type SearchEventsOutput = {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OCCURRENCE_SELECT =
-  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
+  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,heat_score,heat_components,heat_score_updated_at,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
 
 type EventOccurrenceRow = {
   id: string;
@@ -65,6 +68,9 @@ type EventOccurrenceRow = {
   source_url: string | null;
   entrance_costs: unknown;
   flyer_url: string | null;
+  heat_score: number | null;
+  heat_components: unknown;
+  heat_score_updated_at: string | null;
   venue:
     | {
         id: string;
@@ -724,6 +730,7 @@ function toEventSummary(
     genres: metadata.genresByEvent.get(row.id) || [],
     price: summarizeEntranceCosts(row.entrance_costs, fallbackCurrency),
     flyer_url: flyer,
+    heat: toEventHeat(row),
     event_media: mediaRows.map((m) => ({
       media_url: m.media_url,
       media_type: m.media_type,
@@ -754,6 +761,7 @@ export async function searchEvents(
   config: AppConfig,
   input: SearchEventsInput,
 ): Promise<SearchEventsOutput> {
+  const sortByHeat = input.sort_by === "heat";
   const citySlug = normalizeCity(input.city, config.defaultCity);
   const city = await getCityContext(
     supabase,
@@ -846,7 +854,10 @@ export async function searchEvents(
       query = query.eq("series_id", input.seriesId);
     }
 
-    if (!input.area && !queryNeedle) {
+    if (sortByHeat) {
+      // nullsFirst:false keeps unscored events at the tail -- unknown, not cold.
+      query = query.order("heat_score", { ascending: false, nullsFirst: false });
+    } else if (!input.area && !queryNeedle) {
       query = query.order("featured", { ascending: false });
     }
     query = query
@@ -909,6 +920,12 @@ export async function searchEvents(
       }
       return matchQuery(row, queryNeedle, summary.performers, summary.genres);
     });
+  }
+
+  if (sortByHeat) {
+    // Re-sort after filtering so the genre/area/query paths rank by heat too,
+    // not just the plain DB path above.
+    summaries = [...summaries].sort(compareByHeat);
   }
 
   if (needsClientFiltering && !clientPagingApplied) {
@@ -1058,7 +1075,7 @@ export async function getEventDetails(
   const { data: occurrence, error } = await supabase
     .from("event_occurrences")
     .select(
-      "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)",
+      "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,heat_score,heat_components,heat_score_updated_at,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)",
     )
     .eq("id", cleanedId)
     .eq("published", true)
@@ -1221,6 +1238,7 @@ export async function getEventDetails(
       tiers,
     },
     flyer_url: flyer,
+    heat: toEventHeat(occurrence),
     event_media: mediaRows.map((m) => ({
       media_url: m.media_url,
       media_type: m.media_type,

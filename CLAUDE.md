@@ -25,8 +25,8 @@ npm run build && npm start:http
 
 | Tool | Description | Params |
 |------|-------------|--------|
-| `search_events` | Search events with filters | city, date, genre, area, query, limit, offset |
-| `get_tonight` | Tonight's events (service-day aware) | city, genre, area, limit, offset |
+| `search_events` | Search events with filters | city, date, genre, area, query, sort_by, limit, offset |
+| `get_tonight` | Tonight's events (service-day aware) | city, genre, area, sort_by, limit, offset |
 | `get_event_details` | Full event detail by UUID | event_id |
 | `search_venues` | Search venues with event-backed filters | city, date, area, genre, query, limit, offset |
 | `get_venue_info` | Venue profile + upcoming events snapshot | venue_id |
@@ -37,6 +37,33 @@ npm run build && npm start:http
 | `list_cities` | List all available cities with metadata | *(none)* |
 | `list_genres` | List all available genres | *(none)* |
 | `list_areas` | List area/neighborhood names for a city | city (optional) |
+
+### Heat Index (`heat` on every event)
+
+`event_occurrences.heat_score` is recomputed nightly by `nlt-scraper/scripts/heat_score.py`
+as a percentile blend of four demand signals: paid tickets, guest-list signups, RA
+interested, and Instagram engagement. Every event payload carries a `heat` object:
+
+| Field | Meaning |
+|-------|---------|
+| `score` | 0-100, higher is hotter |
+| `level` | `hot` (>=80), `warm` (>=50), `quiet` (<50) |
+| `confidence` | `high` (>=3 signals), `medium` (2), `low` (<=1) |
+| `top_signal` | `tickets` \| `gl` \| `ra` \| `ig` — the "why is this hot" affordance |
+| `signals` | Per-signal percentiles 0-1. Missing key = no data, NOT zero |
+| `raw` | Raw counts behind the percentiles |
+| `updated_at` | When the nightly job last scored it |
+
+**Two properties every consumer must respect:**
+
+1. **`heat: null` means NOT SCORED — unknown, not cold.** Only ~1/3 of upcoming events
+   are scored (1,124 of 3,208 as of 2026-08-27). Never present an unscored event as quiet.
+2. **Equal scores are not equally trustworthy.** A 100 built on an RA like count alone
+   (`confidence: "low"`) and a 100 built on tickets + GL + RA + IG (`confidence: "high"`)
+   both read 100. Use `confidence` to hedge rather than overclaim.
+
+`sort_by: "heat"` ranks hottest first and sinks unscored events to the end; `sort_by: "date"`
+(the default) preserves chronological ordering.
 
 ### Date Filters
 - `tonight` — uses 6am JST rollover (at 2am Saturday, "tonight" = Friday night)

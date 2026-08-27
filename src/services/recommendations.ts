@@ -1,3 +1,4 @@
+import { toEventHeat } from "../utils/eventHeat.js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppConfig } from "../config.js";
 import type {
@@ -53,6 +54,9 @@ type EventOccurrenceRow = {
   published: boolean;
   featured: boolean;
   entrance_costs: unknown;
+  heat_score: number | null;
+  heat_components: unknown;
+  heat_score_updated_at: string | null;
   venue:
     | {
         id: string;
@@ -166,7 +170,7 @@ export type RecommendationCandidate = Candidate;
 export type SelectedRecommendationCandidate = SelectedCandidate;
 
 const OCCURRENCE_SELECT =
-  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,entrance_costs,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
+  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,entrance_costs,heat_score,heat_components,heat_score_updated_at,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
@@ -391,6 +395,7 @@ function toEventSummary(
     genres: metadata.genresByEvent.get(eventId) || [],
     price: summarizeEntranceCosts(row.entrance_costs, fallbackCurrency),
     flyer_url: metadata.flyerByEvent.get(eventId) || null,
+    heat: toEventHeat(row),
     event_media: [],
     nlt_url: buildEventUrl(baseUrl, citySlug, eventId),
   };
