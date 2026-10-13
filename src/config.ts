@@ -4,7 +4,7 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   SERVER_NAME: z.string().default("nightlife-mcp"),
-  SERVER_VERSION: z.string().default("0.1.0"),
+  SERVER_VERSION: z.string().default("0.3.0"),
   DEFAULT_CITY: z.string().default("tokyo"),
   DEFAULT_COUNTRY_CODE: z
     .string()

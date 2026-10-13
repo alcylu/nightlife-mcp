@@ -6,6 +6,7 @@ import { NightlifeError, toNightlifeError, toolErrorResponse } from "../errors.j
 import { recordToolResult, logEvent } from "../observability/metrics.js";
 import { getEventDetails, searchEvents } from "../services/events.js";
 import { getRecommendations } from "../services/recommendations.js";
+import { eventMediaItemSchema } from "./schemas.js";
 
 type ToolDeps = {
   supabase: SupabaseClient;
@@ -61,6 +62,7 @@ const eventSummarySchema = z.object({
   price: z.string().nullable(),
   flyer_url: z.string().nullable(),
   heat: heatSchema.nullable(),
+  event_media: z.array(eventMediaItemSchema),
   nlt_url: z.string(),
 });
 
@@ -81,7 +83,7 @@ const vipVenueOpenSummarySchema = z.object({
   nlt_url: z.string(),
 });
 
-const searchEventsOutputSchema = z.object({
+export const searchEventsOutputSchema = z.object({
   city: z.string(),
   date_filter: z.string().nullable(),
   events: z.array(eventSummarySchema),
@@ -89,7 +91,7 @@ const searchEventsOutputSchema = z.object({
   unavailable_city: cityUnavailableSchema.nullable(),
 });
 
-const eventDetailSchema = z.object({
+export const eventDetailSchema = z.object({
   event_id: z.string(),
   name: z.string(),
   date: z.string(),
@@ -130,6 +132,7 @@ const eventDetailSchema = z.object({
   }),
   flyer_url: z.string().nullable(),
   heat: heatSchema.nullable(),
+  event_media: z.array(eventMediaItemSchema),
   guest_list_status: z.enum(["available", "full", "closed"]),
   nlt_url: z.string(),
 });
@@ -221,6 +224,7 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
         genre: z.string().optional(),
         area: z.string().optional(),
         query: z.string().optional(),
+        series_id: z.string().uuid().optional(),
         sort_by: z
           .enum(["date", "heat"])
           .default("date")
@@ -235,7 +239,11 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
     async (args) => runTool(
       "search_events",
       searchEventsOutputSchema,
-      async () => searchEvents(deps.supabase, deps.config, args),
+      async () =>
+        searchEvents(deps.supabase, deps.config, {
+          ...args,
+          seriesId: args.series_id,
+        }),
     ),
   );
 

@@ -13,6 +13,8 @@ export interface EventMediaItem {
   media_type: string;
   is_primary: boolean;
   display_order: number;
+  thumbnail_url: string | null;
+  title: string | null;
 }
 
 export interface EventSummary {
@@ -159,6 +161,7 @@ export interface SearchVenuesOutput {
 export interface PerformerSummary {
   performer_id: string;
   name: string;
+  performer_type: string | null;
   slug: string | null;
   follower_count: number | null;
   ranking_score: number | null;
@@ -179,6 +182,7 @@ export interface PerformerUpcomingEvent {
 export interface PerformerDetail {
   performer_id: string;
   name: string;
+  performer_type: string | null;
   slug: string | null;
   bio: string | null;
   follower_count: number | null;

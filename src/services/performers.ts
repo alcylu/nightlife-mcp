@@ -18,6 +18,7 @@ import {
   serviceDateWindowToUtc,
 } from "../utils/time.js";
 import { normalizeQuery, stripAccents } from "../utils/normalize.js";
+import { buildEventUrl, buildPerformerUrl } from "../utils/urls.js";
 
 type SearchPerformersInput = {
   city?: string;
@@ -87,6 +88,7 @@ type PerformerRow = {
   name: string;
   name_en: string | null;
   name_ja: string | null;
+  type: string | null;
   slug: string | null;
   bio: string | null;
   bio_en: string | null;
@@ -157,13 +159,15 @@ type MediaRow = {
   media_url: string;
   is_primary: boolean;
   display_order: number;
+  thumbnail_url: string | null;
+  title: string | null;
 };
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const OCCURRENCE_SELECT =
-  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,entrance_costs,heat_score,heat_components,heat_score_updated_at,start_at,published,occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override),venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website)";
+  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,entrance_costs,heat_score,heat_components,heat_score_updated_at,start_at,published,occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override),venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website,area_id,area:areas(slug,name_en,name_i18n))";
 
 function normalizeCity(value: string | undefined, fallback: string): string {
   const normalized = String(value || fallback).trim().toLowerCase();
@@ -278,6 +282,15 @@ function venueArea(venue: EventOccurrenceRow["venue"]): string | null {
   if (!v) {
     return null;
   }
+  const area = firstRelation(
+    (v as typeof v & {
+      area?: { name_en?: string | null; name_i18n?: unknown } | Array<{ name_en?: string | null; name_i18n?: unknown }> | null;
+    }).area,
+  );
+  const areaJa = maybeJa(area?.name_i18n);
+  if (area?.name_en || areaJa) {
+    return area?.name_en || areaJa;
+  }
   return v.city_en || v.city || v.city_ja || null;
 }
 
@@ -338,14 +351,6 @@ function summarizeEntranceCosts(raw: unknown, fallbackCurrency = "JPY"): string 
     return null;
   }
   return values.slice(0, 2).join(" | ");
-}
-
-function buildEventUrl(baseUrl: string, citySlug: string, eventId: string): string {
-  return `${baseUrl}/en/${citySlug}/events/${eventId}`;
-}
-
-function buildPerformerUrl(baseUrl: string, citySlug: string, slugOrId: string): string {
-  return `${baseUrl}/en/${citySlug}/djs/${slugOrId}`;
 }
 
 async function unavailableCityPayload(
@@ -498,7 +503,9 @@ async function fetchOccurrenceMetadata(
         .in("event_id", idsChunk),
       supabase
         .from("event_media")
-        .select("event_id,media_type,media_url,is_primary,display_order")
+          .select(
+            "event_id,media_type,media_url,is_primary,display_order,thumbnail_url,title",
+          )
         .in("event_id", idsChunk)
         .in("media_type", ["flyer", "cover"])
         .order("is_primary", { ascending: false })
@@ -620,6 +627,8 @@ function toEventSummary(
       media_type: m.media_type,
       is_primary: m.is_primary,
       display_order: m.display_order,
+      thumbnail_url: m.thumbnail_url,
+      title: m.title,
     })),
     nlt_url: buildEventUrl(baseUrl, citySlug, row.id),
   };
@@ -843,7 +852,7 @@ export async function searchPerformers(
   for (const idsChunk of chunkArray(performerIds, 100)) {
     const { data, error } = await supabase
       .from("performers")
-      .select("id,name,name_en,name_ja,slug,bio,bio_en,follower_count,ranking_score,is_hot_rising_star")
+      .select("id,name,name_en,name_ja,type,slug,bio,bio_en,follower_count,ranking_score,is_hot_rising_star")
       .in("id", idsChunk);
 
     if (error) {
@@ -873,6 +882,7 @@ export async function searchPerformers(
       return {
         performer_id: row.id,
         name,
+        performer_type: row.type,
         slug: row.slug || null,
         follower_count: row.follower_count,
         ranking_score: row.ranking_score,
@@ -884,6 +894,7 @@ export async function searchPerformers(
           config.nightlifeBaseUrl,
           city.slug,
           row.slug || row.id,
+          row.type,
         ),
       };
     })
@@ -916,7 +927,7 @@ export async function getPerformerInfo(
 
   const { data: performer, error: performerError } = await supabase
     .from("performers")
-    .select("id,name,name_en,name_ja,slug,bio,bio_en,follower_count,ranking_score,is_hot_rising_star")
+    .select("id,name,name_en,name_ja,type,slug,bio,bio_en,follower_count,ranking_score,is_hot_rising_star")
     .eq("id", cleanedId)
     .maybeSingle<PerformerRow>();
 
@@ -976,6 +987,7 @@ export async function getPerformerInfo(
     return {
       performer_id: performer.id,
       name: performer.name_en || performer.name || performer.name_ja || "Unknown Performer",
+      performer_type: performer.type,
       slug: performer.slug,
       bio: performer.bio_en || performer.bio || null,
       follower_count: performer.follower_count,
@@ -984,7 +996,12 @@ export async function getPerformerInfo(
       image_url: imageByPerformer.get(performer.id) || null,
       social_links: socialLinks,
       upcoming_events: [],
-      nlt_url: buildPerformerUrl(config.nightlifeBaseUrl, defaultCity, performer.slug || performer.id),
+      nlt_url: buildPerformerUrl(
+        config.nightlifeBaseUrl,
+        defaultCity,
+        performer.slug || performer.id,
+        performer.type,
+      ),
     };
   }
 
@@ -1128,6 +1145,7 @@ export async function getPerformerInfo(
   return {
     performer_id: performer.id,
     name: performer.name_en || performer.name || performer.name_ja || "Unknown Performer",
+    performer_type: performer.type,
     slug: performer.slug,
     bio: performer.bio_en || performer.bio || null,
     follower_count: performer.follower_count,
@@ -1140,6 +1158,7 @@ export async function getPerformerInfo(
       config.nightlifeBaseUrl,
       detailCitySlug,
       performer.slug || performer.id,
+      performer.type,
     ),
   };
 }

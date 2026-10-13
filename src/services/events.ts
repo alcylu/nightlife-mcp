@@ -17,8 +17,8 @@ import {
   serviceDateWindowToUtc,
 } from "../utils/time.js";
 import { normalizeQuery, stripAccents } from "../utils/normalize.js";
+import { buildEventUrl, buildVenueUrl } from "../utils/urls.js";
 import {
-  buildVenueUrl,
   fetchVipVenuesWithHours,
   parseVenueHoursSlots,
   serviceDateDayOfWeek,
@@ -50,7 +50,7 @@ type SearchEventsOutput = {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OCCURRENCE_SELECT =
-  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,heat_score,heat_components,heat_score_updated_at,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
+  "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,heat_score,heat_components,heat_score_updated_at,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website,area_id,area:areas(slug,name_en,name_i18n)),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)";
 
 type EventOccurrenceRow = {
   id: string;
@@ -136,15 +136,20 @@ type MediaRow = {
   media_url: string;
   is_primary: boolean;
   display_order: number;
+  thumbnail_url: string | null;
+  title: string | null;
 };
 
 type StageRow = {
   event_id: string;
   custom_name: string | null;
+  is_off_stage: boolean | null;
   venue_stage: { name: string | null } | Array<{ name: string | null }> | null;
   event_timetables: Array<{
     start_time: string | null;
     end_time: string | null;
+    custom_performer_name: string | null;
+    confirmation_status: string | null;
     performer:
       | {
           id: string;
@@ -160,6 +165,13 @@ type StageRow = {
         }>
       | null;
   }> | null;
+};
+
+type LineupRow = {
+  stage: string | null;
+  performer_name: string;
+  start_time: string | null;
+  end_time: string | null;
 };
 
 function normalizeCity(value: string | undefined, fallback: string): string {
@@ -241,6 +253,15 @@ function venueArea(venue: EventOccurrenceRow["venue"]): string | null {
   if (!v) {
     return null;
   }
+  const area = firstRelation(
+    (v as typeof v & {
+      area?: { name_en?: string | null; name_i18n?: unknown } | Array<{ name_en?: string | null; name_i18n?: unknown }> | null;
+    }).area,
+  );
+  const areaJa = maybeJa(area?.name_i18n);
+  if (area?.name_en || areaJa) {
+    return area?.name_en || areaJa;
+  }
   return v.city_en || v.city || v.city_ja || null;
 }
 
@@ -257,10 +278,6 @@ function chunkArray<T>(items: T[], size: number): T[][] {
     chunks.push(items.slice(i, i + size));
   }
   return chunks;
-}
-
-function buildEventUrl(baseUrl: string, citySlug: string, eventId: string): string {
-  return `${baseUrl}/en/${citySlug}/events/${eventId}`;
 }
 
 function buildMapLink(address: string | null): string | null {
@@ -371,14 +388,44 @@ async function resolveGenreEventIds(
       { cause: genreError.message },
     );
   }
-  if (!genres || genres.length === 0) {
-    return new Set<string>();
+  const genreIds = (genres || []).map((row) => row.id).filter(Boolean);
+  if (!isUuid) {
+    const { data: aliases, error: aliasError } = await supabase
+      .from("genre_aliases")
+      .select("genre_id")
+      .ilike("alias", `%${safe}%`);
+    if (aliasError) {
+      throw new NightlifeError(
+        "DB_QUERY_FAILED",
+        "Failed to fetch genre aliases.",
+        { cause: aliasError.message },
+      );
+    }
+    for (const row of aliases || []) {
+      const id = String(row.genre_id || "").trim();
+      if (id && !genreIds.includes(id)) {
+        genreIds.push(id);
+      }
+    }
   }
-
-  const genreIds = genres.map((row) => row.id).filter(Boolean);
   if (genreIds.length === 0) {
     return new Set<string>();
   }
+
+  const { data: expandedGenreIds, error: expandError } = await supabase.rpc(
+    "expand_genre_ids",
+    { p_genre_ids: genreIds },
+  );
+  if (expandError) {
+    throw new NightlifeError(
+      "DB_QUERY_FAILED",
+      "Failed to expand the genre catalog.",
+      { cause: expandError.message },
+    );
+  }
+  const resolvedGenreIds = Array.isArray(expandedGenreIds)
+    ? expandedGenreIds.map(String).filter(Boolean)
+    : genreIds;
 
   const eventIds = new Set<string>();
   const pageSize = 1000;
@@ -389,7 +436,7 @@ async function resolveGenreEventIds(
     const { data: pageRows, error: pageError } = await supabase
       .from("event_genres")
       .select("event_id")
-      .in("genre_id", genreIds)
+      .in("genre_id", resolvedGenreIds)
       .order("event_id", { ascending: true })
       .range(from, to);
 
@@ -425,15 +472,7 @@ async function fetchOccurrenceMetadata(
   genresByEvent: Map<string, string[]>;
   mediaByEvent: Map<string, MediaRow[]>;
   performersByEvent: Map<string, string[]>;
-  lineupByEvent: Map<
-    string,
-    Array<{
-      stage: string | null;
-      performer_name: string;
-      start_time: string | null;
-      end_time: string | null;
-    }>
-  >;
+  lineupByEvent: Map<string, LineupRow[]>;
 }> {
   const uniqueOccurrenceIds = Array.from(
     new Set(occurrenceIds.filter((value) => value.length > 0)),
@@ -461,13 +500,14 @@ async function fetchOccurrenceMetadata(
         .in("event_id", idsChunk),
       supabase
         .from("event_media")
-        .select("event_id,media_type,media_url,is_primary,display_order")
-        .in("event_id", idsChunk)
-        .eq("media_type", "image"),
+        .select(
+          "event_id,media_type,media_url,is_primary,display_order,thumbnail_url,title",
+        )
+        .in("event_id", idsChunk),
       supabase
         .from("event_stages")
         .select(
-          "event_id,custom_name,venue_stage:venue_stages(name),event_timetables(start_time,end_time,performer:performers(id,name,name_en,name_ja))",
+          "event_id,custom_name,is_off_stage,venue_stage:venue_stages(name),event_timetables(start_time,end_time,custom_performer_name,confirmation_status,performer:performers(id,name,name_en,name_ja))",
         )
         .in("event_id", idsChunk),
     ]);
@@ -530,19 +570,20 @@ async function fetchOccurrenceMetadata(
     mediaByEvent.set(eventId, rows);
   }
 
+  const { performersByEvent, lineupByEvent } = collectStageMetadata(stageRows);
+
+  return { genresByEvent, mediaByEvent, performersByEvent, lineupByEvent };
+}
+
+function collectStageMetadata(stageRows: StageRow[]): {
+  performersByEvent: Map<string, string[]>;
+  lineupByEvent: Map<string, LineupRow[]>;
+} {
   const performersByEvent = new Map<string, string[]>();
-  const lineupByEvent = new Map<
-    string,
-    Array<{
-      stage: string | null;
-      performer_name: string;
-      start_time: string | null;
-      end_time: string | null;
-    }>
-  >();
+  const lineupByEvent = new Map<string, LineupRow[]>();
 
   for (const stage of stageRows) {
-    if (!stage.event_id || !stage.event_timetables) {
+    if (!stage.event_id || stage.is_off_stage === true || !stage.event_timetables) {
       continue;
     }
 
@@ -552,11 +593,19 @@ async function fetchOccurrenceMetadata(
     const lineupRows = lineupByEvent.get(stage.event_id) || [];
 
     for (const slot of stage.event_timetables) {
+      if (
+        !["pending", "confirmed", "offer_accepted"].includes(
+          String(slot.confirmation_status || ""),
+        )
+      ) {
+        continue;
+      }
       const performer = firstRelation(slot.performer);
       const performerName =
         performer?.name_en ||
         performer?.name ||
         performer?.name_ja ||
+        slot.custom_performer_name?.trim() ||
         null;
       if (!performerName) {
         continue;
@@ -579,7 +628,7 @@ async function fetchOccurrenceMetadata(
     lineupByEvent.set(eventId, rows);
   }
 
-  return { genresByEvent, mediaByEvent, performersByEvent, lineupByEvent };
+  return { performersByEvent, lineupByEvent };
 }
 
 async function fetchOccurrencesByIds(
@@ -647,8 +696,16 @@ function matchArea(row: EventOccurrenceRow, area: string): boolean {
   }
 
   const venue = firstRelation(row.venue);
+  const hierarchyArea = firstRelation(
+    (venue as (typeof venue & {
+      area?: { slug?: string | null; name_en?: string | null; name_i18n?: unknown } | Array<{ slug?: string | null; name_en?: string | null; name_i18n?: unknown }> | null;
+    }) | null)?.area,
+  );
   return hasNeedle(
     needle,
+    hierarchyArea?.slug,
+    hierarchyArea?.name_en,
+    maybeJa(hierarchyArea?.name_i18n),
     venue?.city,
     venue?.city_en,
     venue?.city_ja,
@@ -712,7 +769,8 @@ function toEventSummary(
 ): EventSummary {
   const day = primaryDay(row.occurrence_days);
   const mediaRows = metadata.mediaByEvent.get(row.id) || [];
-  const mediaFlyer = mediaRows[0]?.media_url || null;
+  const mediaFlyer =
+    mediaRows.find((media) => media.media_type === "image")?.media_url || null;
   const flyer = row.flyer_url || mediaFlyer;
   const venue = firstRelation(row.venue);
 
@@ -736,6 +794,8 @@ function toEventSummary(
       media_type: m.media_type,
       is_primary: m.is_primary,
       display_order: m.display_order,
+      thumbnail_url: m.thumbnail_url,
+      title: m.title,
     })),
     nlt_url: buildEventUrl(baseUrl, citySlug, row.id),
   };
@@ -1075,7 +1135,7 @@ export async function getEventDetails(
   const { data: occurrence, error } = await supabase
     .from("event_occurrences")
     .select(
-      "id,city_id,venue_id,name_en,name_i18n,description_en,description_i18n,start_at,end_at,published,featured,source,source_url,entrance_costs,flyer_url,heat_score,heat_components,heat_score_updated_at,venue:venues(id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website),occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)",
+      OCCURRENCE_SELECT,
     )
     .eq("id", cleanedId)
     .eq("published", true)
@@ -1208,7 +1268,8 @@ export async function getEventDetails(
   }
 
   const mediaRows = metadata.mediaByEvent.get(occurrence.id) || [];
-  const mediaFlyer = mediaRows[0]?.media_url || null;
+  const mediaFlyer =
+    mediaRows.find((media) => media.media_type === "image")?.media_url || null;
   const flyer = occurrence.flyer_url || mediaFlyer;
   const lineup = metadata.lineupByEvent.get(occurrence.id) || [];
   const venue = firstRelation(occurrence.venue);
@@ -1244,6 +1305,8 @@ export async function getEventDetails(
       media_type: m.media_type,
       is_primary: m.is_primary,
       display_order: m.display_order,
+      thumbnail_url: m.thumbnail_url,
+      title: m.title,
     })),
     guest_list_status: guestStatus,
     nlt_url: buildEventUrl(config.nightlifeBaseUrl, citySlug, occurrence.id),
@@ -1252,3 +1315,5 @@ export async function getEventDetails(
 
 // Test-only exports (following __testOnly_ convention from venues.ts / performers.ts)
 export const __testOnly_matchQuery = matchQuery;
+export const __testOnly_collectStageMetadata = collectStageMetadata;
+export const __testOnly_resolveGenreEventIds = resolveGenreEventIds;

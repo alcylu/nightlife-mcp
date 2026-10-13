@@ -52,6 +52,7 @@ export function createRestRouter(
         area: str(req.query.area),
         query: str(req.query.query),
         seriesId: str(req.query.series_id),
+        sort_by: str(req.query.sort_by) as "date" | "heat" | undefined,
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
@@ -70,6 +71,7 @@ export function createRestRouter(
         genre: str(req.query.genre),
         area: str(req.query.area),
         seriesId: str(req.query.series_id),
+        sort_by: str(req.query.sort_by) as "date" | "heat" | undefined,
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
@@ -104,6 +106,8 @@ export function createRestRouter(
         area: str(req.query.area),
         genre: str(req.query.genre),
         query: str(req.query.query),
+        vip_booking_supported_only:
+          str(req.query.vip_booking_supported_only) === "true" || undefined,
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });

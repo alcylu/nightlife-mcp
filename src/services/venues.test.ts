@@ -6,6 +6,7 @@ import {
   __testOnly_rankVenueSummaries,
   __testOnly_shouldAttemptFuzzy,
   getVenueInfo,
+  venueArea,
 } from "./venues.js";
 
 test("getVenueInfo validates UUID input", async () => {
@@ -84,6 +85,16 @@ test("venue ranking prefers more events, then earlier next date", () => {
   ]);
 
   assert.deepEqual(ranked.map((venue) => venue.venue_id), ["v2", "v1", "v3"]);
+});
+
+test("venue area prefers the canonical area hierarchy over legacy city text", () => {
+  assert.equal(
+    venueArea({
+      city_en: "Legacy neighborhood",
+      area: { name_en: "Shibuya", name_i18n: { ja: "渋谷" } },
+    } as never),
+    "Shibuya",
+  );
 });
 
 test("VIP hours synthesis creates synthetic open-day events for VIP venues", () => {

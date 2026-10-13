@@ -5,7 +5,7 @@ Open-source MCP server for nightlife event discovery. First nightlife MCP server
 
 - **Stack**: TypeScript, `@modelcontextprotocol/sdk`, Express, Supabase (shared DB with nightlife-tokyo-next)
 - **Location**: `~/Apps/nlt/nightlife-mcp/`
-- **Supabase Project**: `nqwyhdfwcaedtycojslb` (same as consumer site, read-only access)
+- **Supabase Project**: `nqwyhdfwcaedtycojslb` (same as consumer site; discovery tools are read-only, while explicit guest-list/VIP/ops workflows write through scoped service functions)
 - **License**: MIT (open source code, private data)
 
 ## Running
@@ -25,7 +25,7 @@ npm run build && npm start:http
 
 | Tool | Description | Params |
 |------|-------------|--------|
-| `search_events` | Search events with filters | city, date, genre, area, query, sort_by, limit, offset |
+| `search_events` | Search events with filters | city, date, genre, area, query, series_id, sort_by, limit, offset |
 | `get_tonight` | Tonight's events (service-day aware) | city, genre, area, sort_by, limit, offset |
 | `get_event_details` | Full event detail by UUID | event_id |
 | `search_venues` | Search venues with event-backed filters | city, date, area, genre, query, limit, offset |
@@ -33,6 +33,12 @@ npm run build && npm start:http
 | `search_performers` | Search performers active in city/date window | city, date, genre, query, sort_by, limit, offset |
 | `get_performer_info` | Performer profile + social + upcoming events | performer_id |
 | `log_unmet_request` | Log unresolved concierge asks for ops follow-up | channel, language, city, raw_query, intent, suggested_filters, user_hash |
+| `create_vip_booking_request` | Submit a customer VIP request | venue/date/arrival/contact fields |
+| `get_vip_booking_status` | Check a customer-safe VIP request status | booking_request_id + matching contact |
+| `cancel_vip_booking_request` | Cancel a submitted VIP request | booking_request_id + matching contact |
+| `get_vip_pricing` | Venue/date VIP pricing summary | venue_id, date |
+| `submit_to_guest_list` | Submit a guest-list entry | event/contact fields |
+| `get_guest_list_entry_status` | Check a guest-list entry | entry_id + matching contact |
 | `get_recommendations` | Diverse recommendation slots (feature-flagged) | city, date, area, genre, query, limit |
 | `list_cities` | List all available cities with metadata | *(none)* |
 | `list_genres` | List all available genres | *(none)* |
@@ -179,7 +185,7 @@ src/
 SUPABASE_URL=https://nqwyhdfwcaedtycojslb.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<from Railway nlt-admin project>
 SERVER_NAME=nightlife-mcp
-SERVER_VERSION=0.1.0
+SERVER_VERSION=0.3.0
 DEFAULT_CITY=tokyo
 DEFAULT_COUNTRY_CODE=JP
 NIGHTLIFE_BASE_URL=https://nightlifetokyo.com
@@ -208,10 +214,10 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - **Health**: `https://api.nightlife.dev/health`
 - **GitHub**: `https://github.com/alcylu/nightlife-mcp` (public, MIT)
 - **Railway project**: `nightlife-mcp` (ID: `08d1f8fb-4a80-4f48-b1b8-1578d2f8bf0c`)
-- **Production API key**: `nlt-mcp-prod-key-2026-feb` (env-based via `MCP_HTTP_API_KEYS`)
+- **Production fallback API key**: stored only in the deployment secret manager; never record the value in tracked files
 - **Key config**: `MCP_HTTP_USE_DB_KEYS=true` + `MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=true`
 - DB keys: self-service via nightlife.dev dashboard (RPCs applied 2026-02-19)
-- Env key fallback: `nlt-mcp-prod-key-2026-feb` still works alongside DB keys
+- Env key fallback can work alongside DB keys during a controlled rotation; remove retired values promptly
 
 ## Testing (2026-02-19)
 - All tools passing on production (11/11 tests)

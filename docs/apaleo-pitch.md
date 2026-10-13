@@ -44,8 +44,8 @@ AI Agent (using nightlife-mcp):
 Guest: "Book us a VIP table at 1 OAK"
 
 AI Agent:
-→ Calls get_vip_table_availability(venue_id, date)
-→ Shows table map, pricing (¥150K-¥1M), availability
+→ Calls get_vip_pricing(venue_id, date)
+→ Shows configured/approximate pricing, zones, opening status and any table map
 → Calls create_vip_booking_request(venue_id, date, party_size=4, ...)
 → Booking request submitted, venue confirms within 2 hours
 ```
@@ -64,7 +64,7 @@ AI Agent:
 | OpenAPI | 3.1.0 |
 | Data freshness | Real-time (events updated daily from 50+ venue sources) |
 | Coverage | Tokyo (expanding to Osaka, Kyoto, Yokohama) |
-| Tools | 9 MCP tools, 8 REST endpoints |
+| Tools | 17 always-on MCP tools plus 1 feature-flagged recommendation tool; 12 REST endpoints |
 | License | MIT (code), proprietary (data) |
 | Docs | https://api.nightlife.dev/api/v1/docs |
 | GitHub | https://github.com/alcylu/nightlife-mcp |

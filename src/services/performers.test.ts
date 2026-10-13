@@ -45,6 +45,7 @@ test("performer sorting supports recent_activity mode", () => {
       {
         performer_id: "p1",
         name: "Alpha",
+        performer_type: "DJ",
         slug: "alpha",
         follower_count: 100,
         ranking_score: 90,
@@ -57,6 +58,7 @@ test("performer sorting supports recent_activity mode", () => {
       {
         performer_id: "p2",
         name: "Bravo",
+        performer_type: "DJ",
         slug: "bravo",
         follower_count: 20,
         ranking_score: 70,
@@ -69,6 +71,7 @@ test("performer sorting supports recent_activity mode", () => {
       {
         performer_id: "p3",
         name: "Charlie",
+        performer_type: "DJ",
         slug: "charlie",
         follower_count: 500,
         ranking_score: 98,

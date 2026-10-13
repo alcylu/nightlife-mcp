@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { __testOnly_matchQuery } from "./events.js";
+import {
+  __testOnly_collectStageMetadata,
+  __testOnly_matchQuery,
+  __testOnly_resolveGenreEventIds,
+} from "./events.js";
 
 // Minimal EventOccurrenceRow stub for testing matchQuery in isolation.
 // Only populates fields that matchQuery actually reads.
@@ -120,4 +124,113 @@ test("matchQuery: accent-variant needle matches accented genre name", () => {
     true,
     "lowercase needle should match title-case genre via normalization",
   );
+});
+
+test("lineup projection excludes off-stage crew and keeps billed custom performers", () => {
+  const { performersByEvent, lineupByEvent } = __testOnly_collectStageMetadata([
+    {
+      event_id: "event-1",
+      custom_name: "Main Floor",
+      is_off_stage: false,
+      venue_stage: null,
+      event_timetables: [
+        {
+          start_time: "23:00",
+          end_time: "00:00",
+          custom_performer_name: "Special Guest",
+          confirmation_status: "confirmed",
+          performer: null,
+        },
+        {
+          start_time: "22:00",
+          end_time: "23:00",
+          custom_performer_name: "Declined Act",
+          confirmation_status: "declined",
+          performer: null,
+        },
+      ],
+    },
+    {
+      event_id: "event-1",
+      custom_name: "Photo Team",
+      is_off_stage: true,
+      venue_stage: null,
+      event_timetables: [
+        {
+          start_time: null,
+          end_time: null,
+          custom_performer_name: null,
+          confirmation_status: "confirmed",
+          performer: {
+            id: "photographer-1",
+            name: "Backstage Photographer",
+            name_en: null,
+            name_ja: null,
+          },
+        },
+      ],
+    },
+  ]);
+
+  assert.deepEqual(performersByEvent.get("event-1"), ["Special Guest"]);
+  assert.deepEqual(lineupByEvent.get("event-1"), [
+    {
+      stage: "Main Floor",
+      performer_name: "Special Guest",
+      start_time: "23:00",
+      end_time: "00:00",
+    },
+  ]);
+});
+
+test("genre resolution includes aliases and descendants from the shared catalog", async () => {
+  let mappedGenreIds: string[] = [];
+  const supabase = {
+    from(table: string) {
+      if (table === "genres") {
+        return {
+          select: () => ({
+            or: async () => ({ data: [{ id: "parent-id" }], error: null }),
+          }),
+        };
+      }
+      if (table === "genre_aliases") {
+        return {
+          select: () => ({
+            ilike: async () => ({ data: [{ genre_id: "alias-id" }], error: null }),
+          }),
+        };
+      }
+      if (table === "event_genres") {
+        return {
+          select: () => ({
+            in: (_column: string, ids: string[]) => {
+              mappedGenreIds = ids;
+              return {
+                order: () => ({
+                  range: async () => ({
+                    data: [{ event_id: "event-from-child" }],
+                    error: null,
+                  }),
+                }),
+              };
+            },
+          }),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    },
+    async rpc(name: string, args: { p_genre_ids: string[] }) {
+      assert.equal(name, "expand_genre_ids");
+      assert.deepEqual(args.p_genre_ids, ["parent-id", "alias-id"]);
+      return { data: ["parent-id", "alias-id", "child-id"], error: null };
+    },
+  };
+
+  const eventIds = await __testOnly_resolveGenreEventIds(
+    supabase as never,
+    "electronic",
+  );
+  assert.deepEqual(mappedGenreIds, ["parent-id", "alias-id", "child-id"]);
+  assert.deepEqual([...eventIds!], ["event-from-child"]);
 });

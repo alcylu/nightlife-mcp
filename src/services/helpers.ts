@@ -29,10 +29,10 @@ export async function listGenres(
 
 // --- list_areas ---
 
-type VenueAreaRow = {
-  city_en: string | null;
-  city: string | null;
-  city_ja: string | null;
+type AreaRow = {
+  name_en: string;
+  name_i18n: unknown;
+  sort_order: number | null;
 };
 
 export async function listAreas(
@@ -48,9 +48,12 @@ export async function listAreas(
   }
 
   const { data, error } = await supabase
-    .from("venues")
-    .select("city_en,city,city_ja")
-    .eq("city_id", cityCtx.id);
+    .from("areas")
+    .select("name_en,name_i18n,sort_order")
+    .eq("city_id", cityCtx.id)
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true })
+    .order("name_en", { ascending: true });
 
   if (error) {
     throw new NightlifeError("INTERNAL_ERROR", `Failed to fetch areas: ${error.message}`);
@@ -59,8 +62,12 @@ export async function listAreas(
   const seen = new Set<string>();
   const areas: string[] = [];
 
-  for (const row of (data ?? []) as VenueAreaRow[]) {
-    const raw = row.city_en || row.city || row.city_ja;
+  for (const row of (data ?? []) as AreaRow[]) {
+    const ja =
+      row.name_i18n && typeof row.name_i18n === "object"
+        ? (row.name_i18n as { ja?: unknown }).ja
+        : null;
+    const raw = row.name_en || (typeof ja === "string" ? ja : null);
     if (!raw) continue;
     const normalized = raw.trim().toLowerCase();
     if (normalized && !seen.has(normalized)) {

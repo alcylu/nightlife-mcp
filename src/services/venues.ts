@@ -18,6 +18,7 @@ import {
   serviceDateWindowToUtc,
 } from "../utils/time.js";
 import { normalizeQuery } from "../utils/normalize.js";
+import { buildEventUrl, buildVenueUrl } from "../utils/urls.js";
 
 type SearchVenuesInput = {
   city?: string;
@@ -102,6 +103,8 @@ type MediaRow = {
   media_url: string;
   is_primary: boolean;
   display_order: number;
+  thumbnail_url: string | null;
+  title: string | null;
 };
 
 type StageRow = {
@@ -127,7 +130,7 @@ const UUID_RE =
 const HH_MM_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const VIP_HOURS_EVENT_PREFIX = "__vip_hours__:";
 const VENUE_SELECT =
-  "id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website,image_url,sns_instagram,sns_tiktok,sns_x,sns_youtube,guest_list_enabled,vip_booking_enabled,city_id,hours_timezone,hours_weekly_json";
+  "id,name,name_en,name_ja,address,address_en,address_ja,city,city_en,city_ja,website,image_url,sns_instagram,sns_tiktok,sns_x,sns_youtube,guest_list_enabled,vip_booking_enabled,city_id,area_id,area:areas(slug,name_en,name_i18n),hours_timezone,hours_weekly_json";
 
 const OCCURRENCE_SELECT =
   `id,venue_id,city_id,name_en,name_i18n,description_en,description_i18n,entrance_costs,heat_score,heat_components,heat_score_updated_at,start_at,published,occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override),venue:venues(${VENUE_SELECT})`;
@@ -450,6 +453,15 @@ export function venueArea(venue: VenueRow | null): string | null {
   if (!venue) {
     return null;
   }
+  const area = firstRelation(
+    (venue as VenueRow & {
+      area?: { name_en?: string | null; name_i18n?: unknown } | Array<{ name_en?: string | null; name_i18n?: unknown }> | null;
+    }).area,
+  );
+  const areaJa = maybeJa(area?.name_i18n);
+  if (area?.name_en || areaJa) {
+    return area?.name_en || areaJa;
+  }
   return venue.city_en || venue.city || venue.city_ja || null;
 }
 
@@ -517,14 +529,6 @@ function summarizeEntranceCosts(raw: unknown, fallbackCurrency = "JPY"): string 
     return null;
   }
   return values.slice(0, 2).join(" | ");
-}
-
-function buildEventUrl(baseUrl: string, citySlug: string, eventId: string): string {
-  return `${baseUrl}/en/${citySlug}/events/${eventId}`;
-}
-
-export function buildVenueUrl(baseUrl: string, citySlug: string, venueId: string): string {
-  return `${baseUrl}/en/${citySlug}/venues/${venueId}`;
 }
 
 async function unavailableCityPayload(
@@ -647,7 +651,9 @@ async function fetchOccurrenceMetadata(
       await Promise.all([
         supabase
           .from("event_media")
-          .select("event_id,media_type,media_url,is_primary,display_order")
+          .select(
+            "event_id,media_type,media_url,is_primary,display_order,thumbnail_url,title",
+          )
           .in("event_id", idsChunk)
           .in("media_type", ["flyer", "cover"])
           .order("is_primary", { ascending: false })
@@ -740,6 +746,8 @@ function toEventSummary(
       media_type: m.media_type,
       is_primary: m.is_primary,
       display_order: m.display_order,
+      thumbnail_url: m.thumbnail_url,
+      title: m.title,
     })),
     nlt_url: syntheticVipHours
       ? buildVenueUrl(baseUrl, citySlug, venueId)

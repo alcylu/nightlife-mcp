@@ -37,11 +37,16 @@ For curl, TypeScript SDK, and other clients, see [`CLIENT_SETUP.md`](CLIENT_SETU
 - `get_venue_info`
 - `search_performers`
 - `get_performer_info`
+- `list_cities`
+- `list_genres`
+- `list_areas`
 - `log_unmet_request`
 - `create_vip_booking_request`
 - `get_vip_booking_status`
-- `get_vip_table_availability`
-- `get_vip_table_chart`
+- `cancel_vip_booking_request`
+- `get_vip_pricing`
+- `submit_to_guest_list`
+- `get_guest_list_entry_status`
 - `get_recommendations` (v0.2, behind `MCP_ENABLE_RECOMMENDATIONS=true`)
 - Streamable HTTP endpoint with API-key middleware
 - Structured tool output schemas (`outputSchema`)
@@ -50,7 +55,7 @@ For curl, TypeScript SDK, and other clients, see [`CLIENT_SETUP.md`](CLIENT_SETU
 
 ## Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - Supabase project URL + service role key
 
 ## Setup
@@ -139,8 +144,8 @@ Run migration:
 Then call MCP tools:
 - `create_vip_booking_request`
 - `get_vip_booking_status`
-- `get_vip_table_availability` (read per-day table availability by venue/date range)
-- `get_vip_table_chart` (read structured table chart with optional per-date status overlay and optional `layout_image_url`)
+- `cancel_vip_booking_request`
+- `get_vip_pricing` (read venue/date pricing, open status, zones, and optional layout image)
 
 Conversation policy for `create_vip_booking_request`:
 - Confirm booking date/time in venue local time before submitting.

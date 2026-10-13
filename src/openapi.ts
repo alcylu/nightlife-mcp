@@ -30,13 +30,34 @@ const eventSummary = {
           media_type: { type: "string" },
           is_primary: { type: "boolean" },
           display_order: { type: "number" },
+          thumbnail_url: { type: ["string", "null"] },
+          title: { type: ["string", "null"] },
         },
-        required: ["media_url", "media_type", "is_primary", "display_order"],
+        required: ["media_url", "media_type", "is_primary", "display_order", "thumbnail_url", "title"],
       },
+    },
+    heat: {
+      oneOf: [
+        {
+          type: "object",
+          properties: {
+            score: { type: "number", minimum: 0, maximum: 100 },
+            level: { type: "string", enum: ["hot", "warm", "quiet"] },
+            confidence: { type: "string", enum: ["high", "medium", "low"] },
+            top_signal: { type: ["string", "null"], enum: ["tickets", "gl", "ra", "ig", null] },
+            signals: { type: "object", additionalProperties: { type: "number" } },
+            raw: { type: "object", additionalProperties: { type: "number" } },
+            updated_at: { type: ["string", "null"] },
+          },
+          required: ["score", "level", "confidence", "top_signal", "signals", "raw", "updated_at"],
+        },
+        { type: "null" },
+      ],
+      description: "Nightly demand score. Null means unscored/unknown, not quiet.",
     },
     nlt_url: { type: "string" },
   },
-  required: ["event_id", "name", "date", "service_date", "venue", "performers", "genres", "price", "flyer_url", "event_media", "nlt_url"],
+  required: ["event_id", "name", "date", "service_date", "venue", "performers", "genres", "price", "flyer_url", "heat", "event_media", "nlt_url"],
 } as const;
 
 const cityUnavailable = {
@@ -74,6 +95,7 @@ const queryParam = { name: "query", in: "query", schema: { type: "string" }, des
 const seriesParam = { name: "series_id", in: "query", schema: { type: "string", format: "uuid" }, description: "Filter to events belonging to a specific event series (UUID)", required: false };
 const limitParam = { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 20, default: 10 }, description: "Max results (default: 10, max: 20)", required: false };
 const offsetParam = { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 }, description: "Pagination offset (default: 0)", required: false };
+const eventSortParam = { name: "sort_by", in: "query", schema: { type: "string", enum: ["date", "heat"], default: "date" }, description: "Sort chronologically or by demand heat", required: false };
 const idParam = (resource: string) => ({ name: "id", in: "path", schema: { type: "string", format: "uuid" }, description: `${resource} UUID`, required: true });
 
 const auth401 = { description: "API key required", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } };
@@ -116,7 +138,7 @@ export const openApiDocument = {
         description: "Search nightlife events with filters for city, date, genre, area, and free-text query.",
         operationId: "searchEvents",
         tags: ["Events"],
-        parameters: [cityParam, dateParam, genreParam, areaParam, queryParam, seriesParam, limitParam, offsetParam],
+        parameters: [cityParam, dateParam, genreParam, areaParam, queryParam, seriesParam, eventSortParam, limitParam, offsetParam],
         responses: {
           "200": {
             description: "Event search results",
@@ -132,7 +154,7 @@ export const openApiDocument = {
         description: "Get tonight's events using service-day-aware cutoff logic (6am JST rollover). At 2am Saturday, 'tonight' still returns Friday night events.",
         operationId: "getEventsTonight",
         tags: ["Events"],
-        parameters: [cityParam, genreParam, areaParam, seriesParam, limitParam, offsetParam],
+        parameters: [cityParam, genreParam, areaParam, seriesParam, eventSortParam, limitParam, offsetParam],
         responses: {
           "200": {
             description: "Tonight's events",
@@ -165,7 +187,7 @@ export const openApiDocument = {
         description: "Search nightlife venues by city, date window, area, genre, and text query.",
         operationId: "searchVenues",
         tags: ["Venues"],
-        parameters: [cityParam, dateParam, areaParam, genreParam, queryParam, limitParam, offsetParam],
+        parameters: [cityParam, dateParam, areaParam, genreParam, queryParam, { name: "vip_booking_supported_only", in: "query", schema: { type: "boolean" }, description: "Only return venues that accept VIP booking requests", required: false }, limitParam, offsetParam],
         responses: {
           "200": {
             description: "Venue search results",
@@ -473,6 +495,7 @@ export const openApiDocument = {
             required: ["entrance_summary", "door", "advance", "tiers"],
           },
           flyer_url: { type: ["string", "null"] },
+          heat: eventSummary.properties.heat,
           event_media: {
             type: "array",
             items: {
@@ -482,14 +505,16 @@ export const openApiDocument = {
                 media_type: { type: "string" },
                 is_primary: { type: "boolean" },
                 display_order: { type: "number" },
+                thumbnail_url: { type: ["string", "null"] },
+                title: { type: ["string", "null"] },
               },
-              required: ["media_url", "media_type", "is_primary", "display_order"],
+              required: ["media_url", "media_type", "is_primary", "display_order", "thumbnail_url", "title"],
             },
           },
           guest_list_status: { type: "string", enum: ["available", "full", "closed"] },
           nlt_url: { type: "string" },
         },
-        required: ["event_id", "name", "date", "start_time", "end_time", "service_date", "venue", "lineup", "genres", "price", "flyer_url", "event_media", "guest_list_status", "nlt_url"],
+        required: ["event_id", "name", "date", "start_time", "end_time", "service_date", "venue", "lineup", "genres", "price", "flyer_url", "heat", "event_media", "guest_list_status", "nlt_url"],
       },
       VenueSummary: {
         type: "object",
@@ -544,6 +569,7 @@ export const openApiDocument = {
         properties: {
           performer_id: { type: "string" },
           name: { type: "string" },
+          performer_type: { type: ["string", "null"] },
           slug: { type: ["string", "null"] },
           follower_count: { type: ["number", "null"] },
           ranking_score: { type: ["number", "null"] },
@@ -553,7 +579,7 @@ export const openApiDocument = {
           next_event_date: { type: ["string", "null"] },
           nlt_url: { type: "string" },
         },
-        required: ["performer_id", "name", "slug", "follower_count", "ranking_score", "genres", "image_url", "has_upcoming_event", "next_event_date", "nlt_url"],
+        required: ["performer_id", "name", "performer_type", "slug", "follower_count", "ranking_score", "genres", "image_url", "has_upcoming_event", "next_event_date", "nlt_url"],
       },
       SearchPerformersOutput: {
         type: "object",
@@ -570,6 +596,7 @@ export const openApiDocument = {
         properties: {
           performer_id: { type: "string" },
           name: { type: "string" },
+          performer_type: { type: ["string", "null"] },
           slug: { type: ["string", "null"] },
           bio: { type: ["string", "null"] },
           follower_count: { type: ["number", "null"] },
@@ -603,7 +630,7 @@ export const openApiDocument = {
           },
           nlt_url: { type: "string" },
         },
-        required: ["performer_id", "name", "slug", "bio", "follower_count", "ranking_score", "genres", "image_url", "social_links", "upcoming_events", "nlt_url"],
+        required: ["performer_id", "name", "performer_type", "slug", "bio", "follower_count", "ranking_score", "genres", "image_url", "social_links", "upcoming_events", "nlt_url"],
       },
       RecommendationSlot: {
         type: "object",

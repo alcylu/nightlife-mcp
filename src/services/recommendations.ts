@@ -31,6 +31,7 @@ import {
   type DiversitySnapshot,
   type RecommendationVector,
 } from "../utils/recommendationFeatures.js";
+import { buildEventUrl } from "../utils/urls.js";
 
 type RecommendationInput = {
   city?: string;
@@ -299,10 +300,6 @@ function summarizeEntranceCosts(raw: unknown, fallbackCurrency = "JPY"): string 
     return null;
   }
   return values.slice(0, 2).join(" | ");
-}
-
-function buildEventUrl(baseUrl: string, citySlug: string, eventId: string): string {
-  return `${baseUrl}/en/${citySlug}/events/${eventId}`;
 }
 
 function normalizeCity(value: string | undefined, fallback: string): string {

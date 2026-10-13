@@ -15,6 +15,7 @@ type ToolDeps = {
 const performerSummarySchema = z.object({
   performer_id: z.string(),
   name: z.string(),
+  performer_type: z.string().nullable(),
   slug: z.string().nullable(),
   follower_count: z.number().nullable(),
   ranking_score: z.number().nullable(),
@@ -35,6 +36,7 @@ const searchPerformersOutputSchema = z.object({
 const performerDetailSchema = z.object({
   performer_id: z.string(),
   name: z.string(),
+  performer_type: z.string().nullable(),
   slug: z.string().nullable(),
   bio: z.string().nullable(),
   follower_count: z.number().nullable(),
