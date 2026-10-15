@@ -20,23 +20,31 @@ let product = products.data.find(p => p.metadata.app === app);
 let portal = portals.data.find(p => p.metadata.app === app);
 let endpoint = endpoints.data.find(e => e.url === url && e.status === "enabled");
 let price;
+let starterPrice;
 if (product) {
   const prices = await stripe.prices.list({ product: product.id, active: true, limit: 100 });
   price = prices.data.find(p => p.currency === "usd" && p.unit_amount === 1900 && p.recurring?.interval === "month" && p.recurring.interval_count === 1);
+  starterPrice = prices.data.find(p => p.currency === "usd" && p.unit_amount === 500 && p.recurring?.interval === "month" && p.recurring.interval_count === 1);
 }
 if (!process.argv.includes("--apply")) {
-  console.log(JSON.stringify({ dry_run: true, live: vars.STRIPE_SECRET_KEY.startsWith("sk_live_"), price: "US$19/month", existing: { product: product?.id ?? null, price: price?.id ?? null, portal: portal?.id ?? null, webhook: endpoint?.id ?? null }, deployment_variables_required: ["STRIPE_PRO_PRICE_ID", "STRIPE_PRO_PORTAL_CONFIGURATION_ID", "STRIPE_PRO_WEBHOOK_SECRET", "MCP_ENABLE_MONTHLY_LIMITS=true"] }, null, 2));
+  console.log(JSON.stringify({ dry_run: true, live: vars.STRIPE_SECRET_KEY.startsWith("sk_live_"), plans: {starter:"US$5/month · 500 requests",pro:"US$19/month · 5,000 requests"}, existing: { product: product?.id ?? null, price: price?.id ?? null, starterPrice:starterPrice?.id??null, portal: portal?.id ?? null, webhook: endpoint?.id ?? null }, deployment_variables_required: ["STRIPE_STARTER_PRICE_ID", "STRIPE_PRO_PRICE_ID", "STRIPE_PRO_PORTAL_CONFIGURATION_ID", "STRIPE_PRO_WEBHOOK_SECRET", "MCP_ENABLE_MONTHLY_LIMITS=true"] }, null, 2));
   process.exit(0);
 }
 if (!process.env.RAILWAY_TOKEN) throw new Error("A scoped RAILWAY_TOKEN is required to save billing secrets.");
 if (endpoint && !vars.STRIPE_PRO_WEBHOOK_SECRET) throw new Error("An existing webhook requires its stored signing secret. Do not create a duplicate.");
-product ??= await stripe.products.create({ name: "nightlife.dev Pro", description: "Public nightlife MCP tools and REST API. 2,000 requests per billing month shared across up to 3 keys; 30 requests/minute per key.", metadata: { app } }, { idempotencyKey: "nlt-pro-product-v1" });
+product ??= await stripe.products.create({ name: "nightlife.dev API", metadata: { app } }, { idempotencyKey: "nlt-pro-product-v1" });
+await stripe.products.update(product.id,{ name:"nightlife.dev API",description:"Starter: US$5/month, 500 requests. Pro: US$19/month, 5,000 requests. Both include performer bios, profile images/social profiles and venue social links where available. Shared across up to 3 keys. No free API tier or automatic overage charges." });
 price ??= await stripe.prices.create({ product: product.id, currency: "usd", unit_amount: 1900, recurring: { interval: "month" }, metadata: { app } }, { idempotencyKey: "nlt-pro-price-usd19-month-v1" });
+starterPrice ??= await stripe.prices.create({ product:product.id,currency:"usd",unit_amount:500,recurring:{interval:"month"},nickname:"Starter · 500 requests/month",metadata:{app,plan:"starter"} },{idempotencyKey:"nlt-starter-price-usd5-month-v1"});
+await stripe.prices.update(price.id,{nickname:"Pro · 5,000 requests/month",metadata:{app,plan:"pro"}});
 portal ??= await stripe.billingPortal.configurations.create({
   name: "nightlife.dev Pro", metadata: { app }, default_return_url: "https://nightlife.dev/dashboard",
   business_profile: { headline: "Manage your nightlife.dev subscription", terms_of_service_url: "https://nightlife.dev/terms" },
   features: { invoice_history: { enabled: true }, payment_method_update: { enabled: true }, subscription_cancel: { enabled: true, mode: "at_period_end" }, subscription_update: { enabled: false } },
 }, { idempotencyKey: "nlt-pro-portal-v1" });
+await stripe.billingPortal.configurations.update(portal.id,{
+  features:{ subscription_update:{ enabled:true,default_allowed_updates:["price"],products:[{product:product.id,prices:[starterPrice.id,price.id]}],proration_behavior:"always_invoice",schedule_at_period_end:{conditions:[{type:"decreasing_item_amount"}]} } },
+});
 endpoint ??= await stripe.webhookEndpoints.create({
   url, description: "nightlife.dev Pro billing (separate from VIP deposits)", metadata: { app },
   enabled_events: ["checkout.session.completed", "checkout.session.async_payment_succeeded", "customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted", "invoice.paid", "invoice.payment_failed"],
@@ -45,8 +53,9 @@ const secret = endpoint.secret || vars.STRIPE_PRO_WEBHOOK_SECRET;
 if (!secret) throw new Error("Webhook signing secret unavailable; restore it from the deployment secret manager.");
 const result = spawnSync("railway", ["variables", "--service", "6341504b-6b63-4dec-be75-1235563f8c36", "--environment", "production",
   "--set", `STRIPE_PRO_PRICE_ID=${price.id}`, "--set", `STRIPE_PRO_PORTAL_CONFIGURATION_ID=${portal.id}`,
+  "--set", `STRIPE_STARTER_PRICE_ID=${starterPrice.id}`, "--skip-deploys",
   "--set", `STRIPE_PRO_WEBHOOK_SECRET=${secret}`, "--set", "DEVELOPER_SITE_URL=https://nightlife.dev",
   "--set", "MCP_ENABLE_MONTHLY_LIMITS=true", "--set", "MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=false",
 ], { env: process.env, encoding: "utf8" });
 if (result.status !== 0) throw new Error("Railway variable update failed. Keep the Stripe endpoint; rerun with its signing secret from Stripe Workbench.");
-console.log(JSON.stringify({ configured: true, product: product.id, price: price.id, portal: portal.id, webhook: endpoint.id }, null, 2));
+console.log(JSON.stringify({ configured: true, product: product.id, price: price.id, starterPrice:starterPrice.id, portal: portal.id, webhook: endpoint.id }, null, 2));

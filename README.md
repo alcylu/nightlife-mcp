@@ -10,7 +10,7 @@ MCP server for nightlife event discovery backed by Supabase.
 
 **Production endpoint:** `https://api.nightlife.dev/mcp`
 
-1. Get a free API key at [nightlife.dev](https://nightlife.dev)
+1. Subscribe at [nightlife.dev](https://nightlife.dev/checkout): Starter US$5/month for 500 requests, or Pro US$19/month for 5,000. Both include advanced profile data. There is no free public API tier.
 2. Add to Claude Desktop config (`claude_desktop_config.json`):
 
 ```json

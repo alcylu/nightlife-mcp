@@ -169,23 +169,25 @@ test("REST auth rechecks subscription on each request and ignores client Pro cla
   await new Promise<void>(r => server.once("listening", r));
   const url = `http://127.0.0.1:${(server.address() as any).port}/performers/${id}?plan=pro`;
   try {
-    for (const paidQuota of [100, 2000, 100, null]) {
+    for (const paidQuota of [0, 500, 5000, 0, null]) {
       quota = paidQuota;
       const res = await fetch(url, { headers: { "x-api-key": "fixture", "x-api-key-tier": "ops", "x-pro-profiles": "true" } });
       assert.equal(res.status, 200);
       const body = await res.json() as Record<string, unknown>;
-      assert.equal("bio" in body, quota === 2000);
+      assert.equal("bio" in body, quota === 500 || quota === 5000);
       assertNoOperationalData(body);
     }
   } finally { await new Promise<void>(r => server.close(() => r())); }
 });
 
-test("OpenAPI separates Free/Pro profiles and never advertises operational fields", () => {
+test("OpenAPI advertises enriched paid responses without operational fields", () => {
   assert.ok(!openApiDocument.paths["/venues/{id}/vip-pricing"]);
   const spec = JSON.stringify(openApiDocument);
   for (const field of ['"heat"', '"min_spend"', '"follower_count"', '"ranking_score"']) assert.ok(!spec.includes(field), `Public OpenAPI advertises ${field}`);
   assert.ok(!("image_url" in openApiDocument.components.schemas.PerformerDetail.properties));
   assert.ok("bio" in openApiDocument.components.schemas.ProPerformerDetail.properties);
   assert.ok("sns_instagram" in openApiDocument.components.schemas.ProVenueDetail.properties);
+  assert.deepEqual(openApiDocument.components.schemas.ProPerformerDetail["x-plan"], ["starter", "pro"]);
+  assert.deepEqual(openApiDocument.paths["/performers/{id}"].get.responses["200"].content["application/json"].schema, { $ref: "#/components/schemas/ProPerformerDetail" });
   assert.deepEqual(openApiDocument.paths["/performers"].get.parameters.find((p: any) => p.name === "sort_by").schema.enum, ["alphabetical", "recent_activity"]);
 });

@@ -144,7 +144,7 @@ export function registerVenueTools(server: McpServer, deps: ToolDeps): void {
     "get_venue_info",
     {
       description:
-        "Get venue details, upcoming events and VIP booking support. Verified Pro accounts also receive venue social links. Upgrade: https://nightlife.dev/checkout.",
+        "Get venue details, upcoming events and VIP booking support. Verified Starter and Pro accounts also receive venue social links. Subscribe: https://nightlife.dev/checkout.",
       inputSchema: {
         venue_id: z.string().min(1),
       },
