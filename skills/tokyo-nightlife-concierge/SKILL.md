@@ -18,16 +18,16 @@ Read [references/tools.md](references/tools.md) only when exact tool selection, 
 1. Infer `city=tokyo` unless the user names another supported city. Use `list_cities`, `list_areas`, or `list_genres` only when a requested filter is unclear or unsupported.
 2. For “tonight,” prefer `get_tonight`. For another date, weekend, area, genre, artist, or keyword, use `search_events`.
 3. Treat a nightlife day as ending at 06:00 local time. At 02:00 Saturday, “tonight” still means Friday night.
-4. For a short recommendation, fetch enough candidates, then inspect the strongest options with `get_event_details`. Prefer `sort_by=heat` only when the user asks what is hottest or most popular; otherwise keep chronological order.
+4. For a short recommendation, fetch enough candidates, then inspect the strongest options with `get_event_details`. Use chronological ordering. The public API does not provide demand scores or popularity rankings.
 5. When event search includes `vip_venues_open`, consider those venues before saying nothing is happening. They may be open without a listed event.
 6. Use `search_venues` for venue-led requests and `search_performers` for artist-led requests. Follow with the corresponding detail tool before stating specifics.
 
 ## Recommendation quality
 
 - Return a small, useful shortlist unless the user requests a complete list.
-- Explain each pick using returned facts such as lineup, area, genre, time, admission, or demand signals.
-- `heat: null` means unscored, not unpopular. Do not call an unscored event quiet.
-- Qualify low-confidence heat scores. Equal heat scores can be supported by different amounts of evidence.
+- Explain each pick using returned facts such as lineup, area, genre, time, or admission.
+- Public responses omit venue socials, performer bios/images/socials/audience metrics, demand indicators and VIP pricing. Do not infer these fields or call internal tools to fill them in.
+- Pro currently increases request allowances. Additional Pro data is being considered; do not promise unavailable fields. Plans: https://nightlife.dev/checkout.
 - Prefer canonical `nlt_url` links from tool results.
 - State missing fields plainly. Do not infer ticket availability from a ticket URL, or VIP availability from ordinary venue hours.
 

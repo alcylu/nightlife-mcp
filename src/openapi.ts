@@ -1,5 +1,10 @@
 // OpenAPI 3.1 spec for Nightlife Tokyo REST API v1
 // Built manually from the Zod schemas in tools/*.ts
+import * as z from "zod/v4";
+import { publicEventSummarySchema } from "./tools/schemas.js";
+import { publicSearchEventsOutputSchema, publicEventDetailSchema, publicRecommendationsOutputSchema, publicVipVenueOpenSummarySchema } from "./tools/events.js";
+import { publicSearchVenuesOutputSchema, publicVenueDetailSchema } from "./tools/venues.js";
+import { publicPerformerSummarySchema, publicSearchPerformersOutputSchema, publicPerformerDetailSchema } from "./tools/performers.js";
 
 const eventSummary = {
   type: "object",
@@ -101,7 +106,7 @@ const idParam = (resource: string) => ({ name: "id", in: "path", schema: { type:
 const auth401 = { description: "API key required", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } };
 const notFound = (what: string) => ({ description: `${what} not found`, content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } });
 
-export const openApiDocument = {
+const internalOpenApiDocument = {
   openapi: "3.1.0",
   info: {
     title: "Nightlife Tokyo API",
@@ -704,3 +709,31 @@ export const openApiDocument = {
     },
   },
 };
+
+// Public documentation is generated from the exact public transport allowlists.
+// Keep rich service/internal models private rather than advertising hidden fields.
+export const openApiDocument = structuredClone(internalOpenApiDocument) as Record<string, any>;
+const publicSchemas = {
+  EventSummary: publicEventSummarySchema,
+  EventDetail: publicEventDetailSchema,
+  SearchEventsOutput: publicSearchEventsOutputSchema,
+  VipVenueOpenSummary: publicVipVenueOpenSummarySchema,
+  SearchVenuesOutput: publicSearchVenuesOutputSchema,
+  VenueDetail: publicVenueDetailSchema,
+  PerformerSummary: publicPerformerSummarySchema,
+  PerformerDetail: publicPerformerDetailSchema,
+  SearchPerformersOutput: publicSearchPerformersOutputSchema,
+  RecommendationsOutput: publicRecommendationsOutputSchema,
+};
+for (const [name, schema] of Object.entries(publicSchemas)) {
+  openApiDocument.components.schemas[name] = z.toJSONSchema(schema);
+}
+delete openApiDocument.paths["/venues/{id}/vip-pricing"];
+for (const path of ["/events", "/events/tonight"]) {
+  const sort = openApiDocument.paths[path].get.parameters.find((p: any) => p.name === "sort_by");
+  if (sort) { sort.schema.enum = ["date"]; sort.description = "Chronological ordering"; }
+}
+const performerSort = openApiDocument.paths["/performers"].get.parameters.find((p: any) => p.name === "sort_by");
+performerSort.schema.enum = ["alphabetical", "recent_activity"];
+performerSort.schema.default = "alphabetical";
+openApiDocument.info.description = "Public nightlife event discovery: published events, venues, performer identities and schedules. Pro offers higher request allowances at https://nightlife.dev/checkout. Additional Pro data fields are under consideration, not currently included.";

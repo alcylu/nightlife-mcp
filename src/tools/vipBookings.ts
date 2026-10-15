@@ -13,6 +13,7 @@ import {
 export type ToolDeps = {
   supabase: SupabaseClient;
   config: AppConfig;
+  includeInternalData?: boolean;
 };
 
 export const createVipBookingInputSchema = {
@@ -61,6 +62,14 @@ export const vipBookingStatusOutputSchema = z.object({
   deposit_amount_jpy: z.number().nullable(),
   deposit_payment_url: z.string().nullable(),
 });
+
+// Generic public booking actions must not become a side door to VIP prices.
+export const publicCreateVipBookingOutputSchema = createVipBookingOutputSchema.omit({
+  min_spend: true, min_spend_currency: true, table_warning: true, message: true,
+});
+export const publicVipBookingStatusOutputSchema = vipBookingStatusOutputSchema.omit({
+  status_message: true, latest_note: true, deposit_amount_jpy: true, deposit_payment_url: true,
+}).extend({ history: z.array(vipBookingHistorySchema.omit({ note: true })) });
 
 export const cancelVipBookingInputSchema = {
   booking_request_id: z.string().min(1),
@@ -139,16 +148,18 @@ async function runTool<Output>(
 }
 
 export function registerVipBookingTools(server: McpServer, deps: ToolDeps): void {
+  const createSchema = deps.includeInternalData ? createVipBookingOutputSchema : publicCreateVipBookingOutputSchema;
+  const statusSchema = deps.includeInternalData ? vipBookingStatusOutputSchema : publicVipBookingStatusOutputSchema;
   server.registerTool(
     "create_vip_booking_request",
     {
       description: createVipBookingToolDescription,
       inputSchema: createVipBookingInputSchema,
-      outputSchema: createVipBookingOutputSchema,
+      outputSchema: createSchema,
     },
     async (args) => runTool(
       "create_vip_booking_request",
-      createVipBookingOutputSchema,
+      createSchema,
       async () => createVipBookingRequest(deps.supabase, args, {
         resendApiKey: deps.config.resendApiKey ?? undefined,
       }),
@@ -161,11 +172,11 @@ export function registerVipBookingTools(server: McpServer, deps: ToolDeps): void
       description:
         "Fetch VIP booking status from the venue booking workflow. Requires booking request ID and matching customer email or phone.",
       inputSchema: vipBookingStatusInputSchema,
-      outputSchema: vipBookingStatusOutputSchema,
+      outputSchema: statusSchema,
     },
     async (args) => runTool(
       "get_vip_booking_status",
-      vipBookingStatusOutputSchema,
+      statusSchema,
       async () => getVipBookingStatus(deps.supabase, args),
     ),
   );
@@ -176,11 +187,11 @@ export function registerVipBookingTools(server: McpServer, deps: ToolDeps): void
       description:
         "Cancel a VIP booking request. Requires booking ID plus customer email and phone to verify ownership. Works for bookings in submitted, in_review, or confirmed status.",
       inputSchema: cancelVipBookingInputSchema,
-      outputSchema: vipBookingStatusOutputSchema,
+      outputSchema: statusSchema,
     },
     async (args) => runTool(
       "cancel_vip_booking_request",
-      vipBookingStatusOutputSchema,
+      statusSchema,
       async () => cancelVipBookingRequest(deps.supabase, args, {
         stripeSecretKey: deps.config.stripeSecretKey ?? undefined,
         resendApiKey: deps.config.resendApiKey ?? undefined,
