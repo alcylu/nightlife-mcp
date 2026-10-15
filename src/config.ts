@@ -42,6 +42,9 @@ const envSchema = z.object({
   STRIPE_PRO_WEBHOOK_SECRET: z.string().optional(),
   DEVELOPER_SITE_URL: z.string().url().default("https://nightlife.dev"),
   RESEND_API_KEY: z.string().optional(),
+  LINE_CHANNEL_ACCESS_TOKEN: z.string().optional(),
+  LINE_ALERT_USER_ID: z.string().optional(),
+  USAGE_REQUEST_EMAIL: z.string().email().default("allen@nightlifetokyo.com"),
 });
 
 export type AppConfig = {
@@ -68,6 +71,9 @@ export type AppConfig = {
   stripeProWebhookSecret: string | null;
   developerSiteUrl: string;
   resendApiKey: string | null;
+  lineChannelAccessToken: string | null;
+  lineAlertUserId: string | null;
+  usageRequestEmail: string;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -104,5 +110,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     stripeProWebhookSecret: parsed.STRIPE_PRO_WEBHOOK_SECRET || null,
     developerSiteUrl: parsed.DEVELOPER_SITE_URL.replace(/\/+$/, ""),
     resendApiKey: parsed.RESEND_API_KEY || null,
+    lineChannelAccessToken: parsed.LINE_CHANNEL_ACCESS_TOKEN || null,
+    lineAlertUserId: parsed.LINE_ALERT_USER_ID || null,
+    usageRequestEmail: parsed.USAGE_REQUEST_EMAIL,
   };
 }

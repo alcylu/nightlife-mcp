@@ -6,7 +6,7 @@ const parsed = new URL(url);
 if (parsed.hostname && !["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname)) {
   throw new Error("This regression check only runs against local PostgreSQL.");
 }
-const migration = ["20261015090000_mcp_pro_billing.sql", "20261015100000_mcp_monthly_allowances.sql"].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/^BEGIN;\s*/m, "").replace(/^COMMIT;\s*/m, "")).join("\n");
+const migration = ["20261015090000_mcp_pro_billing.sql", "20261015100000_mcp_monthly_allowances.sql", "20261015120000_mcp_usage_requests.sql"].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/^BEGIN;\s*/m, "").replace(/^COMMIT;\s*/m, "")).join("\n");
 const initial = ["20260219094000_mcp_api_keys.sql", "20260220_user_api_keys.sql"].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8")).join("\n");
 const sql = `
 BEGIN;
@@ -93,6 +93,27 @@ INSERT INTO mcp_api_keys(key_name,key_hash,key_prefix,daily_quota,per_minute_quo
 DO $$ DECLARE result record; BEGIN
   SELECT * INTO result FROM consume_mcp_api_request_v2('internal-hash',now(),true);
   IF NOT result.allowed OR result.daily_quota<>500 OR result.monthly_quota IS NOT NULL THEN RAISE EXCEPTION 'Internal key contract changed'; END IF;
+END $$;
+DO $$ DECLARE result text; claimed integer; BEGIN
+  IF has_table_privilege('authenticated','mcp_usage_requests','SELECT') OR has_table_privilege('anon','mcp_usage_notifications','INSERT') OR has_function_privilege('authenticated','claim_mcp_usage_notifications()','EXECUTE') OR has_function_privilege('authenticated','submit_mcp_usage_request(uuid,uuid,text,integer,text,text,jsonb,jsonb)','EXECUTE') THEN RAISE EXCEPTION 'Usage queue permissions unsafe'; END IF;
+  result := submit_mcp_usage_request('00000000-0000-4000-8000-000000000010',auth.uid(),'qa@example.com',10000,'','An integration test use case','{}','{}');
+  IF result<>'received' THEN RAISE EXCEPTION 'Request not saved'; END IF;
+  result := submit_mcp_usage_request('00000000-0000-4000-8000-000000000010',auth.uid(),'qa@example.com',10000,'','An integration test use case','{}','{}');
+  IF result<>'received' OR (SELECT count(*) FROM mcp_usage_notifications)<>2 THEN RAISE EXCEPTION 'Duplicate request generated notifications'; END IF;
+  result := submit_mcp_usage_request('00000000-0000-4000-8000-000000000010',auth.uid(),'qa@example.com',20000,'','An integration test use case','{}','{}');
+  IF result<>'conflict' THEN RAISE EXCEPTION 'Request ID reused with changed payload'; END IF;
+  SELECT count(*) INTO claimed FROM claim_mcp_usage_notifications();
+  IF claimed<>2 THEN RAISE EXCEPTION 'Both channels not claimed'; END IF;
+  SELECT count(*) INTO claimed FROM claim_mcp_usage_notifications();
+  IF claimed<>0 THEN RAISE EXCEPTION 'Leased notifications claimed twice'; END IF;
+  UPDATE mcp_usage_notifications SET state='sent' WHERE channel='email';
+  UPDATE mcp_usage_notifications SET next_attempt_at=now() WHERE channel='line';
+  SELECT count(*) INTO claimed FROM claim_mcp_usage_notifications();
+  IF claimed<>1 THEN RAISE EXCEPTION 'Partial retry resends delivered channel'; END IF;
+  PERFORM submit_mcp_usage_request('00000000-0000-4000-8000-000000000011',auth.uid(),'qa@example.com',10000,'','An integration test use case','{}','{}');
+  PERFORM submit_mcp_usage_request('00000000-0000-4000-8000-000000000012',auth.uid(),'qa@example.com',10000,'','An integration test use case','{}','{}');
+  result := submit_mcp_usage_request('00000000-0000-4000-8000-000000000013',auth.uid(),'qa@example.com',10000,'','An integration test use case','{}','{}');
+  IF result<>'rate_limited' THEN RAISE EXCEPTION 'Daily notification spam guard missing'; END IF;
 END $$;
 ROLLBACK;
 `;
