@@ -48,6 +48,9 @@ export const eventSummarySchema = z.object({
   nlt_url: z.string(),
 });
 
+// Public transport contract; internal services retain the complete event model.
+export const publicEventSummarySchema = eventSummarySchema.omit({ heat: true });
+
 export const cityUnavailableSchema = z.object({
   requested_city: z.string(),
   message: z.string(),

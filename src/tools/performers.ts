@@ -5,11 +5,13 @@ import type { AppConfig } from "../config.js";
 import { NightlifeError, toNightlifeError, toolErrorResponse } from "../errors.js";
 import { logEvent, recordToolResult } from "../observability/metrics.js";
 import { getPerformerInfo, searchPerformers } from "../services/performers.js";
-import { cityUnavailableSchema, eventSummarySchema } from "./schemas.js";
+import { cityUnavailableSchema, eventSummarySchema, publicEventSummarySchema } from "./schemas.js";
 
 type ToolDeps = {
   supabase: SupabaseClient;
   config: AppConfig;
+  includeInternalData?: boolean;
+  includeProProfiles?: boolean;
 };
 
 const performerSummarySchema = z.object({
@@ -60,6 +62,17 @@ const performerDetailSchema = z.object({
   ),
   nlt_url: z.string(),
 });
+
+export const publicPerformerSummarySchema = performerSummarySchema.omit({ follower_count: true, ranking_score: true, image_url: true });
+export const proPerformerSummarySchema = performerSummarySchema.omit({ follower_count: true, ranking_score: true });
+export const proSearchPerformersOutputSchema = searchPerformersOutputSchema.extend({ performers: z.array(proPerformerSummarySchema) });
+export const publicSearchPerformersOutputSchema = searchPerformersOutputSchema.extend({ performers: z.array(publicPerformerSummarySchema) });
+export const publicPerformerDetailSchema = performerDetailSchema.omit({
+  bio: true, image_url: true, social_links: true, follower_count: true, ranking_score: true,
+}).extend({ upcoming_events: z.array(z.object({
+  event: publicEventSummarySchema, stage: z.string().nullable(), set_start_time: z.string().nullable(), set_end_time: z.string().nullable(),
+})) });
+export const proPerformerDetailSchema = performerDetailSchema.omit({ follower_count: true, ranking_score: true }).extend({ upcoming_events: publicPerformerDetailSchema.shape.upcoming_events });
 
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -117,6 +130,8 @@ async function runTool<Output>(
 }
 
 export function registerPerformerTools(server: McpServer, deps: ToolDeps): void {
+  const searchSchema = deps.includeInternalData ? searchPerformersOutputSchema : deps.includeProProfiles ? proSearchPerformersOutputSchema : publicSearchPerformersOutputSchema;
+  const detailSchema = deps.includeInternalData ? performerDetailSchema : deps.includeProProfiles ? proPerformerDetailSchema : publicPerformerDetailSchema;
   server.registerTool(
     "search_performers",
     {
@@ -127,17 +142,17 @@ export function registerPerformerTools(server: McpServer, deps: ToolDeps): void 
         date: z.string().optional(),
         genre: z.string().optional(),
         query: z.string().optional(),
-        sort_by: z
-          .enum(["popularity", "recent_activity", "alphabetical", "rising_stars"])
-          .default("popularity"),
+        sort_by: deps.includeInternalData
+          ? z.enum(["popularity", "recent_activity", "alphabetical", "rising_stars"]).default("popularity")
+          : z.enum(["recent_activity", "alphabetical"]).default("alphabetical"),
         limit: z.number().int().min(1).max(20).default(10),
         offset: z.number().int().min(0).default(0),
       },
-      outputSchema: searchPerformersOutputSchema,
+      outputSchema: searchSchema,
     },
     async (args) => runTool(
       "search_performers",
-      searchPerformersOutputSchema,
+      searchSchema,
       async () => searchPerformers(deps.supabase, deps.config, args),
     ),
   );
@@ -146,15 +161,15 @@ export function registerPerformerTools(server: McpServer, deps: ToolDeps): void 
     "get_performer_info",
     {
       description:
-        "Get performer details by performer ID, including social links and upcoming events snapshot.",
+        "Get performer identity, genres and upcoming events. Verified Pro accounts also receive biography, profile image and social profiles. Demand metrics, follower counts and rankings are internal-only. Upgrade: https://nightlife.dev/checkout.",
       inputSchema: {
         performer_id: z.string().min(1),
       },
-      outputSchema: performerDetailSchema,
+      outputSchema: detailSchema,
     },
     async ({ performer_id }) => runTool(
       "get_performer_info",
-      performerDetailSchema,
+      detailSchema,
       async () => {
         const detail = await getPerformerInfo(deps.supabase, deps.config, performer_id);
         if (!detail) {

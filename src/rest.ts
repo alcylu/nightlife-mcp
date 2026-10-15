@@ -10,6 +10,21 @@ import { getRecommendations } from "./services/recommendations.js";
 import { listCities } from "./services/cities.js";
 import { listGenres, listAreas } from "./services/helpers.js";
 import { getVipPricing } from "./services/vipPricing.js";
+import type { RequestWithAuth } from "./middleware/apiKeyAuth.js";
+import type { ZodType } from "zod/v4";
+import { publicSearchEventsOutputSchema, publicEventDetailSchema, publicRecommendationsOutputSchema } from "./tools/events.js";
+import { publicSearchVenuesOutputSchema, publicVenueDetailSchema, proVenueDetailSchema } from "./tools/venues.js";
+import { publicSearchPerformersOutputSchema, publicPerformerDetailSchema, proSearchPerformersOutputSchema, proPerformerDetailSchema } from "./tools/performers.js";
+
+function isInternal(req: RequestWithAuth): boolean { return req.apiKeyTier === "ops"; }
+function respond(res: Response, data: unknown, schema: ZodType, internal: boolean): void {
+  res.json(internal ? data : schema.parse(data));
+}
+function assertPublicSort(internal: boolean, kind: "events" | "performers", value: unknown): void {
+  if (internal || value === undefined) return;
+  const allowed = kind === "events" ? ["date"] : ["alphabetical", "recent_activity"];
+  if (!allowed.includes(String(value))) throw new NightlifeError("INVALID_REQUEST", `Public ${kind} sort_by must be ${allowed.join(" or ")}.`);
+}
 
 function str(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0
@@ -45,6 +60,7 @@ export function createRestRouter(
   // GET /api/v1/events
   router.get("/events", async (req, res) => {
     try {
+      assertPublicSort(isInternal(req), "events", req.query.sort_by);
       const result = await searchEvents(supabase, config, {
         city: str(req.query.city),
         date: str(req.query.date),
@@ -56,7 +72,7 @@ export function createRestRouter(
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
-      res.json(result);
+      respond(res, result, publicSearchEventsOutputSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -65,6 +81,7 @@ export function createRestRouter(
   // GET /api/v1/events/tonight
   router.get("/events/tonight", async (req, res) => {
     try {
+      assertPublicSort(isInternal(req), "events", req.query.sort_by);
       const result = await searchEvents(supabase, config, {
         city: str(req.query.city),
         date: "tonight",
@@ -75,7 +92,7 @@ export function createRestRouter(
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
-      res.json(result);
+      respond(res, result, publicSearchEventsOutputSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -91,7 +108,7 @@ export function createRestRouter(
         });
         return;
       }
-      res.json(result);
+      respond(res, result, publicEventDetailSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -111,7 +128,7 @@ export function createRestRouter(
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
-      res.json(result);
+      respond(res, result, publicSearchVenuesOutputSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -119,6 +136,10 @@ export function createRestRouter(
 
   // GET /api/v1/venues/:id/vip-pricing
   router.get("/venues/:id/vip-pricing", async (req, res) => {
+    if (!isInternal(req)) {
+      res.status(404).json({ error: { code: "NOT_FOUND", message: "Endpoint not available in the public API." } });
+      return;
+    }
     try {
       const result = await getVipPricing(supabase, {
         venue_id: req.params.id,
@@ -140,7 +161,7 @@ export function createRestRouter(
         });
         return;
       }
-      res.json(result);
+      respond(res, result, (req as RequestWithAuth).proProfiles ? proVenueDetailSchema : publicVenueDetailSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -149,7 +170,8 @@ export function createRestRouter(
   // GET /api/v1/performers
   router.get("/performers", async (req, res) => {
     try {
-      const sortBy = str(req.query.sort_by) as
+      assertPublicSort(isInternal(req), "performers", req.query.sort_by);
+      const sortBy = (str(req.query.sort_by) ?? (isInternal(req) ? undefined : "alphabetical")) as
         | "popularity"
         | "recent_activity"
         | "alphabetical"
@@ -164,7 +186,7 @@ export function createRestRouter(
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
-      res.json(result);
+      respond(res, result, (req as RequestWithAuth).proProfiles ? proSearchPerformersOutputSchema : publicSearchPerformersOutputSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -183,7 +205,7 @@ export function createRestRouter(
         });
         return;
       }
-      res.json(result);
+      respond(res, result, (req as RequestWithAuth).proProfiles ? proPerformerDetailSchema : publicPerformerDetailSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -200,7 +222,7 @@ export function createRestRouter(
         query: str(req.query.query),
         limit: num(req.query.limit),
       });
-      res.json(result);
+      respond(res, result, publicRecommendationsOutputSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }

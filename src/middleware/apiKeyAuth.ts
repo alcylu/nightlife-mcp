@@ -13,6 +13,7 @@ export type RequestWithAuth = Request & {
   apiKeyId?: string;
   apiKeyTier?: string;
   apiKeySource?: "db" | "env";
+  proProfiles?: boolean;
 };
 
 function sendJsonError(
@@ -53,6 +54,7 @@ export function createApiKeyAuthMiddleware(deps: {
       useDbKeys: config.mcpHttpUseDbKeys,
       allowEnvFallback: config.mcpHttpAllowEnvKeyFallback,
       envKeys: config.mcpHttpApiKeys,
+      monthlyLimitsEnabled: config.mcpEnableMonthlyLimits,
     });
 
     if (!auth.ok) {
@@ -69,6 +71,9 @@ export function createApiKeyAuthMiddleware(deps: {
       return;
     }
     recordHttpAuthResult(true);
+    if (auth.context.monthlyQuota !== null) res.setHeader("X-RateLimit-Monthly-Limit", String(auth.context.monthlyQuota));
+    if (auth.context.monthlyRemaining !== null) res.setHeader("X-RateLimit-Monthly-Remaining", String(auth.context.monthlyRemaining));
+    if (auth.context.monthlyResetAt) res.setHeader("X-RateLimit-Monthly-Reset", auth.context.monthlyResetAt);
 
     if (auth.context.dailyQuota !== null) {
       res.setHeader("X-RateLimit-Daily-Limit", String(auth.context.dailyQuota));
@@ -90,6 +95,7 @@ export function createApiKeyAuthMiddleware(deps: {
     req.apiKeyId = auth.context.keyId;
     req.apiKeyTier = auth.context.tier;
     req.apiKeySource = auth.context.source;
+    req.proProfiles = auth.context.proProfiles;
     next();
   };
 }

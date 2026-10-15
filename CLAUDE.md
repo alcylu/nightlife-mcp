@@ -44,11 +44,11 @@ npm run build && npm start:http
 | `list_genres` | List all available genres | *(none)* |
 | `list_areas` | List area/neighborhood names for a city | city (optional) |
 
-### Heat Index (`heat` on every event)
+### Heat Index (internal ops only)
 
 `event_occurrences.heat_score` is recomputed nightly by `nlt-scraper/scripts/heat_score.py`
 as a percentile blend of four demand signals: paid tickets, guest-list signups, RA
-interested, and Instagram engagement. Every event payload carries a `heat` object:
+interested, and Instagram engagement. Internal ops event payloads carry a `heat` object; Free and Pro never expose it:
 
 | Field | Meaning |
 |-------|---------|
@@ -68,7 +68,7 @@ interested, and Instagram engagement. Every event payload carries a `heat` objec
    (`confidence: "low"`) and a 100 built on tickets + GL + RA + IG (`confidence: "high"`)
    both read 100. Use `confidence` to hedge rather than overclaim.
 
-`sort_by: "heat"` ranks hottest first and sinks unscored events to the end; `sort_by: "date"`
+Internal `sort_by: "heat"` ranks hottest first and sinks unscored events to the end; public `sort_by: "date"`
 (the default) preserves chronological ordering.
 
 ### Date Filters
@@ -109,6 +109,14 @@ Error responses: `{ error: { code, message } }` with appropriate HTTP status (40
 | GET `/api/v1/docs` | Interactive Scalar API reference |
 
 ## Auth
+
+Public data contracts: `docs/public-data-access.md`. Free omits performer
+bios/images/socials and venue socials. Verified paid Pro adds those fields only;
+demand, follower counts, rankings, ranking sorts and VIP pricing stay ops-only.
+Pro entitlement comes from the v2 RPC's current paid period, not key tier alone.
+REST/MCP use explicit response allowlists; MCP sessions reinitialize on access
+changes. Stdio defaults to Free. CI now runs types, tests, build and local DB
+billing regression checks on every PR/push.
 
 - **Stdio**: no auth
 - **HTTP**: API key required via `x-api-key` header or `Authorization: Bearer <key>`
@@ -210,6 +218,29 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - `supabase/migrations/20260226_concierge_unmet_requests.sql` — Concierge unmet-request backlog table (`public.concierge_unmet_requests`)
 
 ## Deployment (Railway)
+
+### Pro API subscriptions (prepared 2026-10-15)
+
+`src/routes/billing.ts` provides `/billing/config`, authenticated Supabase-user
+`/billing/checkout`, `/billing/status`, `/billing/portal`, and a dedicated signed
+`/billing/webhook`. API keys do not authorize billing actions. The server fixes
+the US$19 monthly Stripe price and verifies current subscription state before
+granting 2,000/billing month shared across keys, with 30/min per key. Free is
+100/calendar month and 5/min per key. Existing key RPC contracts are unchanged;
+new keys inherit paid limits through a DB trigger. The migration removes direct
+authenticated key writes, preventing self-assigned paid quotas.
+
+Required additional env: `STRIPE_PRO_PRICE_ID`,
+`STRIPE_PRO_PORTAL_CONFIGURATION_ID`, `STRIPE_PRO_WEBHOOK_SECRET`.
+Enable `MCP_ENABLE_MONTHLY_LIMITS=true` after both 20261015 migrations. The v2
+consumption RPC serializes usage across keys, rechecks expiration, and excludes
+MCP control traffic. `get_user_monthly_usage()` returns allowance/count/reset.
+Pricing rationale and official sources: `docs/api-pricing-research-2026-10-15.md`.
+`DEVELOPER_SITE_URL` defaults to `https://nightlife.dev`. Checkout is unavailable
+until configured. VIP deposit routes/secrets are separate. Rollout and metrics:
+`docs/pro-billing-rollout.md`. `scripts/setup-pro-billing.mjs` defaults to dry run;
+`scripts/pro-billing-report.mjs` reports signups and paid conversion aggregates.
+
 - **Production URL**: `https://api.nightlife.dev/mcp` (Railway: `nightlife-mcp-production.up.railway.app`)
 - **Health**: `https://api.nightlife.dev/health`
 - **GitHub**: `https://github.com/alcylu/nightlife-mcp` (public, MIT)

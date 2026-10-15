@@ -5,11 +5,13 @@ import type { AppConfig } from "../config.js";
 import { NightlifeError, toNightlifeError, toolErrorResponse } from "../errors.js";
 import { logEvent, recordToolResult } from "../observability/metrics.js";
 import { getVenueInfo, searchVenues } from "../services/venues.js";
-import { cityUnavailableSchema, eventSummarySchema } from "./schemas.js";
+import { cityUnavailableSchema, eventSummarySchema, publicEventSummarySchema } from "./schemas.js";
 
 type ToolDeps = {
   supabase: SupabaseClient;
   config: AppConfig;
+  includeInternalData?: boolean;
+  includeProProfiles?: boolean;
 };
 
 const venueSummarySchema = z.object({
@@ -50,6 +52,12 @@ const venueDetailSchema = z.object({
   upcoming_events: z.array(eventSummarySchema),
   nlt_url: z.string(),
 });
+
+export const publicSearchVenuesOutputSchema = searchVenuesOutputSchema;
+export const publicVenueDetailSchema = venueDetailSchema.omit({
+  sns_instagram: true, sns_tiktok: true, sns_x: true, sns_youtube: true,
+}).extend({ upcoming_events: z.array(publicEventSummarySchema) });
+export const proVenueDetailSchema = venueDetailSchema.extend({ upcoming_events: z.array(publicEventSummarySchema) });
 
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -107,6 +115,7 @@ async function runTool<Output>(
 }
 
 export function registerVenueTools(server: McpServer, deps: ToolDeps): void {
+  const detailSchema = deps.includeInternalData ? venueDetailSchema : deps.includeProProfiles ? proVenueDetailSchema : publicVenueDetailSchema;
   server.registerTool(
     "search_venues",
     {
@@ -135,15 +144,15 @@ export function registerVenueTools(server: McpServer, deps: ToolDeps): void {
     "get_venue_info",
     {
       description:
-        "Get full details for a specific venue ID, including upcoming events and VIP booking support.",
+        "Get venue details, upcoming events and VIP booking support. Verified Pro accounts also receive venue social links. Upgrade: https://nightlife.dev/checkout.",
       inputSchema: {
         venue_id: z.string().min(1),
       },
-      outputSchema: venueDetailSchema,
+      outputSchema: detailSchema,
     },
     async ({ venue_id }) => runTool(
       "get_venue_info",
-      venueDetailSchema,
+      detailSchema,
       async () => {
         const detail = await getVenueInfo(deps.supabase, deps.config, venue_id);
         if (!detail) {

@@ -15,6 +15,7 @@ import {
   extractApiKeyFromHeaders,
 } from "./auth/apiKeys.js";
 import { authorizeApiKey } from "./auth/authorize.js";
+import { isBillableMcpRequest } from "./auth/metering.js";
 import {
   logEvent,
   recordHttpAuthResult,
@@ -26,6 +27,8 @@ import { createRestRouter } from "./rest.js";
 import { apiReference } from "@scalar/express-api-reference";
 import { openApiDocument } from "./openapi.js";
 import { createStripeWebhookRouter } from "./routes/stripeWebhook.js";
+import { createBillingRouter } from "./routes/billing.js";
+import { getStripe } from "./services/stripe.js";
 import {
   renderDepositSuccessPage,
   renderDepositCancelledPage,
@@ -37,6 +40,7 @@ type SessionContext = {
   apiKeyFingerprint: string;
   apiKeyId: string;
   apiKeyTier: string;
+  proProfiles: boolean;
   createdAt: number;
 };
 
@@ -624,9 +628,25 @@ async function main(): Promise<void> {
     app.use("/stripe/webhook", express.raw({ type: "application/json" }));
   }
 
+  app.use("/billing/webhook", express.raw({ type: "application/json" }));
   app.use(express.json());
   const supabase = createSupabaseClient(config);
   const sessions = new Map<string, SessionContext>();
+
+  app.use("/billing", cors({
+    origin: [config.developerSiteUrl, "https://nightlife-dev-production.up.railway.app", /^http:\/\/localhost(:\d+)?$/],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+    maxAge: 86400,
+  }), createBillingRouter(
+    supabase, config.stripeSecretKey ? getStripe(config.stripeSecretKey) : null,
+    config.stripeProPriceId && config.stripeProPortalConfigurationId ? {
+      priceId: config.stripeProPriceId,
+      portalConfigurationId: config.stripeProPortalConfigurationId,
+      siteUrl: config.developerSiteUrl,
+    } : null,
+    config.stripeProWebhookSecret,
+  ));
 
   // CORS for REST API — allows browser JS from our domains only
   app.use("/api/v1", cors({
@@ -703,6 +723,8 @@ async function main(): Promise<void> {
       useDbKeys: config.mcpHttpUseDbKeys,
       allowEnvFallback: config.mcpHttpAllowEnvKeyFallback,
       envKeys: config.mcpHttpApiKeys,
+      monthlyLimitsEnabled: config.mcpEnableMonthlyLimits,
+      billable: isBillableMcpRequest(req.method, req.body),
     });
 
     if (!auth.ok) {
@@ -719,6 +741,9 @@ async function main(): Promise<void> {
       return;
     }
     recordHttpAuthResult(true);
+    if (auth.context.monthlyQuota !== null) res.setHeader("X-RateLimit-Monthly-Limit", String(auth.context.monthlyQuota));
+    if (auth.context.monthlyRemaining !== null) res.setHeader("X-RateLimit-Monthly-Remaining", String(auth.context.monthlyRemaining));
+    if (auth.context.monthlyResetAt) res.setHeader("X-RateLimit-Monthly-Reset", auth.context.monthlyResetAt);
 
     if (auth.context.dailyQuota !== null) {
       res.setHeader("X-RateLimit-Daily-Limit", String(auth.context.dailyQuota));
@@ -740,6 +765,7 @@ async function main(): Promise<void> {
     req.apiKeyId = auth.context.keyId;
     req.apiKeyTier = auth.context.tier;
     req.apiKeySource = auth.context.source;
+    req.proProfiles = auth.context.proProfiles;
     next();
   });
 
@@ -799,6 +825,13 @@ async function main(): Promise<void> {
           return;
         }
 
+        // A session must not retain ops data access after its key is downgraded.
+        if (context.apiKeyTier !== (req.apiKeyTier || "free") || context.proProfiles !== (req.proProfiles === true)) {
+          await cleanupSession(sessionId);
+          sendJsonRpcError(res, 403, -32003, "API key tier changed. Initialize a new session.");
+          return;
+        }
+
         await context.transport.handleRequest(req, res, req.body);
         return;
       }
@@ -815,6 +848,7 @@ async function main(): Promise<void> {
 
       const server = createNightlifeServer(config, supabase, {
         includeOpsTools: req.apiKeyTier === "ops",
+        includeProProfiles: req.proProfiles === true,
       });
       let transport: StreamableHTTPServerTransport;
 
@@ -827,6 +861,7 @@ async function main(): Promise<void> {
             apiKeyFingerprint: req.apiKeyFingerprint || "anonymous",
             apiKeyId: req.apiKeyId || "anonymous",
             apiKeyTier: req.apiKeyTier || "free",
+            proProfiles: req.proProfiles === true,
             createdAt: Date.now(),
           });
         },

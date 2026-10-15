@@ -14,7 +14,9 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test src/**/*.test.ts",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
-    "smoke:prod:auth": "node scripts/prod-auth-smoke.mjs"
+    "smoke:prod:auth": "node scripts/prod-auth-smoke.mjs",
+    "test:billing:db": "node scripts/test-pro-billing-db.mjs",
+    "billing:report": "node scripts/pro-billing-report.mjs"
   },
   "keywords": [
     "mcp",
