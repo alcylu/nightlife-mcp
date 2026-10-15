@@ -799,6 +799,13 @@ async function main(): Promise<void> {
           return;
         }
 
+        // A session must not retain ops data access after its key is downgraded.
+        if (context.apiKeyTier !== (req.apiKeyTier || "free")) {
+          await cleanupSession(sessionId);
+          sendJsonRpcError(res, 403, -32003, "API key tier changed. Initialize a new session.");
+          return;
+        }
+
         await context.transport.handleRequest(req, res, req.body);
         return;
       }

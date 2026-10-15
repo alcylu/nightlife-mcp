@@ -6,11 +6,12 @@ import { NightlifeError, toNightlifeError, toolErrorResponse } from "../errors.j
 import { recordToolResult, logEvent } from "../observability/metrics.js";
 import { getEventDetails, searchEvents } from "../services/events.js";
 import { getRecommendations } from "../services/recommendations.js";
-import { eventMediaItemSchema } from "./schemas.js";
+import { eventMediaItemSchema, publicEventSummarySchema } from "./schemas.js";
 
 type ToolDeps = {
   supabase: SupabaseClient;
   config: AppConfig;
+  includeInternalData?: boolean;
 };
 
 const heatSignalSchema = z.enum(["tickets", "gl", "ra", "ig"]);
@@ -154,6 +155,16 @@ const recommendationsOutputSchema = z.object({
   unavailable_city: cityUnavailableSchema.nullable(),
 });
 
+export const publicVipVenueOpenSummarySchema = vipVenueOpenSummarySchema.omit({ min_spend: true, currency: true });
+export const publicSearchEventsOutputSchema = searchEventsOutputSchema.extend({
+  events: z.array(publicEventSummarySchema),
+  vip_venues_open: z.array(publicVipVenueOpenSummarySchema),
+});
+export const publicEventDetailSchema = eventDetailSchema.omit({ heat: true });
+export const publicRecommendationsOutputSchema = recommendationsOutputSchema.extend({
+  recommendations: z.array(recommendationSchema.extend({ event: publicEventSummarySchema })),
+});
+
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -213,6 +224,12 @@ async function runTool<Output>(
 }
 
 export function registerEventTools(server: McpServer, deps: ToolDeps): void {
+  const searchSchema = deps.includeInternalData ? searchEventsOutputSchema : publicSearchEventsOutputSchema;
+  const detailSchema = deps.includeInternalData ? eventDetailSchema : publicEventDetailSchema;
+  const recommendationOutput = deps.includeInternalData ? recommendationsOutputSchema : publicRecommendationsOutputSchema;
+  const sortSchema = deps.includeInternalData
+    ? z.enum(["date", "heat"]).default("date")
+    : z.enum(["date"]).default("date");
   server.registerTool(
     "search_events",
     {
@@ -225,20 +242,15 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
         area: z.string().optional(),
         query: z.string().optional(),
         series_id: z.string().uuid().optional(),
-        sort_by: z
-          .enum(["date", "heat"])
-          .default("date")
-          .describe(
-            "\"date\" = chronological (default). \"heat\" = hottest first by demand signal; unscored events fall to the end.",
-          ),
+        sort_by: sortSchema,
         limit: z.number().int().min(1).max(20).default(10),
         offset: z.number().int().min(0).default(0),
       },
-      outputSchema: searchEventsOutputSchema,
+      outputSchema: searchSchema,
     },
     async (args) => runTool(
       "search_events",
-      searchEventsOutputSchema,
+      searchSchema,
       async () =>
         searchEvents(deps.supabase, deps.config, {
           ...args,
@@ -256,20 +268,15 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
         city: z.string().default(deps.config.defaultCity),
         genre: z.string().optional(),
         area: z.string().optional(),
-        sort_by: z
-          .enum(["date", "heat"])
-          .default("date")
-          .describe(
-            "\"date\" = chronological (default). \"heat\" = hottest first by demand signal; unscored events fall to the end.",
-          ),
+        sort_by: sortSchema,
         limit: z.number().int().min(1).max(20).default(10),
         offset: z.number().int().min(0).default(0),
       },
-      outputSchema: searchEventsOutputSchema,
+      outputSchema: searchSchema,
     },
     async (args) => runTool(
       "get_tonight",
-      searchEventsOutputSchema,
+      searchSchema,
       async () =>
         searchEvents(deps.supabase, deps.config, {
           ...args,
@@ -286,11 +293,11 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
       inputSchema: {
         event_id: z.string().min(1),
       },
-      outputSchema: eventDetailSchema,
+      outputSchema: detailSchema,
     },
     async ({ event_id }) => runTool(
       "get_event_details",
-      eventDetailSchema,
+      detailSchema,
       async () => {
         const detail = await getEventDetails(deps.supabase, deps.config, event_id);
         if (!detail) {
@@ -321,11 +328,11 @@ export function registerEventTools(server: McpServer, deps: ToolDeps): void {
         query: z.string().optional(),
         limit: z.number().int().min(1).max(10).default(10),
       },
-      outputSchema: recommendationsOutputSchema,
+      outputSchema: recommendationOutput,
     },
     async (args) => runTool(
       "get_recommendations",
-      recommendationsOutputSchema,
+      recommendationOutput,
       async () => getRecommendations(deps.supabase, deps.config, args),
     ),
   );

@@ -44,7 +44,7 @@ For curl, TypeScript SDK, and other clients, see [`CLIENT_SETUP.md`](CLIENT_SETU
 - `create_vip_booking_request`
 - `get_vip_booking_status`
 - `cancel_vip_booking_request`
-- `get_vip_pricing`
+- `get_vip_pricing` (internal `ops` sessions only)
 - `submit_to_guest_list`
 - `get_guest_list_entry_status`
 - `get_recommendations` (v0.2, behind `MCP_ENABLE_RECOMMENDATIONS=true`)
@@ -145,7 +145,7 @@ Then call MCP tools:
 - `create_vip_booking_request`
 - `get_vip_booking_status`
 - `cancel_vip_booking_request`
-- `get_vip_pricing` (read venue/date pricing, open status, zones, and optional layout image)
+- `get_vip_pricing` (**ops only**: venue/date pricing, open status, zones, and layout image)
 
 Conversation policy for `create_vip_booking_request`:
 - Confirm booking date/time in venue local time before submitting.
