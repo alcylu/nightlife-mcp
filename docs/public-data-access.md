@@ -27,7 +27,8 @@ proProfiles; client claims and manual key tiers do not. Unpaid/expired/past-due
 accounts have no allowance, cannot issue keys, and receive HTTP 402 including MCP
 setup. Paid MCP control traffic is unmetered. Cancellation retains access until
 period end. Usage does not reset on a mid-period upgrade; the latest invoice must
-be paid before a larger limit is granted. Downgrades take effect next period.
+be paid before a larger limit is granted. Portal plan changes are immediate and
+prorated; downgrading after 500 requests leaves no remaining Starter allowance.
 
 Only explicit DB-only internal_access flags preserve private runtime/ops keys.
 NULL user_id does not confer internal access. Production requires DB metering and

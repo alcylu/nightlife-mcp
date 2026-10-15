@@ -8,7 +8,7 @@ if (parsed.hostname && !["localhost", "127.0.0.1", "[::1]"].includes(parsed.host
 }
 const migration = ["20261015090000_mcp_pro_billing.sql", "20261015100000_mcp_monthly_allowances.sql", "20261015120000_mcp_usage_requests.sql"].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/^BEGIN;\s*/m, "").replace(/^COMMIT;\s*/m, "")).join("\n");
 const initial = ["20260219094000_mcp_api_keys.sql", "20260220_user_api_keys.sql"].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8")).join("\n");
-const paidMigration=readFileSync(new URL('../supabase/migrations/20261015140000_mcp_paid_plans.sql',import.meta.url),'utf8').replace(/^BEGIN;\s*/m,'').replace(/^COMMIT;\s*/m,'');
+const paidMigration=['20261015140000_mcp_paid_plans.sql','20261015150000_mcp_private_legacy_metering.sql'].map(name=>readFileSync(new URL(`../supabase/migrations/${name}`,import.meta.url),'utf8').replace(/^BEGIN;\s*/m,'').replace(/^COMMIT;\s*/m,'')).join('\n');
 const sql = `
 BEGIN;
 DO $$ BEGIN
@@ -126,6 +126,7 @@ DO $$ DECLARE r record; BEGIN
   SELECT * INTO r FROM consume_mcp_api_request_v2('internal-hash',now(),true);
   IF NOT r.allowed THEN RAISE EXCEPTION 'Explicit internal key broken'; END IF;
   IF has_function_privilege('authenticated','claim_mcp_checkout(uuid)','EXECUTE') OR has_table_privilege('authenticated','mcp_api_keys','UPDATE') THEN RAISE EXCEPTION 'Billing/internal flag writable by user'; END IF;
+  IF has_function_privilege('anon','consume_mcp_api_request(text,timestamptz)','EXECUTE') OR has_function_privilege('authenticated','consume_mcp_api_request(text,timestamptz)','EXECUTE') OR NOT has_function_privilege('service_role','consume_mcp_api_request(text,timestamptz)','EXECUTE') THEN RAISE EXCEPTION 'Legacy metering RPC permissions unsafe'; END IF;
 END $$;
 INSERT INTO auth.users VALUES('00000000-0000-4000-8000-000000000003');
 SELECT set_config('test.user_id','00000000-0000-4000-8000-000000000003',true);

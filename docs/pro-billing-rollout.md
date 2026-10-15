@@ -10,11 +10,14 @@ remain available without payment and notify Allen by email and LINE.
 Run backend check/test/build/test:billing:db, frontend build and desktop/mobile QA.
 Both CI workflows must pass before production. Then:
 
-1. Apply only 20261015140000_mcp_paid_plans.sql using an isolated Supabase history
+1. Apply 20261015140000_mcp_paid_plans.sql and then
+   20261015150000_mcp_private_legacy_metering.sql using an isolated Supabase history
    fetched from production. Check db push --dry-run; never repair shared history.
 2. Dry-run then apply scripts/setup-pro-billing.mjs with scoped Railway variables
    on stdin. It reuses the Pro product/price/webhook, creates Starter and enables
-   portal switching with price decreases at period end. Secrets are never printed;
+   portal switching between separate Starter/Pro products (Stripe permits only one
+   monthly USD price per product in the portal). Plan changes are immediate and
+   prorated, without a usage reset. Secrets are never printed;
    variable updates use --skip-deploys before the explicit deployment.
 3. Merge/deploy passing backend/frontend. Production enforces DB authentication,
    monthly metering and disabled env fallback. Both price IDs are required.
