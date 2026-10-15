@@ -28,6 +28,8 @@ import { apiReference } from "@scalar/express-api-reference";
 import { openApiDocument } from "./openapi.js";
 import { createStripeWebhookRouter } from "./routes/stripeWebhook.js";
 import { createBillingRouter } from "./routes/billing.js";
+import { createUsageRequestRouter } from "./routes/usageRequests.js";
+import { startUsageNotificationWorker } from "./services/usageRequests.js";
 import { getStripe } from "./services/stripe.js";
 import {
   renderDepositSuccessPage,
@@ -632,13 +634,15 @@ async function main(): Promise<void> {
   app.use(express.json());
   const supabase = createSupabaseClient(config);
   const sessions = new Map<string, SessionContext>();
+  const usageConfig = { resendApiKey: config.resendApiKey, lineToken: config.lineChannelAccessToken, lineUserId: config.lineAlertUserId, emailTo: config.usageRequestEmail };
+  const usageWorker = startUsageNotificationWorker(supabase, usageConfig);
 
   app.use("/billing", cors({
     origin: [config.developerSiteUrl, "https://nightlife-dev-production.up.railway.app", /^http:\/\/localhost(:\d+)?$/],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type"],
     maxAge: 86400,
-  }), createBillingRouter(
+  }), createUsageRequestRouter(supabase, usageConfig, usageWorker.flush), createBillingRouter(
     supabase, config.stripeSecretKey ? getStripe(config.stripeSecretKey) : null,
     config.stripeProPriceId && config.stripeProPortalConfigurationId ? {
       priceId: config.stripeProPriceId,
@@ -1004,6 +1008,7 @@ async function main(): Promise<void> {
   });
 
   const shutdown = async (signal: string): Promise<void> => {
+    usageWorker.stop();
     console.error(`[nightlife-mcp] shutting down (${signal})`);
     listener.close();
     const ids = Array.from(sessions.keys());

@@ -219,6 +219,27 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 
 ## Deployment (Railway)
 
+### Additional usage enquiries
+
+`POST /billing/usage-request` accepts confirmed Supabase accounts only, independent
+of Stripe availability. It records the verified email, requested monthly volume,
+optional website and use case; it never changes billing or quotas. Private
+`mcp_usage_requests` and `mcp_usage_notifications` tables are service-role only.
+The submission RPC atomically enqueues both channels, deduplicates request UUIDs
+and limits submissions to three/account/day. A server-side worker leases pending
+notifications every minute and retries each channel independently (at most eight
+attempts within 23h, bounded by provider deduplication windows). Failed deliveries
+remain stored; inspect `state`, `attempts`, `last_error` and `sent_at` privately.
+“Sent” means provider accepted, not proof the recipient read it.
+
+Required env: existing `RESEND_API_KEY`, `LINE_CHANNEL_ACCESS_TOKEN`,
+`LINE_ALERT_USER_ID`; optional `USAGE_REQUEST_EMAIL` defaults to
+`allen@nightlifetokyo.com`. Notifications use the established Allen LINE alert
+recipient. Apply `20261015120000_mcp_usage_requests.sql` before deploying.
+No API keys, auth tokens, or customer message bodies are written to logs.
+LINE retry reference: https://developers.line.biz/en/docs/messaging-api/retrying-api-request/
+Email retry reference: https://resend.com/changelog/idempotency-keys
+
 ### Pro API subscriptions (prepared 2026-10-15)
 
 `src/routes/billing.ts` provides `/billing/config`, authenticated Supabase-user
