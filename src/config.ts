@@ -36,6 +36,10 @@ const envSchema = z.object({
     .transform((value) => value.trim().toLowerCase() !== "false"),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_PRO_PRICE_ID: z.string().optional(),
+  STRIPE_PRO_PORTAL_CONFIGURATION_ID: z.string().optional(),
+  STRIPE_PRO_WEBHOOK_SECRET: z.string().optional(),
+  DEVELOPER_SITE_URL: z.string().url().default("https://nightlife.dev"),
   RESEND_API_KEY: z.string().optional(),
 });
 
@@ -57,6 +61,10 @@ export type AppConfig = {
   mcpEnableRecommendations: boolean;
   stripeSecretKey: string | null;
   stripeWebhookSecret: string | null;
+  stripeProPriceId: string | null;
+  stripeProPortalConfigurationId: string | null;
+  stripeProWebhookSecret: string | null;
+  developerSiteUrl: string;
   resendApiKey: string | null;
 };
 
@@ -88,6 +96,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mcpEnableRecommendations: parsed.MCP_ENABLE_RECOMMENDATIONS,
     stripeSecretKey: parsed.STRIPE_SECRET_KEY || null,
     stripeWebhookSecret: parsed.STRIPE_WEBHOOK_SECRET || null,
+    stripeProPriceId: parsed.STRIPE_PRO_PRICE_ID || null,
+    stripeProPortalConfigurationId: parsed.STRIPE_PRO_PORTAL_CONFIGURATION_ID || null,
+    stripeProWebhookSecret: parsed.STRIPE_PRO_WEBHOOK_SECRET || null,
+    developerSiteUrl: parsed.DEVELOPER_SITE_URL.replace(/\/+$/, ""),
     resendApiKey: parsed.RESEND_API_KEY || null,
   };
 }

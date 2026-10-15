@@ -210,6 +210,24 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 - `supabase/migrations/20260226_concierge_unmet_requests.sql` — Concierge unmet-request backlog table (`public.concierge_unmet_requests`)
 
 ## Deployment (Railway)
+
+### Pro API subscriptions (prepared 2026-10-15)
+
+`src/routes/billing.ts` provides `/billing/config`, authenticated Supabase-user
+`/billing/checkout`, `/billing/status`, `/billing/portal`, and a dedicated signed
+`/billing/webhook`. API keys do not authorize billing actions. The server fixes
+the US$29 monthly Stripe price and verifies current subscription state before
+granting 1,000/day + 60/min per key. Existing key RPC contracts are unchanged;
+new keys inherit paid limits through a DB trigger. The migration removes direct
+authenticated key writes, preventing self-assigned paid quotas.
+
+Required additional env: `STRIPE_PRO_PRICE_ID`,
+`STRIPE_PRO_PORTAL_CONFIGURATION_ID`, `STRIPE_PRO_WEBHOOK_SECRET`.
+`DEVELOPER_SITE_URL` defaults to `https://nightlife.dev`. Checkout is unavailable
+until configured. VIP deposit routes/secrets are separate. Rollout and metrics:
+`docs/pro-billing-rollout.md`. `scripts/setup-pro-billing.mjs` defaults to dry run;
+`scripts/pro-billing-report.mjs` reports signups and paid conversion aggregates.
+
 - **Production URL**: `https://api.nightlife.dev/mcp` (Railway: `nightlife-mcp-production.up.railway.app`)
 - **Health**: `https://api.nightlife.dev/health`
 - **GitHub**: `https://github.com/alcylu/nightlife-mcp` (public, MIT)

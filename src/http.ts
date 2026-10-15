@@ -26,6 +26,8 @@ import { createRestRouter } from "./rest.js";
 import { apiReference } from "@scalar/express-api-reference";
 import { openApiDocument } from "./openapi.js";
 import { createStripeWebhookRouter } from "./routes/stripeWebhook.js";
+import { createBillingRouter } from "./routes/billing.js";
+import { getStripe } from "./services/stripe.js";
 import {
   renderDepositSuccessPage,
   renderDepositCancelledPage,
@@ -624,9 +626,25 @@ async function main(): Promise<void> {
     app.use("/stripe/webhook", express.raw({ type: "application/json" }));
   }
 
+  app.use("/billing/webhook", express.raw({ type: "application/json" }));
   app.use(express.json());
   const supabase = createSupabaseClient(config);
   const sessions = new Map<string, SessionContext>();
+
+  app.use("/billing", cors({
+    origin: [config.developerSiteUrl, "https://nightlife-dev-production.up.railway.app", /^http:\/\/localhost(:\d+)?$/],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+    maxAge: 86400,
+  }), createBillingRouter(
+    supabase, config.stripeSecretKey ? getStripe(config.stripeSecretKey) : null,
+    config.stripeProPriceId && config.stripeProPortalConfigurationId ? {
+      priceId: config.stripeProPriceId,
+      portalConfigurationId: config.stripeProPortalConfigurationId,
+      siteUrl: config.developerSiteUrl,
+    } : null,
+    config.stripeProWebhookSecret,
+  ));
 
   // CORS for REST API — allows browser JS from our domains only
   app.use("/api/v1", cors({
