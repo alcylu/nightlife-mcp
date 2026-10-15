@@ -1,58 +1,41 @@
-# Public discovery data boundary
+# Paid public data boundary
 
-Public REST/MCP uses explicit response allowlists, including nested events.
-Service functions and verified `ops` clients retain internal enrichment. Stdio
-defaults to the public contract. A session is invalidated if its key tier changes.
+Remote REST/MCP requires Starter (US$5/month, 500 requests, 10/min per key) or Pro
+(US$19/month, 5,000 requests, 30/min per key). No free API tier. Monthly usage is
+shared across up to three keys. Both plans include the same advanced data.
 
-| Fields / functionality | Free now | Pro now | Internal ops |
-| --- | --- | --- | --- |
-| Published events, lineups, admission/ticket prices, event media | Yes | Yes | Yes |
-| Venue identity, address, website, venue image, schedules | Yes | Yes | Yes |
-| Performer identity, type, genres, schedules, profile URL | Yes | Yes | Yes |
-| Venue social links | No | Yes, where available | Yes |
-| Performer bio, profile image, social profiles | No | Yes, where available | Yes |
-| Follower counts, rankings, rising-star/popularity sorting | No | No | Yes |
-| Heat/demand signals, source counts, heat sorting | No | No | Yes |
-| VIP price endpoint/tool, minimum spends, table charts | No | No | Yes |
+| Data | Starter / Pro | Internal ops |
+| --- | --- | --- |
+| Published events, lineups, ordinary admission/ticket prices, event media | Yes | Yes |
+| Venue identity, address, website, image, schedules | Yes | Yes |
+| Performer identity, genres, schedules, profile URL | Yes | Yes |
+| Venue socials; performer bio, primary image, social profiles | Where available | Yes |
+| Demand/heat signals, source counts, heat sorting | No | Yes |
+| Follower counts, rankings, popularity sorting | No | Yes |
+| VIP pricing, minimum spends, table charts | No | Yes |
 
-Open VIP venue listings retain opening hours, names and URLs but omit minimum
-spend and currency. Public booking responses retain IDs/status/timestamps and
-status history; price-bearing messages/notes, minimum spends, deposit amounts
-and deposit checkout URLs are omitted. Internal booking workflows retain them.
-This does not remove ordinary event admission or ticket-tier prices.
+Explicit nested allowlists prevent leaking internal models. Missing enrichment
+is null/empty. Public event sorts allow date only; performer sorts allow
+alphabetical/recent_activity. OpenAPI advertises enriched paid responses using
+legacy Pro* schema names for compatibility. Public booking responses omit
+price-bearing messages/notes, deposits, deposit URLs and minimum spends while
+retaining IDs/status/timestamps/history. Public VIP venue listings omit spend and
+currency. VIP-price endpoint/tool remains ops-only.
 
-The public OpenAPI is derived from these same allowlists. Public MCP tool output
-schemas advertise only public fields. `get_vip_pricing` is registered only for ops;
-REST `/venues/:id/vip-pricing` returns 404 for all non-ops keys. Public event sort
-accepts date only; performer sort accepts alphabetical/recent_activity only.
+The v2 consumption RPC rechecks each paid period. Verified 500/5,000 windows grant
+proProfiles; client claims and manual key tiers do not. Unpaid/expired/past-due
+accounts have no allowance, cannot issue keys, and receive HTTP 402 including MCP
+setup. Paid MCP control traffic is unmetered. Cancellation retains access until
+period end. Usage does not reset on a mid-period upgrade; the latest invoice must
+be paid before a larger limit is granted. Downgrades take effect next period.
 
-## Pro enrichment — approved 2026-10-15
+Only explicit DB-only internal_access flags preserve private runtime/ops keys.
+NULL user_id does not confer internal access. Production requires DB metering and
+forbids env fallback. Local stdio needs private server credentials and defaults to
+a basic safe projection; it is not an unpaid remote service.
 
-Approved bundle: performer biography, primary profile image and social
-profiles, plus venue social profiles. These support richer app/concierge cards
-without distributing operational intelligence. Keep follower counts, internal
-ranking, all demand signals and raw ticket/guest counts, VIP pricing and table
-charts internal-only unless separately approved.
-
-The v2 consumption RPC rechecks the active paid subscription period on every
-request. Only its verified 2,000-request paid window grants `proProfiles`; a
-legacy/manual `starter` key, env fallback or client-supplied plan does not.
-REST and MCP project explicit Pro allowlists, never full internal models.
-Performer search includes the primary image; detail also includes bio/socials.
-Nested events stay public-safe. Missing fields are null/empty, not invented.
-Existing MCP sessions must reinitialize when profile entitlement changes.
-Scheduled cancellation retains access until period end; expiration/past-due
-removes enrichment even if a webhook is delayed. The public OpenAPI documents
-separate Free/Pro variants and no operational models.
-
-## Compatibility and rollout
-
-This is an intentionally breaking field restriction requested by Allen. Browser
-WebMCP metadata in nightlife must stop advertising bios/social links and removed
-sorts. The component forwards REST JSON directly; it does not require those fields
-to render the site. No nightlife/nlt-admin source usages of the VIP pricing API
-were found. Their direct Supabase UI queries are not changed by this API policy.
-
-This restriction can ship independently of paid-checkout migrations. Regression
-coverage includes real MCP discovery/calls, REST requests with Free/paid/ops
-roles, nested event projections, booking side channels and public OpenAPI.
+The paid-plans migration revokes the shared consumer-browser key. Agents must
+connect to the remote MCP/API with their own paid key. Normal consumer rendering
+uses separate Supabase queries and is unchanged. Regression coverage includes
+MCP/REST, nested projections, booking side channels, OpenAPI and PostgreSQL
+permissions, orphaned keys, expiry, plan changes and shared usage caps.

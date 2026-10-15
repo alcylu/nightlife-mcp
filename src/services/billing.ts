@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type Stripe from "stripe";
+import { paidPlans, type PaidPlan } from "./plans.js";
 
 export const BILLING_APP = "nightlife-dev-pro";
 export const BILLING_EVENTS = [
@@ -11,6 +12,7 @@ export const BILLING_EVENTS = [
 
 export type BillingSettings = {
   priceId: string;
+  starterPriceId: string;
   portalConfigurationId: string;
   siteUrl: string;
 };
@@ -21,6 +23,8 @@ type Account = {
   stripe_subscription_id: string | null;
   subscription_status: string;
   current_period_end: string | null;
+  current_period_start: string | null;
+  billing_plan: "none" | PaidPlan;
   cancel_at_period_end: boolean;
   checkout_attempt: string;
   checkout_session_id: string | null;
@@ -52,12 +56,14 @@ export async function getAccount(db: SupabaseClient, userId: string): Promise<Ac
   return data as Account | null;
 }
 
-export async function validateProPrice(stripe: Stripe, priceId: string): Promise<Stripe.Price> {
+export function planPriceId(settings: BillingSettings, plan: PaidPlan): string { return plan === "starter" ? settings.starterPriceId : settings.priceId; }
+
+export async function validateProPrice(stripe: Stripe, priceId: string, plan: PaidPlan = "pro"): Promise<Stripe.Price> {
   const price = await stripe.prices.retrieve(priceId);
-  if (!price.active || price.currency !== "usd" || price.unit_amount !== 1900 ||
+  if (price.id !== priceId || !price.active || price.currency !== "usd" || price.unit_amount !== paidPlans[plan].amount ||
       price.recurring?.interval !== "month" || price.recurring.interval_count !== 1 ||
       price.type !== "recurring") {
-    throw new BillingError(503, "Pro checkout is temporarily unavailable.");
+    throw new BillingError(503, "Checkout is temporarily unavailable.");
   }
   return price;
 }
@@ -67,15 +73,21 @@ export async function syncSubscription(
 ): Promise<void> {
   // Retrieve current state: webhook delivery order is not guaranteed.
   const syncedAt = new Date().toISOString();
-  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["latest_invoice"] });
   if (sub.metadata.app !== BILLING_APP) return;
   const userId = sub.metadata.user_id;
   if (!userId || !/^[0-9a-f-]{36}$/i.test(userId)) throw new Error("Subscription has no valid account owner.");
-  const item = sub.items.data.find(i => i.price.id === settings.priceId);
+  const item = sub.items.data.length === 1 && sub.items.data[0].quantity === 1 ? sub.items.data.find(i => i.price.id === settings.priceId || i.price.id === settings.starterPriceId) : undefined;
+  const plan = item?.price.id === settings.priceId ? "pro" : item?.price.id === settings.starterPriceId ? "starter" : "none";
+  const invoice = typeof sub.latest_invoice === "object" ? sub.latest_invoice : null;
+  // Stripe can apply an upgrade before its invoice is paid. Never grant the
+  // larger allowance on an unpaid invoice, including a failed prorated upgrade.
+  const paid = invoice?.status === "paid";
   const periodEnd = item?.current_period_end;
-  const { error } = await db.rpc("sync_mcp_subscription", {
+  const { error } = await db.rpc("sync_mcp_subscription_v2", {
     p_user_id: userId, p_customer_id: objectId(sub.customer), p_subscription_id: sub.id,
-    p_status: item && !sub.pause_collection ? sub.status : "paused",
+    p_status: item && !sub.pause_collection && (sub.status !== "active" || paid) ? sub.status : "paused",
+    p_plan: plan,
     p_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
     p_cancel_at_period_end: sub.cancel_at_period_end, p_synced_at: syncedAt,
     p_subscription_created_at: sub.created,
@@ -110,8 +122,17 @@ export async function reconcileAccount(db: SupabaseClient, stripe: Stripe, setti
   return account;
 }
 
-export async function startCheckout(db: SupabaseClient, stripe: Stripe, settings: BillingSettings, user: User, source: unknown): Promise<string> {
-  await validateProPrice(stripe, settings.priceId);
+export async function startCheckout(db: SupabaseClient, stripe: Stripe, settings: BillingSettings, user: User, source: unknown, plan: PaidPlan = "pro"): Promise<string> {
+  const priceId = planPriceId(settings, plan);
+  await validateProPrice(stripe, priceId, plan);
+  const lease = await db.rpc("claim_mcp_checkout", { p_user_id: user.id });
+  check(lease.error);
+  if (!lease.data) throw new BillingError(409, "Checkout is already being prepared. Please retry shortly.");
+  try { return await createCheckout(db, stripe, settings, user, source, plan); }
+  finally { const release = await db.rpc("release_mcp_checkout", { p_user_id: user.id, p_lock_id: lease.data }); check(release.error); }
+}
+
+async function createCheckout(db: SupabaseClient, stripe: Stripe, settings: BillingSettings, user: User, source: unknown, plan: PaidPlan): Promise<string> {
   let account = await reconcileAccount(db, stripe, settings, user.id);
   if (account && ["active", "trialing", "past_due", "unpaid", "incomplete", "paused"].includes(account.subscription_status)) {
     throw new BillingError(409, "You already have a subscription. Manage it from your dashboard.");
@@ -124,7 +145,8 @@ export async function startCheckout(db: SupabaseClient, stripe: Stripe, settings
   if (!account) throw new Error("Could not initialize billing account.");
   if (account.checkout_session_id) {
     const previous = await stripe.checkout.sessions.retrieve(account.checkout_session_id);
-    if (previous.status === "open" && previous.url) return previous.url;
+    if (previous.status === "open" && previous.url && previous.metadata?.plan === plan) return previous.url;
+    if (previous.status === "open") await stripe.checkout.sessions.expire(previous.id);
     const { error } = await db.from("mcp_billing_accounts").update({
       checkout_attempt: randomUUID(), checkout_session_id: null,
     }).eq("user_id", user.id).eq("checkout_session_id", previous.id);
@@ -141,13 +163,13 @@ export async function startCheckout(db: SupabaseClient, stripe: Stripe, settings
   }
   const session = await stripe.checkout.sessions.create({
     mode: "subscription", customer: account.stripe_customer_id,
-    client_reference_id: user.id, line_items: [{ price: settings.priceId, quantity: 1 }],
+    client_reference_id: user.id, line_items: [{ price: planPriceId(settings, plan), quantity: 1 }],
     payment_method_types: ["card"],
-    metadata: { app: BILLING_APP, user_id: user.id },
-    subscription_data: { metadata: { app: BILLING_APP, user_id: user.id } },
-    success_url: `${settings.siteUrl}/checkout?result=success`,
-    cancel_url: `${settings.siteUrl}/checkout?result=cancelled`,
-  }, { idempotencyKey: `nlt-pro-checkout-${account.checkout_attempt}` });
+    metadata: { app: BILLING_APP, user_id: user.id, plan },
+    subscription_data: { metadata: { app: BILLING_APP, user_id: user.id, plan } },
+    success_url: `${settings.siteUrl}/checkout?plan=${plan}&result=success`,
+    cancel_url: `${settings.siteUrl}/checkout?plan=${plan}&result=cancelled`,
+  }, { idempotencyKey: `nlt-checkout-${account.checkout_attempt}-${plan}` });
   if (!session.url) throw new Error("Stripe did not return a checkout URL.");
   const { error } = await db.from("mcp_billing_accounts").update({ checkout_session_id: session.id }).eq("user_id", user.id);
   check(error);

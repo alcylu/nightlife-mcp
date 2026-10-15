@@ -161,7 +161,7 @@ export function registerPerformerTools(server: McpServer, deps: ToolDeps): void 
     "get_performer_info",
     {
       description:
-        "Get performer identity, genres and upcoming events. Verified Pro accounts also receive biography, profile image and social profiles. Demand metrics, follower counts and rankings are internal-only. Upgrade: https://nightlife.dev/checkout.",
+        "Get performer identity, genres and upcoming events. Verified Starter and Pro accounts also receive biography, profile image and social profiles. Demand metrics, follower counts and rankings are internal-only. Subscribe: https://nightlife.dev/checkout.",
       inputSchema: {
         performer_id: z.string().min(1),
       },

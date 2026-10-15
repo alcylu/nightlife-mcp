@@ -736,12 +736,11 @@ for (const path of ["/events", "/events/tonight"]) {
 const performerSort = openApiDocument.paths["/performers"].get.parameters.find((p: any) => p.name === "sort_by");
 performerSort.schema.enum = ["alphabetical", "recent_activity"];
 performerSort.schema.default = "alphabetical";
-// Document Pro as a distinct contract: clients must not assume these fields are
-// present for Free keys. No internal model is exposed in either variant.
+// Keep legacy schema names stable; both paid plans receive the enriched contract.
 for (const [name, schema] of Object.entries({ ProVenueDetail: proVenueDetailSchema, ProPerformerSummary: proPerformerSummarySchema, ProPerformerDetail: proPerformerDetailSchema, ProSearchPerformersOutput: proSearchPerformersOutputSchema })) {
-  openApiDocument.components.schemas[name] = { ...z.toJSONSchema(schema), description: "Requires a verified active Pro subscription. Fields may be null or empty when unavailable.", "x-plan": "pro" };
+  openApiDocument.components.schemas[name] = { ...z.toJSONSchema(schema), description: "Included with verified active Starter and Pro subscriptions. Fields may be null or empty when unavailable.", "x-plan": ["starter", "pro"] };
 }
-for (const [path, free, pro] of [["/venues/{id}", "VenueDetail", "ProVenueDetail"], ["/performers/{id}", "PerformerDetail", "ProPerformerDetail"], ["/performers", "SearchPerformersOutput", "ProSearchPerformersOutput"]]) {
-  openApiDocument.paths[path].get.responses["200"].content["application/json"].schema = { anyOf: [{ $ref: `#/components/schemas/${free}` }, { $ref: `#/components/schemas/${pro}` }] };
+for (const [path, pro] of [["/venues/{id}", "ProVenueDetail"], ["/performers/{id}", "ProPerformerDetail"], ["/performers", "ProSearchPerformersOutput"]]) {
+  openApiDocument.paths[path].get.responses["200"].content["application/json"].schema = { $ref: `#/components/schemas/${pro}` };
 }
-openApiDocument.info.description = "Nightlife discovery API. Free: published events, venues, performer identities and schedules. Pro: performer biographies, profile images and social profiles, plus venue social links and higher request allowances. Missing enrichment is null/empty. Demand indicators, follower counts, rankings and VIP pricing remain internal-only. Upgrade: https://nightlife.dev/checkout.";
+openApiDocument.info.description = "Paid nightlife discovery API. Starter: US$5/month for 500 requests; Pro: US$19/month for 5,000 requests. Both include published events, venues, performer identities and schedules, plus performer biographies, profile images, social profiles and venue social links. Missing enrichment is null/empty. No free API tier. Demand indicators, follower counts, rankings and VIP pricing remain internal-only. Subscribe: https://nightlife.dev/checkout.";

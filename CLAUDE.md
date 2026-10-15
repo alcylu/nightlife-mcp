@@ -110,12 +110,13 @@ Error responses: `{ error: { code, message } }` with appropriate HTTP status (40
 
 ## Auth
 
-Public data contracts: `docs/public-data-access.md`. Free omits performer
-bios/images/socials and venue socials. Verified paid Pro adds those fields only;
+Public data contracts: `docs/public-data-access.md`. Public remote access is paid-only:
+Starter US$5/500 requests and Pro US$19/5,000 per billing month. Both add performer
+bios/images/socials and venue socials;
 demand, follower counts, rankings, ranking sorts and VIP pricing stay ops-only.
-Pro entitlement comes from the v2 RPC's current paid period, not key tier alone.
+Profile entitlement comes from the v2 RPC's current paid period, not key tier alone.
 REST/MCP use explicit response allowlists; MCP sessions reinitialize on access
-changes. Stdio defaults to Free. CI now runs types, tests, build and local DB
+changes. Local stdio defaults to a basic safe projection and requires private server credentials; it is not a free remote service. CI runs types, tests, build and local DB
 billing regression checks on every PR/push.
 
 - **Stdio**: no auth
@@ -245,15 +246,22 @@ Email retry reference: https://resend.com/changelog/idempotency-keys
 `src/routes/billing.ts` provides `/billing/config`, authenticated Supabase-user
 `/billing/checkout`, `/billing/status`, `/billing/portal`, and a dedicated signed
 `/billing/webhook`. API keys do not authorize billing actions. The server fixes
-the US$19 monthly Stripe price and verifies current subscription state before
-granting 2,000/billing month shared across keys, with 30/min per key. Free is
-100/calendar month and 5/min per key. Existing key RPC contracts are unchanged;
+the selected monthly Stripe price and verifies current subscription state before
+granting Starter (US$5, 500/billing month, 10/min per key) or Pro
+(US$19, 5,000/billing month, 30/min per key). Both include advanced data.
+Unpaid/expired accounts have no allowance, including MCP control access.
+Existing key RPC contracts are unchanged;
 new keys inherit paid limits through a DB trigger. The migration removes direct
 authenticated key writes, preventing self-assigned paid quotas.
 
-Required additional env: `STRIPE_PRO_PRICE_ID`,
+Required additional env: `STRIPE_STARTER_PRICE_ID`, `STRIPE_PRO_PRICE_ID`,
 `STRIPE_PRO_PORTAL_CONFIGURATION_ID`, `STRIPE_PRO_WEBHOOK_SECRET`.
-Enable `MCP_ENABLE_MONTHLY_LIMITS=true` after both 20261015 migrations. The v2
+Enable `MCP_ENABLE_MONTHLY_LIMITS=true` after the 20261015 migrations, including
+`20261015140000_mcp_paid_plans.sql`. Production refuses to start without DB keys,
+mandatory authentication, monthly limits and disabled env-key fallback. Explicit
+`internal_access` flags preserve trusted private runtime/ops keys; NULL user IDs
+do not confer internal access. The shared public browser key is revoked.
+The v2
 consumption RPC serializes usage across keys, rechecks expiration, and excludes
 MCP control traffic. `get_user_monthly_usage()` returns allowance/count/reset.
 Pricing rationale and official sources: `docs/api-pricing-research-2026-10-15.md`.
@@ -267,7 +275,7 @@ until configured. VIP deposit routes/secrets are separate. Rollout and metrics:
 - **GitHub**: `https://github.com/alcylu/nightlife-mcp` (public, MIT)
 - **Railway project**: `nightlife-mcp` (ID: `08d1f8fb-4a80-4f48-b1b8-1578d2f8bf0c`)
 - **Production fallback API key**: stored only in the deployment secret manager; never record the value in tracked files
-- **Key config**: `MCP_HTTP_USE_DB_KEYS=true` + `MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=true`
+- **Key config**: `MCP_HTTP_USE_DB_KEYS=true` + `MCP_HTTP_ALLOW_ENV_KEY_FALLBACK=false`
 - DB keys: self-service via nightlife.dev dashboard (RPCs applied 2026-02-19)
 - Env key fallback can work alongside DB keys during a controlled rotation; remove retired values promptly
 

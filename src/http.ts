@@ -612,6 +612,7 @@ function sendJsonRpcError(
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  if (process.env.NODE_ENV === "production" && (!config.mcpHttpRequireApiKey || !config.mcpHttpUseDbKeys || !config.mcpEnableMonthlyLimits || config.mcpHttpAllowEnvKeyFallback)) throw new Error("Paid API requires DB auth, billing-aware quotas and no env fallback in production.");
 
   if (
     config.mcpHttpRequireApiKey &&
@@ -644,8 +645,9 @@ async function main(): Promise<void> {
     maxAge: 86400,
   }), createUsageRequestRouter(supabase, usageConfig, usageWorker.flush), createBillingRouter(
     supabase, config.stripeSecretKey ? getStripe(config.stripeSecretKey) : null,
-    config.stripeProPriceId && config.stripeProPortalConfigurationId ? {
+    config.stripeProPriceId && config.stripeStarterPriceId && config.stripeProPortalConfigurationId ? {
       priceId: config.stripeProPriceId,
+      starterPriceId: config.stripeStarterPriceId,
       portalConfigurationId: config.stripeProPortalConfigurationId,
       siteUrl: config.developerSiteUrl,
     } : null,

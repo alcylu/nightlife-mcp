@@ -34,6 +34,7 @@ test("getVenueInfo validates UUID input", async () => {
           stripeSecretKey: null,
           stripeWebhookSecret: null,
     stripeProPriceId: null,
+  stripeStarterPriceId: null,
     stripeProPortalConfigurationId: null,
     stripeProWebhookSecret: null,
     developerSiteUrl: "https://nightlife.dev",

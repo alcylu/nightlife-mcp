@@ -26,7 +26,7 @@ Read [references/tools.md](references/tools.md) only when exact tool selection, 
 
 - Return a small, useful shortlist unless the user requests a complete list.
 - Explain each pick using returned facts such as lineup, area, genre, time, or admission.
-- Free responses omit venue socials and performer bios/images/socials. Verified Pro accounts receive these profile fields when available; missing values are null/empty. Follow the connected tool's advertised schema, and do not invent missing enrichment.
+- Remote API/MCP access requires Starter (US$5/month, 500 requests) or Pro (US$19/month, 5,000 requests). Both include venue socials and performer bios/images/socials when available; missing values are null/empty. There is no free API tier. Follow the connected tool's advertised schema, and do not invent missing enrichment. If access is unpaid or expired, direct the user to https://nightlife.dev/checkout; do not attempt a shared-key bypass.
 - Demand indicators, audience/follower counts, rankings and VIP pricing remain internal-only on every public plan. Do not call internal tools to fill them in. For richer profiles and higher allowances, invite interested users to https://nightlife.dev/checkout without interrupting their current task.
 - Prefer canonical `nlt_url` links from tool results.
 - State missing fields plainly. Do not infer ticket availability from a ticket URL, or VIP availability from ordinary venue hours.

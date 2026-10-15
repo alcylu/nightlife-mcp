@@ -8,6 +8,7 @@ if (parsed.hostname && !["localhost", "127.0.0.1", "[::1]"].includes(parsed.host
 }
 const migration = ["20261015090000_mcp_pro_billing.sql", "20261015100000_mcp_monthly_allowances.sql", "20261015120000_mcp_usage_requests.sql"].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8").replace(/^BEGIN;\s*/m, "").replace(/^COMMIT;\s*/m, "")).join("\n");
 const initial = ["20260219094000_mcp_api_keys.sql", "20260220_user_api_keys.sql"].map(name => readFileSync(new URL(`../supabase/migrations/${name}`, import.meta.url), "utf8")).join("\n");
+const paidMigration=readFileSync(new URL('../supabase/migrations/20261015140000_mcp_paid_plans.sql',import.meta.url),'utf8').replace(/^BEGIN;\s*/m,'').replace(/^COMMIT;\s*/m,'');
 const sql = `
 BEGIN;
 DO $$ BEGIN
@@ -114,6 +115,69 @@ DO $$ DECLARE result text; claimed integer; BEGIN
   PERFORM submit_mcp_usage_request('00000000-0000-4000-8000-000000000012',auth.uid(),'qa@example.com',10000,'','An integration test use case','{}','{}');
   result := submit_mcp_usage_request('00000000-0000-4000-8000-000000000013',auth.uid(),'qa@example.com',10000,'','An integration test use case','{}','{}');
   IF result<>'rate_limited' THEN RAISE EXCEPTION 'Daily notification spam guard missing'; END IF;
+END $$;
+${paidMigration}
+DO $$ DECLARE r record; BEGIN
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='free-a'),now(),false);
+  IF r.allowed OR r.reason<>'subscription_required' OR r.monthly_quota<>0 THEN RAISE EXCEPTION 'Unpaid control traffic bypasses paid access'; END IF;
+  SELECT * INTO r FROM consume_mcp_api_request_v2('internal-hash',now(),true);
+  IF r.allowed THEN RAISE EXCEPTION 'NULL owner inferred internal access'; END IF;
+  UPDATE mcp_api_keys SET internal_access=true WHERE key_hash='internal-hash';
+  SELECT * INTO r FROM consume_mcp_api_request_v2('internal-hash',now(),true);
+  IF NOT r.allowed THEN RAISE EXCEPTION 'Explicit internal key broken'; END IF;
+  IF has_function_privilege('authenticated','claim_mcp_checkout(uuid)','EXECUTE') OR has_table_privilege('authenticated','mcp_api_keys','UPDATE') THEN RAISE EXCEPTION 'Billing/internal flag writable by user'; END IF;
+END $$;
+INSERT INTO auth.users VALUES('00000000-0000-4000-8000-000000000003');
+SELECT set_config('test.user_id','00000000-0000-4000-8000-000000000003',true);
+DO $$ DECLARE lock1 uuid; lock2 uuid; BEGIN
+  BEGIN
+    PERFORM create_user_api_key('unpaid-key');
+    RAISE EXCEPTION 'Unpaid key issuance unexpectedly succeeded';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM NOT LIKE 'An active Starter or Pro%' THEN RAISE; END IF;
+  END;
+  lock1:=claim_mcp_checkout(auth.uid());lock2:=claim_mcp_checkout(auth.uid());
+  IF lock1 IS NULL OR lock2 IS NOT NULL THEN RAISE EXCEPTION 'Concurrent checkout lease broken'; END IF;
+  PERFORM release_mcp_checkout(auth.uid(),gen_random_uuid());
+  IF claim_mcp_checkout(auth.uid()) IS NOT NULL THEN RAISE EXCEPTION 'Wrong owner released checkout'; END IF;
+  PERFORM release_mcp_checkout(auth.uid(),lock1);
+  IF claim_mcp_checkout(auth.uid()) IS NULL THEN RAISE EXCEPTION 'Checkout lease not released'; END IF;
+END $$;
+UPDATE mcp_billing_accounts SET stripe_customer_id='cus_paid_test' WHERE user_id=auth.uid();
+SELECT sync_mcp_subscription_v2(auth.uid(),'cus_paid_test','sub_paid_test','active',now()+interval '1 month',false,now(),300,now(),'starter');
+SELECT key_name FROM create_user_api_key('starter-a');
+SELECT key_name FROM create_user_api_key('starter-b');
+INSERT INTO mcp_api_usage_monthly(user_id,period_start,request_count) VALUES(auth.uid(),now(),499);
+DO $$ DECLARE r record; BEGIN
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-a'),now(),true);
+  IF NOT r.allowed OR r.monthly_quota<>500 OR r.monthly_count<>500 OR r.per_minute_quota<>10 THEN RAISE EXCEPTION 'Starter allowance/rate incorrect'; END IF;
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-b'),now(),true);
+  IF r.allowed OR r.reason<>'monthly_limit_exceeded' THEN RAISE EXCEPTION 'Starter cap not shared'; END IF;
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-b'),now(),false);
+  IF NOT r.allowed OR r.monthly_count<>500 THEN RAISE EXCEPTION 'Paid control traffic charged'; END IF;
+END $$;
+SELECT sync_mcp_subscription_v2(auth.uid(),'cus_paid_test','sub_paid_test','active',now()+interval '1 month',true,now(),300,now(),'pro');
+DO $$ DECLARE r record; BEGIN
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-a'),now(),true);
+  IF NOT r.allowed OR r.monthly_quota<>5000 OR r.monthly_count<>501 OR r.per_minute_quota<>30 THEN RAISE EXCEPTION 'Pro upgrade reset usage or scheduled cancellation removed access'; END IF;
+END $$;
+UPDATE mcp_api_usage_monthly SET request_count=4999 WHERE user_id=auth.uid();
+DO $$ DECLARE r record; BEGIN
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-a'),now(),true);
+  IF NOT r.allowed OR r.monthly_count<>5000 THEN RAISE EXCEPTION '5000th Pro request failed'; END IF;
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-b'),now(),true);
+  IF r.allowed THEN RAISE EXCEPTION '5001st Pro request allowed'; END IF;
+END $$;
+SELECT sync_mcp_subscription_v2(auth.uid(),'cus_paid_test','sub_paid_test','active',now()-interval '1 second',false,now(),300,now()-interval '1 month','pro');
+DO $$ DECLARE r record; BEGIN
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-a'),now(),false);
+  IF r.allowed OR r.reason<>'subscription_required' THEN RAISE EXCEPTION 'Expired subscription has access'; END IF;
+END $$;
+-- Account deletion must not convert previously paid keys into internal keys.
+DELETE FROM auth.users WHERE id=auth.uid();
+DO $$ DECLARE r record; BEGIN
+  SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-a'),now(),true);
+  IF r.allowed THEN RAISE EXCEPTION 'Orphan key bypassed subscription'; END IF;
 END $$;
 ROLLBACK;
 `;

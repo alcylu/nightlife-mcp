@@ -12,7 +12,7 @@ async function allRows(query) {
   }
 }
 const [accounts, funnel] = await Promise.all([
-  allRows(() => db.from("mcp_billing_accounts").select("subscription_status,current_period_end,cancel_at_period_end").order("user_id")),
+  allRows(() => db.from("mcp_billing_accounts").select("subscription_status,current_period_end,cancel_at_period_end,billing_plan").order("user_id")),
   allRows(() => db.from("mcp_checkout_funnel").select("source,paid_at,user_id").gte("started_at", since).order("checkout_session_id")),
 ]);
 let signups = 0;
@@ -34,7 +34,8 @@ console.log(JSON.stringify({
   window_days: 30, signups, checkout_starts: funnel.length,
   paid_checkouts: paid.length, unique_buyers: new Set(paid.map(c => c.user_id)).size,
   checkout_conversion_pct: funnel.length ? +(100 * paid.length / funnel.length).toFixed(1) : 0,
-  active_pro_subscriptions: active.length,
+  active_starter_subscriptions: active.filter(a=>a.billing_plan==='starter').length,
+  active_pro_subscriptions: active.filter(a=>a.billing_plan==='pro').length,
   scheduled_cancellations: active.filter(a => a.cancel_at_period_end).length,
-  gross_usd_mrr: active.length * 19, by_source: bySource,
+  gross_usd_mrr: active.reduce((total,a)=>total+(a.billing_plan==='pro'?19:a.billing_plan==='starter'?5:0),0), by_source: bySource,
 }, null, 2));

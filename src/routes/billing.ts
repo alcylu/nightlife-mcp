@@ -6,6 +6,7 @@ import {
   BillingError, getAccount, hasProAccess, processBillingEvent, reconcileAccount,
   startCheckout, validateProPrice, type BillingSettings,
 } from "../services/billing.js";
+import { paidPlans, parsePaidPlan } from "../services/plans.js";
 import { logEvent } from "../observability/metrics.js";
 
 export function createBillingRouter(
@@ -19,8 +20,8 @@ export function createBillingRouter(
   router.get("/config", async (_req, res) => {
     if (!stripe || !settings || !webhookSecret) { res.json({ enabled: false }); return; }
     try {
-      const price = await validateProPrice(stripe, settings.priceId);
-      res.json({ enabled: true, amount: price.unit_amount, currency: price.currency, interval: "month" });
+      await Promise.all([validateProPrice(stripe, settings.priceId),validateProPrice(stripe, settings.starterPriceId,"starter")]);
+      res.json({ enabled: true, plans: paidPlans, interval: "month", free_available: false });
     } catch { res.status(503).json({ enabled: false, error: "Checkout is temporarily unavailable." }); }
   });
 
@@ -75,17 +76,21 @@ export function createBillingRouter(
 
   router.get("/status", handler(async (_req, res) => {
     const account = await reconcileAccount(db, stripe!, settings!, res.locals.billingUser.id);
-    const pro = !!account && hasProAccess(account.subscription_status, account.current_period_end);
+    const active = !!account && hasProAccess(account.subscription_status, account.current_period_end) && !!account.current_period_start && Date.parse(account.current_period_start)<=Date.now() && account.billing_plan !== "none";
+    const plan = active ? account!.billing_plan : "none";
     res.json({
-      plan: pro ? "pro" : "free", status: account?.subscription_status ?? "none",
+      plan, status: account?.subscription_status ?? "none",
       current_period_end: account?.current_period_end ?? null,
       cancel_at_period_end: account?.cancel_at_period_end ?? false,
       can_manage: !!account?.stripe_customer_id && !!account?.stripe_subscription_id,
-      monthly_quota: pro ? 2000 : 100, per_minute_quota: pro ? 30 : 5,
+      monthly_quota: plan === "none" ? 0 : paidPlans[plan].monthly_quota, per_minute_quota: plan === "none" ? 0 : paidPlans[plan].per_minute_quota,
+      advanced_data: active,
     });
   }));
   router.post("/checkout", handler(async (req, res) => {
-    res.json({ url: await startCheckout(db, stripe!, settings!, res.locals.billingUser, req.body?.source) });
+    let plan;
+    try { plan = parsePaidPlan(req.body?.plan); } catch { throw new BillingError(400,"Select Starter or Pro."); }
+    res.json({ url: await startCheckout(db, stripe!, settings!, res.locals.billingUser, req.body?.source, plan) });
   }));
   router.post("/portal", handler(async (_req, res) => {
     const account = await getAccount(db, res.locals.billingUser.id);

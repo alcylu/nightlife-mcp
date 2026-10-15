@@ -76,6 +76,8 @@ function normalizeTier(value: string | null | undefined): string {
 
 function mapRpcRejection(reason: string): ApiAuthError {
   switch (reason) {
+    case "subscription_required":
+      return { httpStatus: 402, jsonRpcCode: -32002, message: "An active Starter or Pro subscription is required. Choose a plan at https://nightlife.dev/checkout. Free API access is no longer available." };
     case "invalid_key":
     case "revoked_key":
       return {
@@ -213,7 +215,7 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
             context: {
               // The v2 RPC rechecks the current paid billing window on every
               // request. A legacy/manual 'starter' tier is not proof of payment.
-              proProfiles: options.monthlyLimitsEnabled === true && row.monthly_quota === 2000,
+              proProfiles: options.monthlyLimitsEnabled === true && (row.monthly_quota === 500 || row.monthly_quota === 5000),
               keyId: row.api_key_id || "unknown",
               keyName: row.key_name,
               tier: normalizeTier(row.tier),

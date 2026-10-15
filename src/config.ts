@@ -25,7 +25,7 @@ const envSchema = z.object({
     .string()
     .default("true")
     .transform((value) => value.trim().toLowerCase() !== "false"),
-  MCP_ENABLE_MONTHLY_LIMITS: z.string().default("false").transform(value => value === "true"),
+  MCP_ENABLE_MONTHLY_LIMITS: z.string().default("true").transform(value => value === "true"),
   MCP_HTTP_ALLOW_ENV_KEY_FALLBACK: z
     .string()
     .default("true")
@@ -38,6 +38,7 @@ const envSchema = z.object({
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_PRO_PRICE_ID: z.string().optional(),
+  STRIPE_STARTER_PRICE_ID: z.string().optional(),
   STRIPE_PRO_PORTAL_CONFIGURATION_ID: z.string().optional(),
   STRIPE_PRO_WEBHOOK_SECRET: z.string().optional(),
   DEVELOPER_SITE_URL: z.string().url().default("https://nightlife.dev"),
@@ -67,6 +68,7 @@ export type AppConfig = {
   stripeSecretKey: string | null;
   stripeWebhookSecret: string | null;
   stripeProPriceId: string | null;
+  stripeStarterPriceId: string | null;
   stripeProPortalConfigurationId: string | null;
   stripeProWebhookSecret: string | null;
   developerSiteUrl: string;
@@ -106,6 +108,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     stripeSecretKey: parsed.STRIPE_SECRET_KEY || null,
     stripeWebhookSecret: parsed.STRIPE_WEBHOOK_SECRET || null,
     stripeProPriceId: parsed.STRIPE_PRO_PRICE_ID || null,
+    stripeStarterPriceId: parsed.STRIPE_STARTER_PRICE_ID || null,
     stripeProPortalConfigurationId: parsed.STRIPE_PRO_PORTAL_CONFIGURATION_ID || null,
     stripeProWebhookSecret: parsed.STRIPE_PRO_WEBHOOK_SECRET || null,
     developerSiteUrl: parsed.DEVELOPER_SITE_URL.replace(/\/+$/, ""),
