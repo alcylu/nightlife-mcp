@@ -11,6 +11,7 @@ type ToolDeps = {
   supabase: SupabaseClient;
   config: AppConfig;
   includeInternalData?: boolean;
+  includeProProfiles?: boolean;
 };
 
 const venueSummarySchema = z.object({
@@ -56,6 +57,7 @@ export const publicSearchVenuesOutputSchema = searchVenuesOutputSchema;
 export const publicVenueDetailSchema = venueDetailSchema.omit({
   sns_instagram: true, sns_tiktok: true, sns_x: true, sns_youtube: true,
 }).extend({ upcoming_events: z.array(publicEventSummarySchema) });
+export const proVenueDetailSchema = venueDetailSchema.extend({ upcoming_events: z.array(publicEventSummarySchema) });
 
 function jsonText(value: unknown): string {
   return JSON.stringify(value, null, 2);
@@ -113,7 +115,7 @@ async function runTool<Output>(
 }
 
 export function registerVenueTools(server: McpServer, deps: ToolDeps): void {
-  const detailSchema = deps.includeInternalData ? venueDetailSchema : publicVenueDetailSchema;
+  const detailSchema = deps.includeInternalData ? venueDetailSchema : deps.includeProProfiles ? proVenueDetailSchema : publicVenueDetailSchema;
   server.registerTool(
     "search_venues",
     {
@@ -142,7 +144,7 @@ export function registerVenueTools(server: McpServer, deps: ToolDeps): void {
     "get_venue_info",
     {
       description:
-        "Get full details for a specific venue ID, including upcoming events and VIP booking support.",
+        "Get venue details, upcoming events and VIP booking support. Verified Pro accounts also receive venue social links. Upgrade: https://nightlife.dev/checkout.",
       inputSchema: {
         venue_id: z.string().min(1),
       },

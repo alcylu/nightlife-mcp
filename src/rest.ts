@@ -13,8 +13,8 @@ import { getVipPricing } from "./services/vipPricing.js";
 import type { RequestWithAuth } from "./middleware/apiKeyAuth.js";
 import type { ZodType } from "zod/v4";
 import { publicSearchEventsOutputSchema, publicEventDetailSchema, publicRecommendationsOutputSchema } from "./tools/events.js";
-import { publicSearchVenuesOutputSchema, publicVenueDetailSchema } from "./tools/venues.js";
-import { publicSearchPerformersOutputSchema, publicPerformerDetailSchema } from "./tools/performers.js";
+import { publicSearchVenuesOutputSchema, publicVenueDetailSchema, proVenueDetailSchema } from "./tools/venues.js";
+import { publicSearchPerformersOutputSchema, publicPerformerDetailSchema, proSearchPerformersOutputSchema, proPerformerDetailSchema } from "./tools/performers.js";
 
 function isInternal(req: RequestWithAuth): boolean { return req.apiKeyTier === "ops"; }
 function respond(res: Response, data: unknown, schema: ZodType, internal: boolean): void {
@@ -161,7 +161,7 @@ export function createRestRouter(
         });
         return;
       }
-      respond(res, result, publicVenueDetailSchema, isInternal(req));
+      respond(res, result, (req as RequestWithAuth).proProfiles ? proVenueDetailSchema : publicVenueDetailSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -186,7 +186,7 @@ export function createRestRouter(
         limit: num(req.query.limit),
         offset: num(req.query.offset),
       });
-      respond(res, result, publicSearchPerformersOutputSchema, isInternal(req));
+      respond(res, result, (req as RequestWithAuth).proProfiles ? proSearchPerformersOutputSchema : publicSearchPerformersOutputSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }
@@ -205,7 +205,7 @@ export function createRestRouter(
         });
         return;
       }
-      respond(res, result, publicPerformerDetailSchema, isInternal(req));
+      respond(res, result, (req as RequestWithAuth).proProfiles ? proPerformerDetailSchema : publicPerformerDetailSchema, isInternal(req));
     } catch (error) {
       sendError(res, error);
     }

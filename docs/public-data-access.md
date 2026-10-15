@@ -9,8 +9,8 @@ defaults to the public contract. A session is invalidated if its key tier change
 | Published events, lineups, admission/ticket prices, event media | Yes | Yes | Yes |
 | Venue identity, address, website, venue image, schedules | Yes | Yes | Yes |
 | Performer identity, type, genres, schedules, profile URL | Yes | Yes | Yes |
-| Venue social links | No | No | Yes |
-| Performer bio, profile image, social profiles | No | No | Yes |
+| Venue social links | No | Yes, where available | Yes |
+| Performer bio, profile image, social profiles | No | Yes, where available | Yes |
 | Follower counts, rankings, rising-star/popularity sorting | No | No | Yes |
 | Heat/demand signals, source counts, heat sorting | No | No | Yes |
 | VIP price endpoint/tool, minimum spends, table charts | No | No | Yes |
@@ -26,19 +26,24 @@ schemas advertise only public fields. `get_vip_pricing` is registered only for o
 REST `/venues/:id/vip-pricing` returns 404 for all non-ops keys. Public event sort
 accepts date only; performer sort accepts alphabetical/recent_activity only.
 
-## Proposed Pro enrichment — not enabled
+## Pro enrichment — approved 2026-10-15
 
-Recommended first bundle: performer biography, primary profile image and social
+Approved bundle: performer biography, primary profile image and social
 profiles, plus venue social profiles. These support richer app/concierge cards
 without distributing operational intelligence. Keep follower counts, internal
 ranking, all demand signals and raw ticket/guest counts, VIP pricing and table
 charts internal-only unless separately approved.
 
-Pro currently provides higher usage limits, not richer fields. Marketing and
-tool descriptions must clearly label proposed enrichment as planned/unavailable.
-If approved, enforce the field bundle on the server using verified billing/key
-entitlements for both REST and MCP, including reinitialization on tier change.
-Never gate it with a client-supplied `plan=pro` flag or website copy alone.
+The v2 consumption RPC rechecks the active paid subscription period on every
+request. Only its verified 2,000-request paid window grants `proProfiles`; a
+legacy/manual `starter` key, env fallback or client-supplied plan does not.
+REST and MCP project explicit Pro allowlists, never full internal models.
+Performer search includes the primary image; detail also includes bio/socials.
+Nested events stay public-safe. Missing fields are null/empty, not invented.
+Existing MCP sessions must reinitialize when profile entitlement changes.
+Scheduled cancellation retains access until period end; expiration/past-due
+removes enrichment even if a webhook is delayed. The public OpenAPI documents
+separate Free/Pro variants and no operational models.
 
 ## Compatibility and rollout
 

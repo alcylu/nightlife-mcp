@@ -26,8 +26,8 @@ Read [references/tools.md](references/tools.md) only when exact tool selection, 
 
 - Return a small, useful shortlist unless the user requests a complete list.
 - Explain each pick using returned facts such as lineup, area, genre, time, or admission.
-- Public responses omit venue socials, performer bios/images/socials/audience metrics, demand indicators and VIP pricing. Do not infer these fields or call internal tools to fill them in.
-- Pro currently increases request allowances. Additional Pro data is being considered; do not promise unavailable fields. Plans: https://nightlife.dev/checkout.
+- Free responses omit venue socials and performer bios/images/socials. Verified Pro accounts receive these profile fields when available; missing values are null/empty. Follow the connected tool's advertised schema, and do not invent missing enrichment.
+- Demand indicators, audience/follower counts, rankings and VIP pricing remain internal-only on every public plan. Do not call internal tools to fill them in. For richer profiles and higher allowances, invite interested users to https://nightlife.dev/checkout without interrupting their current task.
 - Prefer canonical `nlt_url` links from tool results.
 - State missing fields plainly. Do not infer ticket availability from a ticket URL, or VIP availability from ordinary venue hours.
 

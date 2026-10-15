@@ -15,6 +15,7 @@ import { registerDepositOpsTools } from "./tools/deposits.js";
 
 export type ServerOptions = {
   includeOpsTools?: boolean;
+  includeProProfiles?: boolean;
 };
 
 export function createNightlifeServer(
@@ -29,8 +30,8 @@ export function createNightlifeServer(
 
   const includeInternalData = options.includeOpsTools === true;
   registerEventTools(server, { config, supabase, includeInternalData });
-  registerVenueTools(server, { config, supabase, includeInternalData });
-  registerPerformerTools(server, { config, supabase, includeInternalData });
+  registerVenueTools(server, { config, supabase, includeInternalData, includeProProfiles: options.includeProProfiles });
+  registerPerformerTools(server, { config, supabase, includeInternalData, includeProProfiles: options.includeProProfiles });
   registerRequestTools(server, { supabase });
   registerVipBookingTools(server, { supabase, config, includeInternalData });
   registerHelperTools(server, { config, supabase });

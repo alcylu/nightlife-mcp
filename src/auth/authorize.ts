@@ -21,6 +21,7 @@ type ConsumeRpcRow = {
 };
 
 export interface ApiKeyContext {
+  proProfiles: boolean;
   keyId: string;
   keyName: string | null;
   tier: string;
@@ -154,6 +155,7 @@ function backendUnavailableError(errorMessage: string): ApiAuthError {
 
 function buildEnvContext(apiKey: string): ApiKeyContext {
   return {
+    proProfiles: false,
     keyId: "env",
     keyName: "env-fallback",
     tier: "free",
@@ -209,6 +211,9 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
           return {
             ok: true,
             context: {
+              // The v2 RPC rechecks the current paid billing window on every
+              // request. A legacy/manual 'starter' tier is not proof of payment.
+              proProfiles: options.monthlyLimitsEnabled === true && row.monthly_quota === 2000,
               keyId: row.api_key_id || "unknown",
               keyName: row.key_name,
               tier: normalizeTier(row.tier),

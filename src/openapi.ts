@@ -3,8 +3,8 @@
 import * as z from "zod/v4";
 import { publicEventSummarySchema } from "./tools/schemas.js";
 import { publicSearchEventsOutputSchema, publicEventDetailSchema, publicRecommendationsOutputSchema, publicVipVenueOpenSummarySchema } from "./tools/events.js";
-import { publicSearchVenuesOutputSchema, publicVenueDetailSchema } from "./tools/venues.js";
-import { publicPerformerSummarySchema, publicSearchPerformersOutputSchema, publicPerformerDetailSchema } from "./tools/performers.js";
+import { publicSearchVenuesOutputSchema, publicVenueDetailSchema, proVenueDetailSchema } from "./tools/venues.js";
+import { publicPerformerSummarySchema, publicSearchPerformersOutputSchema, publicPerformerDetailSchema, proPerformerSummarySchema, proPerformerDetailSchema, proSearchPerformersOutputSchema } from "./tools/performers.js";
 
 const eventSummary = {
   type: "object",
@@ -736,4 +736,12 @@ for (const path of ["/events", "/events/tonight"]) {
 const performerSort = openApiDocument.paths["/performers"].get.parameters.find((p: any) => p.name === "sort_by");
 performerSort.schema.enum = ["alphabetical", "recent_activity"];
 performerSort.schema.default = "alphabetical";
-openApiDocument.info.description = "Public nightlife event discovery: published events, venues, performer identities and schedules. Pro offers higher request allowances at https://nightlife.dev/checkout. Additional Pro data fields are under consideration, not currently included.";
+// Document Pro as a distinct contract: clients must not assume these fields are
+// present for Free keys. No internal model is exposed in either variant.
+for (const [name, schema] of Object.entries({ ProVenueDetail: proVenueDetailSchema, ProPerformerSummary: proPerformerSummarySchema, ProPerformerDetail: proPerformerDetailSchema, ProSearchPerformersOutput: proSearchPerformersOutputSchema })) {
+  openApiDocument.components.schemas[name] = { ...z.toJSONSchema(schema), description: "Requires a verified active Pro subscription. Fields may be null or empty when unavailable.", "x-plan": "pro" };
+}
+for (const [path, free, pro] of [["/venues/{id}", "VenueDetail", "ProVenueDetail"], ["/performers/{id}", "PerformerDetail", "ProPerformerDetail"], ["/performers", "SearchPerformersOutput", "ProSearchPerformersOutput"]]) {
+  openApiDocument.paths[path].get.responses["200"].content["application/json"].schema = { anyOf: [{ $ref: `#/components/schemas/${free}` }, { $ref: `#/components/schemas/${pro}` }] };
+}
+openApiDocument.info.description = "Nightlife discovery API. Free: published events, venues, performer identities and schedules. Pro: performer biographies, profile images and social profiles, plus venue social links and higher request allowances. Missing enrichment is null/empty. Demand indicators, follower counts, rankings and VIP pricing remain internal-only. Upgrade: https://nightlife.dev/checkout.";

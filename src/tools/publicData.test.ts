@@ -9,9 +9,10 @@ import { createNightlifeServer } from "../server.js";
 import { createRestRouter } from "../rest.js";
 import { openApiDocument } from "../openapi.js";
 import { publicSearchEventsOutputSchema, publicEventDetailSchema, publicRecommendationsOutputSchema, searchEventsOutputSchema } from "./events.js";
-import { publicVenueDetailSchema } from "./venues.js";
-import { publicPerformerDetailSchema } from "./performers.js";
+import { publicVenueDetailSchema, proVenueDetailSchema } from "./venues.js";
+import { publicPerformerDetailSchema, proPerformerDetailSchema, proSearchPerformersOutputSchema } from "./performers.js";
 import { publicCreateVipBookingOutputSchema, publicVipBookingStatusOutputSchema } from "./vipBookings.js";
+import { createApiKeyAuthMiddleware } from "../middleware/apiKeyAuth.js";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const config = loadConfig({ SUPABASE_URL: "https://example.supabase.co", SUPABASE_SERVICE_ROLE_KEY: "fixture", MCP_ENABLE_RECOMMENDATIONS: "true" });
@@ -83,9 +84,28 @@ test("public booking actions cannot expose prices indirectly in notes or deposit
   assertNoPrivateData(publicVipBookingStatusOutputSchema.parse({ booking_request_id: id, status: "confirmed", last_updated_at: "2026-10-15", status_message: "INTERNAL_PRICE", latest_note: "INTERNAL_PRICE", history: [{ status: "confirmed", at: "2026-10-15", note: "INTERNAL_PRICE" }], deposit_status: "paid", deposit_amount_jpy: 50000, deposit_payment_url: "https://example.com/INTERNAL_PRICE" }));
 });
 
-test("actual MCP tools/list and tools/call enforce public vs ops access", async () => {
-  for (const internal of [false, true]) {
-    const server = createNightlifeServer(config, fakeDatabase(), { includeOpsTools: internal });
+function assertNoOperationalData(value: unknown) {
+  const text = JSON.stringify(value);
+  for (const forbidden of ['"heat"', '"follower_count"', '"ranking_score"', '"min_spend"', '"deposit_amount_jpy"', '"deposit_payment_url"', '"future_internal_metric"']) assert.ok(!text.includes(forbidden), `Pro response leaked ${forbidden}`);
+}
+
+test("Pro allowlists add approved enrichment without nested operational data", () => {
+  const p = proPerformerDetailSchema.parse(performer);
+  assert.equal(p.bio, performer.bio);
+  assert.equal(p.image_url, performer.image_url);
+  assert.deepEqual(p.social_links, performer.social_links);
+  assertNoOperationalData(p);
+  assertNoOperationalData(proVenueDetailSchema.parse(venue));
+  const search = proSearchPerformersOutputSchema.parse({ city: "tokyo", date_filter: null, unavailable_city: null, performers: [{ ...performer, has_upcoming_event: true, next_event_date: "2026-10-15" }] });
+  assert.equal(search.performers[0].image_url, performer.image_url);
+  assertNoOperationalData(search);
+});
+
+test("actual MCP discovery and calls enforce Free, Pro and ops contracts", async () => {
+  for (const mode of ["free", "pro", "ops"]) {
+    const internal = mode === "ops";
+    const enriched = mode !== "free";
+    const server = createNightlifeServer(config, fakeDatabase(), { includeOpsTools: internal, includeProProfiles: mode === "pro" });
     const client = new Client({ name: "policy-test", version: "1" });
     const [a, b] = InMemoryTransport.createLinkedPair();
     await server.connect(b);
@@ -94,37 +114,40 @@ test("actual MCP tools/list and tools/call enforce public vs ops access", async 
       const tools = (await client.listTools()).tools;
       assert.equal(tools.some(t => t.name === "get_vip_pricing"), internal);
       const performerTool = tools.find(t => t.name === "get_performer_info")!;
-      assert.equal(JSON.stringify(performerTool.outputSchema).includes('"bio"'), internal);
+      assert.equal(JSON.stringify(performerTool.outputSchema).includes('"bio"'), enriched);
+      assert.equal(JSON.stringify(performerTool.outputSchema).includes('"follower_count"'), internal);
       const eventTool = tools.find(t => t.name === "search_events")!;
       assert.equal(JSON.stringify(eventTool.inputSchema).includes('"heat"'), internal);
       const p = await client.callTool({ name: "get_performer_info", arguments: { performer_id: id } });
       assert.ok(!p.isError);
-      if (internal) assert.ok(JSON.stringify(p).includes("INTERNAL_BIO"));
+      if (enriched) assert.ok(JSON.stringify(p).includes("INTERNAL_BIO"));
       else assertNoPrivateData(p);
       const v = await client.callTool({ name: "get_venue_info", arguments: { venue_id: id } });
       assert.ok(!v.isError);
-      if (internal) assert.ok(JSON.stringify(v).includes("INTERNAL_SOCIAL"));
+      if (enriched) assert.ok(JSON.stringify(v).includes("INTERNAL_SOCIAL"));
       else assertNoPrivateData(v);
+      if (!internal) { assertNoOperationalData(p); assertNoOperationalData(v); }
     } finally { await client.close(); await server.close(); }
   }
 });
 
-test("REST Free and paid keys receive the same restricted public contract; ops keeps enrichment", async () => {
+test("REST Free/legacy keys omit enrichment, Pro adds profiles, ops retains internal data", async () => {
   const app = express();
-  app.use((req, _res, next) => { (req as any).apiKeyTier = req.headers["x-test-tier"] ?? "free"; next(); });
+  app.use((req, _res, next) => { (req as any).apiKeyTier = req.headers["x-test-tier"] ?? "free"; (req as any).proProfiles = req.headers["x-test-tier"] === "pro"; next(); });
   app.use(createRestRouter(config, fakeDatabase()));
   const server = app.listen(0, "127.0.0.1");
   await new Promise<void>(r => server.once("listening", r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   try {
-    for (const tier of ["free", "starter", "ops"]) {
+    for (const tier of ["free", "starter", "pro", "ops"]) {
       const headers = { "x-test-tier": tier };
       for (const path of [`/performers/${id}`, `/venues/${id}`]) {
         const res = await fetch(base + path, { headers });
         assert.equal(res.status, 200);
         const data = await res.json();
-        if (tier === "ops") assert.ok(JSON.stringify(data).includes("INTERNAL_"));
+        if (tier === "ops" || tier === "pro") assert.ok(JSON.stringify(data).includes("INTERNAL_"));
         else assertNoPrivateData(data);
+        if (tier !== "ops") assertNoOperationalData(data);
       }
       if (tier !== "ops") {
         assert.equal((await fetch(`${base}/venues/${id}/vip-pricing`, { headers })).status, 404);
@@ -135,10 +158,34 @@ test("REST Free and paid keys receive the same restricted public contract; ops k
   } finally { await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve())); }
 });
 
-test("public OpenAPI documents only the restricted public response and sort fields", () => {
+test("REST auth rechecks subscription on each request and ignores client Pro claims", async () => {
+  let quota: number | null = 100;
+  const db = fakeDatabase();
+  db.rpc = (async () => ({ error: null, data: [{ allowed: true, tier: "starter", monthly_quota: quota, monthly_count: 1 }] })) as any;
+  const app = express();
+  app.use(createApiKeyAuthMiddleware({ supabase: db, config: { ...config, mcpHttpRequireApiKey: true, mcpHttpUseDbKeys: true, mcpEnableMonthlyLimits: true } }));
+  app.use(createRestRouter(config, db));
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>(r => server.once("listening", r));
+  const url = `http://127.0.0.1:${(server.address() as any).port}/performers/${id}?plan=pro`;
+  try {
+    for (const paidQuota of [100, 2000, 100, null]) {
+      quota = paidQuota;
+      const res = await fetch(url, { headers: { "x-api-key": "fixture", "x-api-key-tier": "ops", "x-pro-profiles": "true" } });
+      assert.equal(res.status, 200);
+      const body = await res.json() as Record<string, unknown>;
+      assert.equal("bio" in body, quota === 2000);
+      assertNoOperationalData(body);
+    }
+  } finally { await new Promise<void>(r => server.close(() => r())); }
+});
+
+test("OpenAPI separates Free/Pro profiles and never advertises operational fields", () => {
   assert.ok(!openApiDocument.paths["/venues/{id}/vip-pricing"]);
   const spec = JSON.stringify(openApiDocument);
-  for (const field of ['"heat"', '"min_spend"', '"sns_instagram"', '"social_links"', '"follower_count"', '"ranking_score"', '"bio"']) assert.ok(!spec.includes(field), `Public OpenAPI advertises ${field}`);
+  for (const field of ['"heat"', '"min_spend"', '"follower_count"', '"ranking_score"']) assert.ok(!spec.includes(field), `Public OpenAPI advertises ${field}`);
   assert.ok(!("image_url" in openApiDocument.components.schemas.PerformerDetail.properties));
+  assert.ok("bio" in openApiDocument.components.schemas.ProPerformerDetail.properties);
+  assert.ok("sns_instagram" in openApiDocument.components.schemas.ProVenueDetail.properties);
   assert.deepEqual(openApiDocument.paths["/performers"].get.parameters.find((p: any) => p.name === "sort_by").schema.enum, ["alphabetical", "recent_activity"]);
 });

@@ -13,6 +13,7 @@ export type RequestWithAuth = Request & {
   apiKeyId?: string;
   apiKeyTier?: string;
   apiKeySource?: "db" | "env";
+  proProfiles?: boolean;
 };
 
 function sendJsonError(
@@ -94,6 +95,7 @@ export function createApiKeyAuthMiddleware(deps: {
     req.apiKeyId = auth.context.keyId;
     req.apiKeyTier = auth.context.tier;
     req.apiKeySource = auth.context.source;
+    req.proProfiles = auth.context.proProfiles;
     next();
   };
 }

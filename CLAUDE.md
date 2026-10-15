@@ -44,11 +44,11 @@ npm run build && npm start:http
 | `list_genres` | List all available genres | *(none)* |
 | `list_areas` | List area/neighborhood names for a city | city (optional) |
 
-### Heat Index (`heat` on every event)
+### Heat Index (internal ops only)
 
 `event_occurrences.heat_score` is recomputed nightly by `nlt-scraper/scripts/heat_score.py`
 as a percentile blend of four demand signals: paid tickets, guest-list signups, RA
-interested, and Instagram engagement. Every event payload carries a `heat` object:
+interested, and Instagram engagement. Internal ops event payloads carry a `heat` object; Free and Pro never expose it:
 
 | Field | Meaning |
 |-------|---------|
@@ -68,7 +68,7 @@ interested, and Instagram engagement. Every event payload carries a `heat` objec
    (`confidence: "low"`) and a 100 built on tickets + GL + RA + IG (`confidence: "high"`)
    both read 100. Use `confidence` to hedge rather than overclaim.
 
-`sort_by: "heat"` ranks hottest first and sinks unscored events to the end; `sort_by: "date"`
+Internal `sort_by: "heat"` ranks hottest first and sinks unscored events to the end; public `sort_by: "date"`
 (the default) preserves chronological ordering.
 
 ### Date Filters
@@ -109,6 +109,14 @@ Error responses: `{ error: { code, message } }` with appropriate HTTP status (40
 | GET `/api/v1/docs` | Interactive Scalar API reference |
 
 ## Auth
+
+Public data contracts: `docs/public-data-access.md`. Free omits performer
+bios/images/socials and venue socials. Verified paid Pro adds those fields only;
+demand, follower counts, rankings, ranking sorts and VIP pricing stay ops-only.
+Pro entitlement comes from the v2 RPC's current paid period, not key tier alone.
+REST/MCP use explicit response allowlists; MCP sessions reinitialize on access
+changes. Stdio defaults to Free. CI now runs types, tests, build and local DB
+billing regression checks on every PR/push.
 
 - **Stdio**: no auth
 - **HTTP**: API key required via `x-api-key` header or `Authorization: Bearer <key>`

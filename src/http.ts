@@ -40,6 +40,7 @@ type SessionContext = {
   apiKeyFingerprint: string;
   apiKeyId: string;
   apiKeyTier: string;
+  proProfiles: boolean;
   createdAt: number;
 };
 
@@ -764,6 +765,7 @@ async function main(): Promise<void> {
     req.apiKeyId = auth.context.keyId;
     req.apiKeyTier = auth.context.tier;
     req.apiKeySource = auth.context.source;
+    req.proProfiles = auth.context.proProfiles;
     next();
   });
 
@@ -824,7 +826,7 @@ async function main(): Promise<void> {
         }
 
         // A session must not retain ops data access after its key is downgraded.
-        if (context.apiKeyTier !== (req.apiKeyTier || "free")) {
+        if (context.apiKeyTier !== (req.apiKeyTier || "free") || context.proProfiles !== (req.proProfiles === true)) {
           await cleanupSession(sessionId);
           sendJsonRpcError(res, 403, -32003, "API key tier changed. Initialize a new session.");
           return;
@@ -846,6 +848,7 @@ async function main(): Promise<void> {
 
       const server = createNightlifeServer(config, supabase, {
         includeOpsTools: req.apiKeyTier === "ops",
+        includeProProfiles: req.proProfiles === true,
       });
       let transport: StreamableHTTPServerTransport;
 
@@ -858,6 +861,7 @@ async function main(): Promise<void> {
             apiKeyFingerprint: req.apiKeyFingerprint || "anonymous",
             apiKeyId: req.apiKeyId || "anonymous",
             apiKeyTier: req.apiKeyTier || "free",
+            proProfiles: req.proProfiles === true,
             createdAt: Date.now(),
           });
         },

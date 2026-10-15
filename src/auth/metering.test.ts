@@ -20,3 +20,15 @@ test("monthly quota exhaustion is a 429 and does not fall back to env keys", asy
   assert.equal(result.ok, false);
   if (!result.ok) { assert.equal(result.error.httpStatus, 429); assert.match(result.error.message, /Monthly/); }
 });
+
+test("Pro profiles require the billing-aware RPC's active paid window, not a legacy tier", async () => {
+  for (const [monthlyLimitsEnabled, monthlyQuota, expected] of [[true, 2000, true], [true, 100, false], [true, null, false], [false, 2000, false]] as const) {
+    const db = { async rpc() { return { data: [{ allowed: true, tier: "starter", monthly_quota: monthlyQuota }], error: null }; } } as unknown as SupabaseClient;
+    const result = await authorizeApiKey({ supabase: db, apiKey: "test", useDbKeys: true, allowEnvFallback: false, envKeys: [], monthlyLimitsEnabled });
+    assert.ok(result.ok);
+    assert.equal(result.context.proProfiles, expected);
+  }
+  const fallback = await authorizeApiKey({ supabase: {} as SupabaseClient, apiKey: "fallback", useDbKeys: false, allowEnvFallback: true, envKeys: ["fallback"], monthlyLimitsEnabled: true });
+  assert.ok(fallback.ok);
+  assert.equal(fallback.context.proProfiles, false);
+});
