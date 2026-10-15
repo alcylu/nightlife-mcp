@@ -15,6 +15,9 @@ type ConsumeRpcRow = {
   daily_count: number | null;
   per_minute_quota: number | null;
   minute_count: number | null;
+  monthly_quota?: number | null;
+  monthly_count?: number | null;
+  monthly_reset_at?: string | null;
 };
 
 export interface ApiKeyContext {
@@ -29,6 +32,9 @@ export interface ApiKeyContext {
   minuteCount: number | null;
   dailyRemaining: number | null;
   minuteRemaining: number | null;
+  monthlyQuota: number | null;
+  monthlyRemaining: number | null;
+  monthlyResetAt: string | null;
 }
 
 export interface ApiAuthError {
@@ -44,6 +50,8 @@ type AuthOptions = {
   useDbKeys: boolean;
   allowEnvFallback: boolean;
   envKeys: string[];
+  monthlyLimitsEnabled?: boolean;
+  billable?: boolean;
 };
 
 type AuthResult =
@@ -86,6 +94,12 @@ function mapRpcRejection(reason: string): ApiAuthError {
         httpStatus: 429,
         jsonRpcCode: -32029,
         message: "Daily API quota exceeded.",
+        retryAfterSec: 3600,
+      };
+    case "monthly_limit_exceeded":
+      return {
+        httpStatus: 429, jsonRpcCode: -32029,
+        message: "Monthly request allowance reached. Upgrade your plan or wait until your allowance resets.",
         retryAfterSec: 3600,
       };
     default:
@@ -151,6 +165,7 @@ function buildEnvContext(apiKey: string): ApiKeyContext {
     minuteCount: null,
     dailyRemaining: null,
     minuteRemaining: null,
+    monthlyQuota: null, monthlyRemaining: null, monthlyResetAt: null,
   };
 }
 
@@ -166,9 +181,10 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
   if (useDbKeys) {
     const keyHash = hashApiKey(apiKey);
     const nowIso = new Date().toISOString();
-    const { data, error } = await supabase.rpc("consume_mcp_api_request", {
+    const { data, error } = await supabase.rpc(options.monthlyLimitsEnabled ? "consume_mcp_api_request_v2" : "consume_mcp_api_request", {
       p_key_hash: keyHash,
       p_now: nowIso,
+      ...(options.monthlyLimitsEnabled ? { p_billable: options.billable ?? true } : {}),
     });
 
     if (!error) {
@@ -204,6 +220,9 @@ export async function authorizeApiKey(options: AuthOptions): Promise<AuthResult>
               minuteCount: row.minute_count,
               dailyRemaining: remaining(row.daily_quota, row.daily_count),
               minuteRemaining: remaining(row.per_minute_quota, row.minute_count),
+              monthlyQuota: row.monthly_quota ?? null,
+              monthlyRemaining: remaining(row.monthly_quota ?? null, row.monthly_count ?? null),
+              monthlyResetAt: row.monthly_reset_at ?? null,
             },
           };
         }

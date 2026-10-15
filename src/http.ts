@@ -15,6 +15,7 @@ import {
   extractApiKeyFromHeaders,
 } from "./auth/apiKeys.js";
 import { authorizeApiKey } from "./auth/authorize.js";
+import { isBillableMcpRequest } from "./auth/metering.js";
 import {
   logEvent,
   recordHttpAuthResult,
@@ -721,6 +722,8 @@ async function main(): Promise<void> {
       useDbKeys: config.mcpHttpUseDbKeys,
       allowEnvFallback: config.mcpHttpAllowEnvKeyFallback,
       envKeys: config.mcpHttpApiKeys,
+      monthlyLimitsEnabled: config.mcpEnableMonthlyLimits,
+      billable: isBillableMcpRequest(req.method, req.body),
     });
 
     if (!auth.ok) {
@@ -737,6 +740,9 @@ async function main(): Promise<void> {
       return;
     }
     recordHttpAuthResult(true);
+    if (auth.context.monthlyQuota !== null) res.setHeader("X-RateLimit-Monthly-Limit", String(auth.context.monthlyQuota));
+    if (auth.context.monthlyRemaining !== null) res.setHeader("X-RateLimit-Monthly-Remaining", String(auth.context.monthlyRemaining));
+    if (auth.context.monthlyResetAt) res.setHeader("X-RateLimit-Monthly-Reset", auth.context.monthlyResetAt);
 
     if (auth.context.dailyQuota !== null) {
       res.setHeader("X-RateLimit-Daily-Limit", String(auth.context.dailyQuota));

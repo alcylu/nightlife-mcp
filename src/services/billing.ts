@@ -54,7 +54,7 @@ export async function getAccount(db: SupabaseClient, userId: string): Promise<Ac
 
 export async function validateProPrice(stripe: Stripe, priceId: string): Promise<Stripe.Price> {
   const price = await stripe.prices.retrieve(priceId);
-  if (!price.active || price.currency !== "usd" || price.unit_amount !== 2900 ||
+  if (!price.active || price.currency !== "usd" || price.unit_amount !== 1900 ||
       price.recurring?.interval !== "month" || price.recurring.interval_count !== 1 ||
       price.type !== "recurring") {
     throw new BillingError(503, "Pro checkout is temporarily unavailable.");
@@ -79,6 +79,7 @@ export async function syncSubscription(
     p_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
     p_cancel_at_period_end: sub.cancel_at_period_end, p_synced_at: syncedAt,
     p_subscription_created_at: sub.created,
+    p_period_start: item?.current_period_start ? new Date(item.current_period_start * 1000).toISOString() : null,
   });
   check(error);
 }

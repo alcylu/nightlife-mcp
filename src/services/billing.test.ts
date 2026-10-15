@@ -10,7 +10,7 @@ const settings = { priceId: "price_pro", portalConfigurationId: "bpc_test", site
 function fixtures() {
   const state: any = { account: null, funnel: {}, customerCalls: [], checkoutCalls: [], syncCalls: [], sessions: {}, subscription: {
     id: "sub_pro", created: 1700000000, customer: "cus_pro", metadata: { app: BILLING_APP, user_id: user.id }, status: "active", cancel_at_period_end: false,
-    items: { data: [{ price: { id: settings.priceId }, current_period_end: Math.floor(Date.now() / 1000) + 86400 }] },
+    items: { data: [{ price: { id: settings.priceId }, current_period_start: Math.floor(Date.now() / 1000), current_period_end: Math.floor(Date.now() / 1000) + 86400 }] },
   }};
   const db = {
     from(table: string) {
@@ -37,7 +37,7 @@ function fixtures() {
     async rpc(_name: string, args: any) { state.syncCalls.push(args); return { error: null }; },
   } as unknown as SupabaseClient;
   const stripe = {
-    prices: { async retrieve() { return { id: "price_pro", active: true, currency: "usd", unit_amount: 2900, type: "recurring", recurring: { interval: "month", interval_count: 1 } }; } },
+    prices: { async retrieve() { return { id: "price_pro", active: true, currency: "usd", unit_amount: 1900, type: "recurring", recurring: { interval: "month", interval_count: 1 } }; } },
     customers: { async create(args: any, options: any) { state.customerCalls.push({ args, options }); return { id: "cus_pro" }; } },
     subscriptions: { async retrieve() { return state.subscription; } },
     checkout: { sessions: {
@@ -123,12 +123,12 @@ test("an unpaid checkout is never counted as a paid conversion; duplicates stay 
   const event = { type: "checkout.session.completed", data: { object: session } } as Stripe.Event;
   await processBillingEvent(db, stripe, settings, event);
   assert.equal(state.funnel.cs_pro.paid_at, undefined);
-  Object.assign(session, { subscription: "sub_pro", payment_status: "paid", amount_total: 2900, currency: "usd" });
+  Object.assign(session, { subscription: "sub_pro", payment_status: "paid", amount_total: 1900, currency: "usd" });
   await processBillingEvent(db, stripe, settings, event);
   const paidAt = state.funnel.cs_pro.paid_at;
   await processBillingEvent(db, stripe, settings, event);
   assert.equal(state.funnel.cs_pro.paid_at, paidAt);
-  assert.equal(state.funnel.cs_pro.amount_total, 2900);
+  assert.equal(state.funnel.cs_pro.amount_total, 1900);
 });
 
 test("invoice failures refresh the subscription using current invoice parent linkage", async () => {

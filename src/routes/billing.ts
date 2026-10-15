@@ -81,7 +81,7 @@ export function createBillingRouter(
       current_period_end: account?.current_period_end ?? null,
       cancel_at_period_end: account?.cancel_at_period_end ?? false,
       can_manage: !!account?.stripe_customer_id && !!account?.stripe_subscription_id,
-      daily_quota: pro ? 1000 : 100, per_minute_quota: pro ? 60 : 20,
+      monthly_quota: pro ? 2000 : 100, per_minute_quota: pro ? 30 : 5,
     });
   }));
   router.post("/checkout", handler(async (req, res) => {

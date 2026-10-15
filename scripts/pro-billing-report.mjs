@@ -36,5 +36,5 @@ console.log(JSON.stringify({
   checkout_conversion_pct: funnel.length ? +(100 * paid.length / funnel.length).toFixed(1) : 0,
   active_pro_subscriptions: active.length,
   scheduled_cancellations: active.filter(a => a.cancel_at_period_end).length,
-  gross_usd_mrr: active.length * 29, by_source: bySource,
+  gross_usd_mrr: active.length * 19, by_source: bySource,
 }, null, 2));

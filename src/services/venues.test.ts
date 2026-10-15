@@ -27,6 +27,7 @@ test("getVenueInfo validates UUID input", async () => {
           httpPort: 3000,
           mcpHttpRequireApiKey: true,
           mcpHttpUseDbKeys: true,
+    mcpEnableMonthlyLimits: false,
           mcpHttpAllowEnvKeyFallback: true,
           mcpHttpApiKeys: [],
           mcpEnableRecommendations: false,
