@@ -180,6 +180,20 @@ DO $$ DECLARE r record; BEGIN
   SELECT * INTO r FROM consume_mcp_api_request_v2((SELECT key_hash FROM mcp_api_keys WHERE key_name='starter-a'),now(),true);
   IF r.allowed THEN RAISE EXCEPTION 'Orphan key bypassed subscription'; END IF;
 END $$;
+${readFileSync(new URL('../supabase/migrations/20261022090000_mcp_site_funnel.sql',import.meta.url),'utf8').replace(/^BEGIN;\s*/m,'').replace(/^COMMIT;\s*/m,'')}
+DO $$ BEGIN
+  IF has_table_privilege('anon','mcp_site_funnel_events','SELECT') OR has_table_privilege('authenticated','mcp_site_funnel_events','SELECT') OR has_function_privilege('anon','record_mcp_site_event(uuid,text,text,text,text)','EXECUTE') THEN RAISE EXCEPTION 'Analytics data is publicly accessible'; END IF;
+  PERFORM record_mcp_site_event('00000000-0000-4000-8000-000000000099','page_view','home','search','none');
+  PERFORM record_mcp_site_event('00000000-0000-4000-8000-000000000099','page_view','home','search','none');
+  IF (SELECT count(*) FROM mcp_site_funnel_events)<>1 THEN RAISE EXCEPTION 'Duplicate analytics inflated visit counts'; END IF;
+  INSERT INTO mcp_site_funnel_events(day,visit_id,event,page,source,plan) VALUES((now() AT TIME ZONE 'UTC')::date-31,gen_random_uuid(),'page_view','home','direct','none');
+  PERFORM record_mcp_site_event(gen_random_uuid(),'signup_submitted','signup','direct','starter');
+  IF EXISTS(SELECT 1 FROM mcp_site_funnel_events WHERE day<(now() AT TIME ZONE 'UTC')::date-30) THEN RAISE EXCEPTION 'Analytics retention failed'; END IF;
+  BEGIN
+    PERFORM record_mcp_site_event(gen_random_uuid(),'password','home','direct','none');
+    RAISE EXCEPTION 'Arbitrary analytics event was accepted';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+END $$;
 ROLLBACK;
 `;
 const result = spawnSync("psql", [url, "-X", "-v", "ON_ERROR_STOP=1", "-q"], { input: sql, encoding: "utf8" });
