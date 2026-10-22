@@ -29,6 +29,7 @@ import { openApiDocument } from "./openapi.js";
 import { createStripeWebhookRouter } from "./routes/stripeWebhook.js";
 import { createBillingRouter } from "./routes/billing.js";
 import { createUsageRequestRouter } from "./routes/usageRequests.js";
+import { createSiteAnalyticsRouter } from "./routes/siteAnalytics.js";
 import { startUsageNotificationWorker } from "./services/usageRequests.js";
 import { getStripe } from "./services/stripe.js";
 import {
@@ -634,6 +635,7 @@ async function main(): Promise<void> {
   app.use("/billing/webhook", express.raw({ type: "application/json" }));
   app.use(express.json());
   const supabase = createSupabaseClient(config);
+  app.use("/site-analytics", createSiteAnalyticsRouter(supabase, config.developerSiteUrl));
   const sessions = new Map<string, SessionContext>();
   const usageConfig = { resendApiKey: config.resendApiKey, lineToken: config.lineChannelAccessToken, lineUserId: config.lineAlertUserId, emailTo: config.usageRequestEmail };
   const usageWorker = startUsageNotificationWorker(supabase, usageConfig);

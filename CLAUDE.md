@@ -220,6 +220,21 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 
 ## Deployment (Railway)
 
+### Optional developer-site funnel analytics (2026-10-22)
+
+`POST /site-analytics/event` is an unauthenticated, origin-restricted collector for
+nightlife.dev. Strict labels only: daily tab UUID, event, page, source category,
+and plan. No account IDs, free text, URLs, emails, tokens, or stored IP/UA. The
+frontend requires opt-in and respects DNT/GPC; known automation is ignored.
+Transient per-process rate caps and DB per-visit/global daily ceilings bound abuse;
+Origin/UA checks are not proof of human traffic. `mcp_site_funnel_events` and its
+writer RPC are service-only. Migration `20261022090000_mcp_site_funnel.sql` includes
+deduplication, ingestion cleanup and a nightly pg_cron retention job (30 days).
+The existing billing report now includes optional browser funnel observations,
+clearly separate from verified signup/Stripe conversion metrics. Client event
+`email_confirmed` means a confirmed session was observed, not necessarily a new
+email confirmation. Public API keys/quotas/data contracts are unchanged.
+
 ### Additional usage enquiries
 
 `POST /billing/usage-request` accepts confirmed Supabase accounts only, independent

@@ -11,9 +11,10 @@ async function allRows(query) {
     if (data.length < 1000) return rows;
   }
 }
-const [accounts, funnel] = await Promise.all([
+const [accounts, funnel, siteEvents] = await Promise.all([
   allRows(() => db.from("mcp_billing_accounts").select("subscription_status,current_period_end,cancel_at_period_end,billing_plan").order("user_id")),
   allRows(() => db.from("mcp_checkout_funnel").select("source,paid_at,user_id").gte("started_at", since).order("checkout_session_id")),
+  allRows(() => db.from("mcp_site_funnel_events").select("day,visit_id,event,page,source,plan").gte("day",since.slice(0,10)).order("day").order("visit_id").order("event").order("page").order("source").order("plan")),
 ]);
 let signups = 0;
 for (let page = 1; ; page++) {
@@ -25,6 +26,12 @@ for (let page = 1; ; page++) {
 const active = accounts.filter(a => a.subscription_status === "active" && Date.parse(a.current_period_end) > Date.now());
 const paid = funnel.filter(c => c.paid_at);
 const bySource = {};
+const siteByEvent = {}, sitePages = {}, siteSources = {};
+for(const row of siteEvents) {
+  siteByEvent[row.event]=(siteByEvent[row.event]||0)+1;
+  if(row.event==='page_view')sitePages[row.page]=(sitePages[row.page]||0)+1;
+  (siteSources[row.source]??=new Set()).add(`${row.day}:${row.visit_id}`);
+}
 for (const checkout of funnel) {
   bySource[checkout.source] ??= { checkout_starts: 0, paid_checkouts: 0 };
   bySource[checkout.source].checkout_starts++;
@@ -38,4 +45,5 @@ console.log(JSON.stringify({
   active_pro_subscriptions: active.filter(a=>a.billing_plan==='pro').length,
   scheduled_cancellations: active.filter(a => a.cancel_at_period_end).length,
   gross_usd_mrr: active.reduce((total,a)=>total+(a.billing_plan==='pro'?19:a.billing_plan==='starter'?5:0),0), by_source: bySource,
+  optional_site_analytics: { started_after_deployment:true, consented_daily_tab_visits:new Set(siteEvents.filter(e=>e.event==='page_view').map(e=>`${e.day}:${e.visit_id}`)).size, events:siteByEvent, pages:sitePages, visits_by_source:Object.fromEntries(Object.entries(siteSources).map(([s,ids])=>[s,ids.size])), caveat:"Opt-in browser observations, not unique people or verified purchases; excludes known automation, may include undetected bots. Billing metrics above remain authoritative." },
 }, null, 2));
