@@ -26,6 +26,7 @@ const envSchema = z.object({
     .default("true")
     .transform((value) => value.trim().toLowerCase() !== "false"),
   MCP_ENABLE_MONTHLY_LIMITS: z.string().default("true").transform(value => value === "true"),
+  MCP_ENABLE_SITE_ANALYTICS: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
   MCP_HTTP_ALLOW_ENV_KEY_FALLBACK: z
     .string()
     .default("true")
@@ -62,6 +63,7 @@ export type AppConfig = {
   mcpHttpRequireApiKey: boolean;
   mcpHttpUseDbKeys: boolean;
   mcpEnableMonthlyLimits: boolean;
+  siteAnalyticsEnabled: boolean;
   mcpHttpAllowEnvKeyFallback: boolean;
   mcpHttpApiKeys: string[];
   mcpEnableRecommendations: boolean;
@@ -102,6 +104,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mcpHttpRequireApiKey: parsed.MCP_HTTP_REQUIRE_API_KEY,
     mcpHttpUseDbKeys: parsed.MCP_HTTP_USE_DB_KEYS,
     mcpEnableMonthlyLimits: parsed.MCP_ENABLE_MONTHLY_LIMITS,
+    siteAnalyticsEnabled: parsed.MCP_ENABLE_SITE_ANALYTICS,
     mcpHttpAllowEnvKeyFallback: parsed.MCP_HTTP_ALLOW_ENV_KEY_FALLBACK,
     mcpHttpApiKeys: keys,
     mcpEnableRecommendations: parsed.MCP_ENABLE_RECOMMENDATIONS,

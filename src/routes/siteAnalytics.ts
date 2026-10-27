@@ -13,8 +13,9 @@ export const siteEventSchema = z.object({
 
 // No auth identity or customer details are accepted. Origin and bot checks are
 // abuse reduction, not proof of human traffic. Aggregate visits remain estimates.
-export function createSiteAnalyticsRouter(db: SupabaseClient, siteUrl: string) {
+export function createSiteAnalyticsRouter(db: SupabaseClient, siteUrl: string, enabled = false) {
   const router = Router();
+  if (!enabled) return router;
   const origins = [siteUrl];
   const buckets = new Map<string, { count: number; until: number }>();
   let windowUntil = Date.now() + 60_000;

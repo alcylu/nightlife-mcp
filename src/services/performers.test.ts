@@ -26,6 +26,7 @@ test("getPerformerInfo validates UUID input", async () => {
           mcpHttpRequireApiKey: true,
           mcpHttpUseDbKeys: true,
     mcpEnableMonthlyLimits: false,
+    siteAnalyticsEnabled: false,
           mcpHttpAllowEnvKeyFallback: true,
           mcpHttpApiKeys: [],
           mcpEnableRecommendations: false,

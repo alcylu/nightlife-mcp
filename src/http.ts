@@ -635,7 +635,7 @@ async function main(): Promise<void> {
   app.use("/billing/webhook", express.raw({ type: "application/json" }));
   app.use(express.json());
   const supabase = createSupabaseClient(config);
-  app.use("/site-analytics", createSiteAnalyticsRouter(supabase, config.developerSiteUrl));
+  app.use("/site-analytics", createSiteAnalyticsRouter(supabase, config.developerSiteUrl, config.siteAnalyticsEnabled));
   const sessions = new Map<string, SessionContext>();
   const usageConfig = { resendApiKey: config.resendApiKey, lineToken: config.lineChannelAccessToken, lineUserId: config.lineAlertUserId, emailTo: config.usageRequestEmail };
   const usageWorker = startUsageNotificationWorker(supabase, usageConfig);
