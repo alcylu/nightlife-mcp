@@ -225,7 +225,11 @@ MCP_HTTP_API_KEYS=<comma-separated fallback keys>
 `POST /site-analytics/event` is an unauthenticated, origin-restricted collector for
 nightlife.dev. Strict labels only: daily tab UUID, event, page, source category,
 and plan. No account IDs, free text, URLs, emails, tokens, or stored IP/UA. The
-frontend requires opt-in and respects DNT/GPC; known automation is ignored.
+collector is **disabled by default**. Set `MCP_ENABLE_SITE_ANALYTICS=true` only
+after its migration and feature rollout are approved; absent/false leaves the
+endpoint at 404 and performs no analytics writes. The Node security rollout
+keeps it disabled and does not apply the analytics migration.
+The frontend requires opt-in and respects DNT/GPC; known automation is ignored.
 Transient per-process rate caps and DB per-visit/global daily ceilings bound abuse;
 Origin/UA checks are not proof of human traffic. `mcp_site_funnel_events` and its
 writer RPC are service-only. Migration `20261022090000_mcp_site_funnel.sql` includes
