@@ -409,6 +409,7 @@ async function fetchCandidates(
     .from("event_occurrences")
     .select(OCCURRENCE_SELECT)
     .eq("published", true)
+    .is("merged_into_id", null)
     .eq("city_id", cityId)
     .order("start_at", { ascending: true })
     .range(0, 399);
