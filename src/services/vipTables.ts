@@ -516,6 +516,7 @@ async function resolveClosedDates(
     .select("start_at")
     .eq("venue_id", venueId)
     .eq("published", true)
+    .is("merged_into_id", null)
     .gte("start_at", windowStart)
     .lt("start_at", windowEnd);
 

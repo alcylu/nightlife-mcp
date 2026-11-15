@@ -407,3 +407,16 @@ Before entering the 4-level pricing fallback, VIP table queries check if the ven
 - Multi-city expansion (next 5 cities after Tokyo)
 - Hotel concierge dashboard (separate frontend)
 - RapidAPI Hub listing — free/freemium tier only for developer awareness; keep paid tiers on nightlife.dev to avoid 25% commission. Low effort (~2-3h) since OpenAPI spec already exists. Not a revenue channel — top-of-funnel lead gen only.
+
+### Canonical event reads (prepared November 16, 2026)
+
+Every event-occurrence read in discovery, genre batches, recommendations, venue and
+performer snapshots, and VIP event/open-day context requires both publication and
+`merged_into_id IS NULL` at the database boundary, before pagination. A legacy
+published archive cannot appear as an event, consume a page slot or count as an
+opening event. Direct details for merged IDs return the existing not-found result;
+no automatic aliasing, publication, booking/pricing policy, auth/quota or response
+shape changes. `src/services/canonicalEvents.test.ts` exercises actual service
+functions with the real Supabase URL serializer and an entirely offline transport,
+including all eleven query branches, one-result pagination, direct lookup and
+VIP open-date context. No migration, paid/provider request or background job.

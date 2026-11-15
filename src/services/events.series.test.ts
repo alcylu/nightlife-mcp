@@ -26,6 +26,7 @@ function recordingSupabase(eqCalls: EqCall[]): SupabaseClient {
     const passthrough = () => chain;
     for (const m of [
       "select",
+      "is",
       "order",
       "range",
       "in",

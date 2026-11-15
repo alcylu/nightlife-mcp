@@ -116,10 +116,9 @@ function createStub(overrides: StubOverrides = {}) {
           select: () => ({
             eq: () => ({
               eq: () => ({
-                gte: () => ({
-                  lt: async () => ({
-                    data: eventOccurrences,
-                    error: null,
+                is: () => ({
+                  gte: () => ({
+                    lt: async () => ({ data: eventOccurrences, error: null }),
                   }),
                 }),
               }),
