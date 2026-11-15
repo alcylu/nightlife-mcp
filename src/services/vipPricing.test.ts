@@ -112,20 +112,20 @@ function createStub(overrides: StubOverrides = {}) {
       }
 
       if (table === "event_occurrences") {
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                gte: () => ({
-                  lt: async () => ({
-                    data: eventOccurrences,
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          }),
+        let selected = eventOccurrences;
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          is: (column: string, value: unknown) => {
+            assert.equal(column, "merged_into_id");
+            assert.equal(value, null);
+            selected = selected.filter((row) => (row as { merged_into_id?: string | null }).merged_into_id == null);
+            return chain;
+          },
+          gte: () => chain,
+          lt: async () => ({ data: selected, error: null }),
         };
+        return chain;
       }
 
       if (table === "venue_operating_hours") {
@@ -592,4 +592,24 @@ test("getVipPricing sets pricing_approximate false when pricing_configured false
   });
 
   assert.equal(result.pricing_approximate, false);
+});
+
+test('a retained published archive cannot make an otherwise closed venue busy or open', async () => {
+  const result = await getVipPricing(createStub({
+    eventOccurrences: [{ id: 'archive', name_en: 'Archived bill', start_at: '2026-03-09T12:00:00Z', merged_into_id: 'canonical-elsewhere' }],
+    operatingHours: [{ day_of_week: 1, is_enabled: false }],
+  }) as never, { venue_id: VENUE_ID, date: '2026-03-09' });
+  assert.equal(result.venue_open, false);
+  assert.equal(result.busy_night, false);
+  assert.equal(result.event_name, null);
+});
+
+test('a canonical published bill still establishes the normal event-backed opening', async () => {
+  const result = await getVipPricing(createStub({
+    eventOccurrences: [{ id: 'canonical', name_en: 'Actual bill', start_at: '2026-03-09T12:00:00Z', merged_into_id: null }],
+    operatingHours: [{ day_of_week: 1, is_enabled: false }],
+  }) as never, { venue_id: VENUE_ID, date: '2026-03-09' });
+  assert.equal(result.venue_open, true);
+  assert.equal(result.busy_night, true);
+  assert.equal(result.event_name, 'Actual bill');
 });

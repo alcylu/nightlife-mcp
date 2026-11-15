@@ -648,6 +648,7 @@ async function fetchOccurrencesByIds(
       .from("event_occurrences")
       .select(OCCURRENCE_SELECT)
       .eq("published", true)
+      .is("merged_into_id", null)
       .eq("city_id", cityId)
       .in("id", idsChunk)
       .order("start_at", { ascending: true });
@@ -908,6 +909,7 @@ export async function searchEvents(
       .from("event_occurrences")
       .select(OCCURRENCE_SELECT)
       .eq("published", true)
+      .is("merged_into_id", null)
       .eq("city_id", city.id);
 
     if (input.seriesId) {
@@ -1139,6 +1141,7 @@ export async function getEventDetails(
     )
     .eq("id", cleanedId)
     .eq("published", true)
+    .is("merged_into_id", null)
     .maybeSingle<EventOccurrenceRow>();
 
   if (error) {

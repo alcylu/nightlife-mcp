@@ -1,5 +1,19 @@
 # nightlife-mcp — Technical Spec
 
+## Canonical public event reads (prepared November 15)
+
+All eleven direct published occurrence reads exclude `merged_into_id` archives
+before pagination, ranking, profile schedules, recommendations and event-backed
+venue opening inference. Retained archive roots, sources and historical financial
+or guest records remain unchanged. This repair changes no authorization, billing,
+VIP price, booking, notification, provider, schedule or spending limit.
+
+Seven behavioral canaries fail on unchanged main: Tokyo/Amsterdam ranked browse
+and archive detail plus an archived bill incorrectly establishing a venue opening.
+The corrected suite passes 167 offline tests; supported typecheck and build pass.
+Required exact-head CI, existing staging checks and production verification remain
+required before release. No provider calls, production writes or jobs are tests.
+
 ## Overview
 Open-source MCP server for nightlife event discovery. First nightlife MCP server among 17,744+ on mcp.so.
 
