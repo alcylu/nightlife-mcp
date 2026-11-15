@@ -201,6 +201,7 @@ async function resolvePricingClosedDates(
     .select("start_at,name_en,name_i18n")
     .eq("venue_id", venueId)
     .eq("published", true)
+    .is("merged_into_id", null)
     .gte("start_at", windowStart)
     .lt("start_at", windowEnd);
 

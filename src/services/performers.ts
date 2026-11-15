@@ -735,6 +735,7 @@ export async function searchPerformers(
     .from("event_occurrences")
     .select("id,start_at,occurrence_days:event_occurrence_days(id,service_date,start_at,end_at,published,title_en_override,title_i18n_override)")
     .eq("published", true)
+    .is("merged_into_id", null)
     .eq("city_id", city.id)
     .gte("start_at", window.startIso)
     .lt("start_at", window.endIso)
@@ -1041,6 +1042,7 @@ export async function getPerformerInfo(
     .select(OCCURRENCE_SELECT)
     .in("id", eventIds)
     .eq("published", true)
+    .is("merged_into_id", null)
     .gte("start_at", new Date().toISOString())
     .order("start_at", { ascending: true });
 
